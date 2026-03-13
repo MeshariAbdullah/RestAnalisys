@@ -1,0 +1,41 @@
+services:
+  # ── Backend API ────────────────────────────────────────────────
+  - type: web
+    name: franchise-quality-monitor-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install && npm run db:migrate
+    startCommand: node --loader tsx/esm src/index.ts
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        fromDatabase:
+          name: franchise-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_URL
+        value: https://franchise-quality-monitor.onrender.com
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+
+  # ── Frontend ───────────────────────────────────────────────────
+  - type: web
+    name: franchise-quality-monitor
+    runtime: static
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://franchise-quality-monitor-api.onrender.com
+
+databases:
+  - name: franchise-db
+    databaseName: franchise_quality_monitor
+    plan: free
