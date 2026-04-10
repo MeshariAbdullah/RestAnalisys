@@ -1,188 +1,229 @@
+/**
+ * Zod validation schemas for the Managed Luxury Rental Platform API.
+ *
+ * All request payloads are validated through these schemas so routes can stay
+ * thin and all input is known-good before it reaches the database layer.
+ */
+
 import { z } from "zod";
 
-// ── Enums ────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Primitives
+// ─────────────────────────────────────────────────────────────────────────────
 
-export const AlertLevelSchema = z
-  .enum(["none", "low", "medium", "high", "critical"])
-  .catch("low");
+export const SaudiPhone = z
+  .string()
+  .regex(/^\+?9665\d{8}$/, "Saudi mobile number must match +9665XXXXXXXX");
 
-export const QualityRatingSchema = z
-  .enum(["excellent", "good", "fair", "poor", "critical"])
-  .catch("fair");
+export const SaudiNationalId = z
+  .string()
+  .regex(/^[12]\d{9}$/, "Saudi National ID must be 10 digits starting with 1 or 2");
 
-export const ComplianceStatusSchema = z
-  .enum(["compliant", "partial", "non_compliant"])
-  .catch("partial");
+export const IsoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
-// ── Operational Metrics Schema (GPT Prompt 1) ────────────────────────────────
+export const HalalasAmount = z.number().int().nonnegative();
 
-export const OperationalMetricsSchema = z.object({
-  hygieneScore: z.number().min(0).max(100).catch(50),
-  crowdingLevel: z.enum(["low", "medium", "high"]).catch("medium"),
-  equipmentStatus: z.enum(["operational", "degraded", "offline"]).catch("operational"),
-  staffCount: z.number().min(0).catch(0),
-  workflowEfficiency: z.number().min(0).max(100).catch(50),
-  temperatureControl: z.enum(["ok", "warning", "critical"]).catch("ok"),
-  cleanlinessLevel: z.number().min(0).max(100).catch(50),
-  notes: z.string().catch(""),
+// ─────────────────────────────────────────────────────────────────────────────
+// Auth
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const RegisterSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  fullName: z.string().min(2),
+  phone: SaudiPhone.optional(),
+  role: z.enum(["renter", "owner"]).default("renter"),
 });
 
-export type OperationalMetrics = z.infer<typeof OperationalMetricsSchema>;
-
-// ── Issue Detection Schema (GPT Prompt 2) ────────────────────────────────────
-
-export const IssueSchema = z.object({
-  type: z.string().catch("unknown"),
-  severity: AlertLevelSchema,
-  description: z.string().catch(""),
-  location: z.string().catch(""),
-  timestamp: z.number().optional(),
+export const LoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
 });
 
-export const IssueDetectionSchema = z.object({
-  issues: z.array(IssueSchema).catch([]),
-  alertLevel: AlertLevelSchema,
-  safetyViolations: z.array(z.string()).catch([]),
-  qualityIssues: z.array(z.string()).catch([]),
-  immediateActionRequired: z.boolean().catch(false),
+export const NafathVerifySchema = z.object({
+  nationalId: SaudiNationalId,
 });
 
-export type IssueDetection = z.infer<typeof IssueDetectionSchema>;
+// ─────────────────────────────────────────────────────────────────────────────
+// Assets (owner submission + admin review)
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ── Performance Scoring Schema (GPT Prompt 3) ─────────────────────────────────
+export const AssetCategory = z.enum([
+  "handbag",
+  "watch",
+  "dress",
+  "jewelry",
+  "accessory",
+  "other",
+]);
 
-export const PerformanceScoringSchema = z.object({
-  overallScore: z.number().min(0).max(100).catch(50),
-  qualityRating: QualityRatingSchema,
-  preparationTime: z.enum(["fast", "normal", "slow"]).catch("normal"),
-  portionAccuracy: z.number().min(0).max(100).catch(50),
-  presentationScore: z.number().min(0).max(100).catch(50),
-  staffPerformance: z.number().min(0).max(100).catch(50),
-  strengths: z.array(z.string()).catch([]),
-  improvements: z.array(z.string()).catch([]),
+export const AssetSubmissionSchema = z.object({
+  category: AssetCategory,
+  brand: z.string().min(1),
+  model: z.string().optional(),
+  title: z.string().min(3),
+  description: z.string().optional(),
+  ownerDeclaredValueHalalas: HalalasAmount,
+  submissionImages: z.array(z.string().url()).min(1).max(20),
+  attributes: z.record(z.any()).optional(),
 });
 
-export type PerformanceScoring = z.infer<typeof PerformanceScoringSchema>;
-
-// ── Recipe Compliance Schema (GPT Prompt 4 / Gemini) ─────────────────────────
-
-export const RecipeComplianceSchema = z.object({
-  ingredientPresenceScore: z.number().min(0).max(100).catch(0),
-  assemblyOrderScore: z.number().min(0).max(100).catch(0),
-  portionScore: z.number().min(0).max(100).catch(0),
-  presentationScore: z.number().min(0).max(100).catch(0),
-  safetyScore: z.number().min(0).max(100).catch(0),
-  totalScore: z.number().min(0).max(100).catch(0),
-  complianceStatus: ComplianceStatusSchema,
-  detectedIngredients: z.array(z.string()).catch([]),
-  missingIngredients: z.array(z.string()).catch([]),
-  safetyViolations: z.array(z.string()).catch([]),
-  reasons: z.array(z.string()).catch([]),
+export const AssetApprovalSchema = z.object({
+  assetId: z.number().int().positive(),
+  approved: z.boolean(),
+  rejectionReason: z.string().optional(),
 });
 
-export type RecipeCompliance = z.infer<typeof RecipeComplianceSchema>;
-
-// ── Gemini Full Video Analysis Schema ────────────────────────────────────────
-
-export const GeminiVideoAnalysisSchema = z.object({
-  summary: z.string().catch(""),
-  overallQualityScore: z.number().min(0).max(100).catch(50),
-  qualityRating: QualityRatingSchema,
-  alertLevel: AlertLevelSchema,
-  timeline: z
-    .array(
-      z.object({
-        timestampSec: z.number().catch(0),
-        event: z.string().catch(""),
-        severity: AlertLevelSchema,
-        description: z.string().catch(""),
-      })
-    )
-    .catch([]),
-  operationalMetrics: OperationalMetricsSchema.optional(),
-  issueDetection: IssueDetectionSchema.optional(),
-  performanceScoring: PerformanceScoringSchema.optional(),
-  recipeCompliance: RecipeComplianceSchema.optional(),
-  keyFindings: z.array(z.string()).catch([]),
-  recommendations: z.array(z.string()).catch([]),
+export const AssetListingFilter = z.object({
+  category: AssetCategory.optional(),
+  brand: z.string().optional(),
+  minDaily: HalalasAmount.optional(),
+  maxDaily: HalalasAmount.optional(),
+  from: IsoDate.optional(),
+  to: IsoDate.optional(),
+  cursor: z.coerce.number().int().nonnegative().optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
-export type GeminiVideoAnalysis = z.infer<typeof GeminiVideoAnalysisSchema>;
+// ─────────────────────────────────────────────────────────────────────────────
+// Inspections
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ── GPT Aggregated Frame Analysis ────────────────────────────────────────────
-
-export const GPTAggregatedSchema = z.object({
-  framesAnalyzed: z.number().catch(0),
-  averageQualityScore: z.number().min(0).max(100).catch(50),
-  alertLevel: AlertLevelSchema,
-  operationalMetrics: OperationalMetricsSchema.optional(),
-  issueDetection: IssueDetectionSchema.optional(),
-  performanceScoring: PerformanceScoringSchema.optional(),
-  recipeCompliance: RecipeComplianceSchema.optional(),
-  timeline: z
-    .array(
-      z.object({
-        timestampSec: z.number().catch(0),
-        frameIndex: z.number().catch(0),
-        event: z.string().catch(""),
-        severity: AlertLevelSchema,
-      })
-    )
-    .catch([]),
-  keyFindings: z.array(z.string()).catch([]),
-  recommendations: z.array(z.string()).catch([]),
+export const InspectionReportSchema = z.object({
+  assetId: z.number().int().positive(),
+  type: z.enum(["intake", "return", "audit"]).default("intake"),
+  rentalId: z.number().int().positive().optional(),
+  authenticityVerified: z.boolean(),
+  authenticityNotes: z.string().optional(),
+  conditionScore: z.number().int().min(0).max(100),
+  conditionGrade: z.enum(["A", "B", "C", "D"]),
+  conditionNotes: z.string().optional(),
+  marketValueHalalas: HalalasAmount,
+  recommendedDailyPriceHalalas: HalalasAmount,
+  riskCategory: z.enum(["low", "medium", "high", "ultra_high"]),
+  beforeImages: z.array(z.string().url()).default([]),
+  afterImages: z.array(z.string().url()).default([]),
+  checklist: z.record(z.any()).default({}),
 });
 
-export type GPTAggregated = z.infer<typeof GPTAggregatedSchema>;
+export const OwnerValuationResponseSchema = z.object({
+  inspectionId: z.number().int().positive(),
+  approved: z.boolean(),
+  rejectionReason: z.string().optional(),
+});
 
-// ── Utility: Safe JSON extraction ────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Rentals
+// ─────────────────────────────────────────────────────────────────────────────
 
-export function extractFirstJSON(text: string): unknown {
-  // Try direct parse
-  try {
-    return JSON.parse(text);
-  } catch {}
+export const RentalQuoteRequestSchema = z.object({
+  assetId: z.number().int().positive(),
+  startDate: IsoDate,
+  endDate: IsoDate,
+});
 
-  // Find first { or [ and try from there
-  const startBrace = text.indexOf("{");
-  const startBracket = text.indexOf("[");
-  let start = -1;
+export const RentalCreateSchema = z.object({
+  assetId: z.number().int().positive(),
+  startDate: IsoDate,
+  endDate: IsoDate,
+  deliveryAddress: z
+    .object({
+      city: z.string(),
+      district: z.string(),
+      street: z.string(),
+      buildingNumber: z.string().optional(),
+      postalCode: z.string().optional(),
+      additionalCode: z.string().optional(),
+    })
+    .optional(),
+});
 
-  if (startBrace === -1 && startBracket === -1) {
-    throw new Error("No JSON found in response");
-  } else if (startBrace === -1) {
-    start = startBracket;
-  } else if (startBracket === -1) {
-    start = startBrace;
-  } else {
-    start = Math.min(startBrace, startBracket);
-  }
+export const RentalCancelSchema = z.object({
+  reason: z.string().min(3),
+});
 
-  // Find matching end by stack counting
-  const openChar = text[start];
-  const closeChar = openChar === "{" ? "}" : "]";
-  let depth = 0;
-  let inString = false;
-  let escape = false;
+// ─────────────────────────────────────────────────────────────────────────────
+// Legal + Sanad
+// ─────────────────────────────────────────────────────────────────────────────
 
-  for (let i = start; i < text.length; i++) {
-    const c = text[i];
-    if (escape) { escape = false; continue; }
-    if (c === "\\") { escape = true; continue; }
-    if (c === '"') { inString = !inString; continue; }
-    if (inString) continue;
-    if (c === openChar) depth++;
-    if (c === closeChar) {
-      depth--;
-      if (depth === 0) {
-        try {
-          return JSON.parse(text.slice(start, i + 1));
-        } catch {
-          throw new Error("Failed to parse extracted JSON");
-        }
-      }
-    }
-  }
+export const LegalSignSchema = z.object({
+  legalCommitmentId: z.number().int().positive(),
+  acceptTerms: z.literal(true),
+});
 
-  throw new Error("Could not find complete JSON object");
-}
+export const SanadExecuteSchema = z.object({
+  sanadId: z.number().int().positive(),
+  reason: z.string().min(5),
+  attachments: z.array(z.string().url()).default([]),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Payments
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const PaymentChargeSchema = z.object({
+  rentalId: z.number().int().positive(),
+  paymentMethodToken: z.string().optional(),
+});
+
+export const PaymentRefundSchema = z.object({
+  paymentId: z.number().int().positive(),
+  amountHalalas: HalalasAmount.optional(),
+  reason: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Disputes
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const DisputeOpenSchema = z.object({
+  rentalId: z.number().int().positive(),
+  category: z.enum(["damage", "loss", "fraud", "service", "billing"]),
+  summary: z.string().min(10),
+  evidence: z.array(z.string().url()).default([]),
+});
+
+export const DisputeResolveSchema = z.object({
+  disputeId: z.number().int().positive(),
+  resolution: z.enum([
+    "resolved_for_renter",
+    "resolved_for_platform",
+    "resolved_for_owner",
+    "escalated_to_legal",
+  ]),
+  notes: z.string().min(3),
+  resolutionAmountHalalas: HalalasAmount.optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inventory / Shipments
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ShipmentScheduleSchema = z.object({
+  assetId: z.number().int().positive(),
+  rentalId: z.number().int().positive().optional(),
+  direction: z.enum([
+    "owner_to_platform",
+    "platform_to_renter",
+    "renter_to_platform",
+    "platform_to_owner",
+  ]),
+  courier: z.string().optional(),
+  scheduledAt: z.string().datetime().optional(),
+  fromAddress: z.record(z.any()).optional(),
+  toAddress: z.record(z.any()).optional(),
+});
+
+export const ShipmentUpdateSchema = z.object({
+  status: z.enum([
+    "scheduled",
+    "picked_up",
+    "in_transit",
+    "delivered",
+    "failed",
+    "returned",
+  ]),
+  trackingNumber: z.string().optional(),
+});

@@ -1,35 +1,246 @@
+/**
+ * Typed API client for the Managed Luxury Rental Platform.
+ *
+ * Every call uses the JWT stored in localStorage under `auth_token`. On 401
+ * we clear the token so `ProtectedRoute` redirects to /login.
+ */
+
 const API_BASE = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
   : "/api";
 
-function getToken() {
+function getToken(): string | null {
   return localStorage.getItem("auth_token");
 }
 
-async function request<T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     ...(options.body && !(options.body instanceof FormData)
       ? { "Content-Type": "application/json" }
       : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(options.headers as Record<string, string> ?? {}),
+    ...((options.headers as Record<string, string>) ?? {}),
   };
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
+  if (res.status === 401) {
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("auth_user");
+  }
+
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error ?? "Request failed");
+    let err: { error?: string; code?: string; details?: unknown } = {};
+    try {
+      err = await res.json();
+    } catch {
+      /* ignore */
+    }
+    const e = new Error(err.error ?? res.statusText) as Error & {
+      code?: string;
+      details?: unknown;
+      status?: number;
+    };
+    e.code = err.code;
+    e.details = err.details;
+    e.status = res.status;
+    throw e;
   }
 
   return res.json();
 }
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type Role =
+  | "renter"
+  | "owner"
+  | "inspector"
+  | "operations"
+  | "admin"
+  | "super_admin";
+
+export interface User {
+  id: number;
+  email: string;
+  fullName: string;
+  role: Role;
+  phoneE164?: string;
+  nationalId?: string;
+  nafathVerified: boolean;
+  kycStatus: "unverified" | "pending" | "verified" | "rejected";
+  trustScore: number;
+  riskCategory: "low" | "medium" | "high" | "ultra_high";
+  isBlocked?: boolean;
+}
+
+export interface Asset {
+  id: number;
+  ownerId: number;
+  category: string;
+  brand: string;
+  model?: string;
+  title: string;
+  description?: string;
+  ownerDeclaredValueHalalas?: number;
+  evaluatedValueHalalas?: number;
+  dailyRentalPriceHalalas?: number;
+  riskCategory: string;
+  status: string;
+  submissionImagesJson: string[];
+  studioImagesJson: string[];
+  attributesJson: Record<string, unknown>;
+  warehouseLocationCode?: string;
+  rejectionReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Rental {
+  id: number;
+  reference: string;
+  assetId: number;
+  renterId: number;
+  ownerId: number;
+  status: string;
+  startDate: string;
+  endDate: string;
+  durationDays: number;
+  dailyPriceHalalas: number;
+  rentalSubtotalHalalas: number;
+  platformFeeHalalas: number;
+  vatHalalas: number;
+  totalPayableHalalas: number;
+  trustScoreAtBooking?: number;
+  legalCommitmentPct: number;
+  legalCommitmentHalalas: number;
+  riskSnapshotJson?: Record<string, unknown>;
+  confirmedAt?: string;
+  deliveredAt?: string;
+  returnedAt?: string;
+  closedAt?: string;
+  createdAt: string;
+}
+
+export interface LegalCommitment {
+  id: number;
+  rentalId: number;
+  status: string;
+  contractVersion: string;
+  commitmentHalalas: number;
+  commitmentPct: number;
+  clausesJson: Array<{
+    id: string;
+    titleEn: string;
+    titleAr: string;
+    bodyEn: string;
+    bodyAr: string;
+  }>;
+  signedAt?: string;
+}
+
+export interface SanadRecord {
+  id: number;
+  rentalId: number;
+  status: string;
+  nafithReference?: string;
+  principalHalalas: number;
+  dueHalalas: number;
+  maturityDate: string;
+  executionCaseNumber?: string;
+}
+
+export interface Payment {
+  id: number;
+  rentalId?: number;
+  type: string;
+  status: string;
+  amountHalalas: number;
+  gateway: string;
+  gatewayTransactionId?: string;
+  invoiceNumber?: string;
+  invoiceQrBase64?: string;
+  capturedAt?: string;
+  createdAt: string;
+}
+
+export interface Inspection {
+  id: number;
+  assetId: number;
+  inspectorId: number;
+  type: "intake" | "return" | "audit";
+  rentalId?: number;
+  authenticityVerified: boolean;
+  conditionScore?: number;
+  conditionGrade?: string;
+  marketValueHalalas?: number;
+  recommendedDailyPriceHalalas?: number;
+  riskCategory: string;
+  beforeImagesJson: string[];
+  afterImagesJson: string[];
+  ownerApproved: boolean;
+}
+
+export interface Dispute {
+  id: number;
+  rentalId: number;
+  openedByUserId: number;
+  status: string;
+  category: string;
+  severity: string;
+  summary: string;
+  evidenceJson: string[];
+  resolutionNotes?: string;
+  resolutionAmountHalalas?: number;
+  openedAt: string;
+  resolvedAt?: string;
+}
+
+export interface Shipment {
+  id: number;
+  assetId: number;
+  rentalId?: number;
+  direction: string;
+  status: string;
+  courier?: string;
+  trackingNumber?: string;
+  scheduledAt?: string;
+  deliveredAt?: string;
+}
+
+export interface RentalQuote {
+  assetId: number;
+  assetTitle: string;
+  evaluatedValueHalalas: number;
+  dailyPriceHalalas: number;
+  durationDays: number;
+  rentalSubtotalHalalas: number;
+  platformFeeHalalas: number;
+  vatHalalas: number;
+  totalPayableHalalas: number;
+}
+
+export interface AdminKPIs {
+  users: number;
+  listedAssets: number;
+  rentedAssets: number;
+  rentalsThisMonth: number;
+  revenue: {
+    rentalSubtotalHalalas: number;
+    platformFeeHalalas: number;
+    vatHalalas: number;
+  };
+  openDisputes: number;
+  activeSanads: number;
+  sanadsUnderExecution: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Auth
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const authApi = {
   login: (email: string, password: string) =>
@@ -37,262 +248,355 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
-  register: (email: string, password: string, name: string) =>
+  register: (email: string, password: string, fullName: string, role: "renter" | "owner" = "renter") =>
     request<{ token: string; user: User }>("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ email, password, name }),
+      body: JSON.stringify({ email, password, fullName, role }),
+    }),
+  me: () => request<User>("/auth/me"),
+  nafathVerify: (nationalId: string) =>
+    request<{ transactionId: string; status: string }>("/auth/nafath/initiate", {
+      method: "POST",
+      body: JSON.stringify({ nationalId }),
     }),
 };
 
-// ── Stores ────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Assets
+// ─────────────────────────────────────────────────────────────────────────────
 
-export const storesApi = {
-  list: () => request<Store[]>("/stores"),
-  get: (id: number) => request<Store>(`/stores/${id}`),
-  create: (data: Partial<Store>) =>
-    request<Store>("/stores", { method: "POST", body: JSON.stringify(data) }),
-};
-
-// ── Recipes ───────────────────────────────────────────────────────────────────
-
-export const recipesApi = {
-  list: () => request<Recipe[]>("/recipes"),
-  get: (id: number) => request<Recipe>(`/recipes/${id}`),
-  create: (data: Partial<Recipe> & { specJson?: RecipeSpec }) =>
-    request<Recipe>("/recipes", { method: "POST", body: JSON.stringify(data) }),
-  update: (id: number, data: Partial<Recipe> & { specJson?: RecipeSpec }) =>
-    request<Recipe>(`/recipes/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  delete: (id: number) =>
-    request<{ success: boolean }>(`/recipes/${id}`, { method: "DELETE" }),
-};
-
-// ── Videos ────────────────────────────────────────────────────────────────────
-
-export const videosApi = {
-  list: (params?: { storeId?: number; limit?: number; offset?: number }) => {
+export const assetsApi = {
+  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
     const qs = new URLSearchParams();
-    if (params?.storeId) qs.set("storeId", String(params.storeId));
+    if (params?.category) qs.set("category", params.category);
+    if (params?.brand) qs.set("brand", params.brand);
     if (params?.limit) qs.set("limit", String(params.limit));
-    if (params?.offset) qs.set("offset", String(params.offset));
-    return request<VideoUpload[]>(`/videos?${qs}`);
+    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
   },
-  upload: (file: File, storeId: number, recipeId?: number) => {
-    const form = new FormData();
-    form.append("video", file);
-    form.append("storeId", String(storeId));
-    if (recipeId) form.append("recipeId", String(recipeId));
-    return request<VideoUpload>("/videos/upload", { method: "POST", body: form });
+  listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
+  mine: () => request<Asset[]>("/assets/mine"),
+  submit: (data: {
+    category: string;
+    brand: string;
+    model?: string;
+    title: string;
+    description?: string;
+    ownerDeclaredValueHalalas: number;
+    submissionImages: string[];
+    attributes?: Record<string, unknown>;
+  }) =>
+    request<Asset>("/assets", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  pending: () => request<Asset[]>("/assets/pending"),
+  review: (assetId: number, approved: boolean, rejectionReason?: string) =>
+    request<Asset>("/assets/review", {
+      method: "POST",
+      body: JSON.stringify({ assetId, approved, rejectionReason }),
+    }),
+  publish: (id: number) =>
+    request<Asset>(`/assets/${id}/publish`, { method: "POST" }),
+  valuationResponse: (id: number, approved: boolean, rejectionReason?: string) =>
+    request<Asset>(`/assets/${id}/valuation-response`, {
+      method: "POST",
+      body: JSON.stringify({ approved, rejectionReason }),
+    }),
+  received: (id: number, warehouseLocationCode: string) =>
+    request<Asset>(`/assets/${id}/received`, {
+      method: "POST",
+      body: JSON.stringify({ warehouseLocationCode }),
+    }),
+  get: (id: number) => request<Asset>(`/assets/${id}`),
+  withdraw: (id: number) =>
+    request<Asset>(`/assets/${id}/withdraw`, { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inspections
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const inspectionsApi = {
+  queue: () => request<Asset[]>("/inspections/queue"),
+  createIntake: (data: {
+    assetId: number;
+    authenticityVerified: boolean;
+    authenticityNotes?: string;
+    conditionScore: number;
+    conditionGrade: "A" | "B" | "C" | "D";
+    conditionNotes?: string;
+    marketValueHalalas: number;
+    recommendedDailyPriceHalalas: number;
+    riskCategory: "low" | "medium" | "high" | "ultra_high";
+    beforeImages?: string[];
+    afterImages?: string[];
+    checklist?: Record<string, unknown>;
+  }) =>
+    request<Inspection>("/inspections/intake", {
+      method: "POST",
+      body: JSON.stringify({ ...data, type: "intake" }),
+    }),
+  createReturn: (data: {
+    assetId: number;
+    rentalId: number;
+    authenticityVerified: boolean;
+    conditionScore: number;
+    conditionGrade: "A" | "B" | "C" | "D";
+    conditionNotes?: string;
+    marketValueHalalas: number;
+    recommendedDailyPriceHalalas: number;
+    riskCategory: "low" | "medium" | "high" | "ultra_high";
+    beforeImages?: string[];
+    afterImages?: string[];
+    checklist?: Record<string, unknown>;
+  }) =>
+    request<{ inspection: Inspection; hint: string }>("/inspections/return", {
+      method: "POST",
+      body: JSON.stringify({ ...data, type: "return" }),
+    }),
+  forAsset: (assetId: number) =>
+    request<Inspection[]>(`/inspections/asset/${assetId}`),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rentals
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const rentalsApi = {
+  quote: (assetId: number, startDate: string, endDate: string) => {
+    const qs = new URLSearchParams({
+      assetId: String(assetId),
+      startDate,
+      endDate,
+    });
+    return request<RentalQuote>(`/rentals/quote?${qs}`);
   },
-  startAnalysis: (id: number) =>
-    request<{ jobId: string; videoId: number; status: string }>(`/videos/${id}/start-analysis`, {
+  create: (data: {
+    assetId: number;
+    startDate: string;
+    endDate: string;
+    deliveryAddress?: Record<string, unknown>;
+  }) =>
+    request<{
+      rental: Rental;
+      risk: Record<string, unknown>;
+      legal: {
+        commitmentId: number;
+        status: string;
+        clauses: LegalCommitment["clausesJson"];
+        textHash: string;
+        commitmentHalalas: number;
+        commitmentPct: number;
+      };
+      quote: RentalQuote;
+    }>("/rentals", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  mine: () => request<Rental[]>("/rentals/mine"),
+  list: () => request<Rental[]>("/rentals"),
+  get: (id: number) =>
+    request<{
+      rental: Rental;
+      legal: LegalCommitment | null;
+      sanad: SanadRecord | null;
+      payments: Payment[];
+    }>(`/rentals/${id}`),
+  cancel: (id: number, reason: string) =>
+    request<Rental>(`/rentals/${id}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+  fulfill: (id: number) =>
+    request<Rental>(`/rentals/${id}/fulfill`, { method: "POST" }),
+  delivered: (id: number) =>
+    request<Rental>(`/rentals/${id}/delivered`, { method: "POST" }),
+  returned: (id: number) =>
+    request<Rental>(`/rentals/${id}/returned`, { method: "POST" }),
+  close: (
+    id: number,
+    outcome: "clean" | "penalty" | "major_damage" | "loss",
+    penaltyHalalas?: number
+  ) =>
+    request<Rental>(`/rentals/${id}/close`, {
+      method: "POST",
+      body: JSON.stringify({ outcome, penaltyHalalas }),
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Legal + Sanad
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const legalApi = {
+  commitment: (id: number) =>
+    request<{ commitment: LegalCommitment; rental: Rental; asset: Asset }>(
+      `/legal/commitment/${id}`
+    ),
+  sign: (legalCommitmentId: number) =>
+    request<{ commitment: LegalCommitment; sanad: SanadRecord }>("/legal/sign", {
+      method: "POST",
+      body: JSON.stringify({ legalCommitmentId, acceptTerms: true }),
+    }),
+  sanads: () => request<SanadRecord[]>("/legal/sanads"),
+  pendingEnforcement: () =>
+    request<SanadRecord[]>("/legal/pending-enforcement"),
+  dischargeSanad: (id: number) =>
+    request<SanadRecord>(`/legal/sanad/${id}/discharge`, { method: "POST" }),
+  executeSanad: (sanadId: number, reason: string, attachments: string[] = []) =>
+    request<SanadRecord>("/legal/sanad/execute", {
+      method: "POST",
+      body: JSON.stringify({ sanadId, reason, attachments }),
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Payments
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const paymentsApi = {
+  charge: (rentalId: number) =>
+    request<{ payment: Payment; invoice: { invoiceNumber: string } }>("/payments/charge", {
+      method: "POST",
+      body: JSON.stringify({ rentalId }),
+    }),
+  refund: (paymentId: number, amountHalalas?: number, reason?: string) =>
+    request<Payment>("/payments/refund", {
+      method: "POST",
+      body: JSON.stringify({ paymentId, amountHalalas, reason }),
+    }),
+  mine: () => request<Payment[]>("/payments/mine"),
+  releasePayout: (rentalId: number) =>
+    request<{ id: number; netHalalas: number }>(`/payments/payout/${rentalId}`, {
       method: "POST",
     }),
-  getStatus: (id: number) => request<VideoStatus>(`/videos/${id}/status`),
-  getResults: (id: number) => request<VideoResults>(`/videos/${id}/results`),
+  myPayouts: () =>
+    request<Array<{ id: number; netHalalas: number; status: string; createdAt: string }>>(
+      "/payments/payouts/mine"
+    ),
 };
 
-// ── Alerts ────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Disputes
+// ─────────────────────────────────────────────────────────────────────────────
 
-export const alertsApi = {
-  list: (params?: {
-    storeId?: number;
-    videoId?: number;
-    provider?: string;
-    status?: string;
-    limit?: number;
-  }) => {
-    const qs = new URLSearchParams();
-    if (params?.storeId) qs.set("storeId", String(params.storeId));
-    if (params?.videoId) qs.set("videoId", String(params.videoId));
-    if (params?.provider) qs.set("provider", params.provider);
-    if (params?.status) qs.set("status", params.status);
-    if (params?.limit) qs.set("limit", String(params.limit));
-    return request<Alert[]>(`/alerts?${qs}`);
-  },
-  updateStatus: (id: number, status: string) =>
-    request<Alert>(`/alerts/${id}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ status }),
+export const disputesApi = {
+  open: (data: {
+    rentalId: number;
+    category: "damage" | "loss" | "fraud" | "service" | "billing";
+    summary: string;
+    evidence?: string[];
+  }) =>
+    request<Dispute>("/disputes", {
+      method: "POST",
+      body: JSON.stringify(data),
     }),
-  getStats: () => request<AlertStats>("/alerts/stats"),
+  list: () => request<Dispute[]>("/disputes"),
+  assign: (id: number, assigneeUserId: number) =>
+    request<Dispute>(`/disputes/${id}/assign`, {
+      method: "POST",
+      body: JSON.stringify({ assigneeUserId }),
+    }),
+  resolve: (data: {
+    disputeId: number;
+    resolution:
+      | "resolved_for_renter"
+      | "resolved_for_platform"
+      | "resolved_for_owner"
+      | "escalated_to_legal";
+    notes: string;
+    resolutionAmountHalalas?: number;
+  }) =>
+    request<Dispute>("/disputes/resolve", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
-// ── Dashboard ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Operations
+// ─────────────────────────────────────────────────────────────────────────────
 
-export const dashboardApi = {
-  getKPIs: () => request<DashboardKPIs>("/dashboard/kpis"),
-  getCharts: () => request<DashboardCharts>("/dashboard/charts"),
-  getReport: (period: "daily" | "weekly" | "monthly") =>
-    request<DashboardReport>(`/dashboard/reports?period=${period}`),
+export const operationsApi = {
+  summary: () =>
+    request<{
+      activeRentals: number;
+      lateRentals: number;
+      openAlerts: number;
+      inventoryCounts: Array<{ status: string; count: number }>;
+    }>("/operations/summary"),
+  shipments: () => request<Shipment[]>("/operations/shipments"),
+  scheduleShipment: (data: {
+    assetId: number;
+    rentalId?: number;
+    direction: string;
+    courier?: string;
+    scheduledAt?: string;
+    fromAddress?: Record<string, unknown>;
+    toAddress?: Record<string, unknown>;
+  }) =>
+    request<Shipment>("/operations/shipments", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateShipment: (id: number, data: { status: string; trackingNumber?: string }) =>
+    request<Shipment>(`/operations/shipments/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  inventory: () =>
+    request<Array<{ id: number; title: string; brand: string; status: string }>>(
+      "/operations/inventory"
+    ),
+  alerts: () =>
+    request<Array<{ id: number; type: string; severity: string; message: string; status: string; createdAt: string }>>(
+      "/operations/alerts"
+    ),
+  resolveAlert: (id: number) =>
+    request(`/operations/alerts/${id}/resolve`, { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const adminApi = {
+  kpis: () => request<AdminKPIs>("/admin/kpis"),
+  revenueTrend: () =>
+    request<Array<{ day: string; total_halalas: string; fee_halalas: string; rentals: string }>>(
+      "/admin/revenue-trend"
+    ),
+  lowTrustUsers: () => request<User[]>("/admin/risk/low-trust"),
+  users: (role?: string) => {
+    const qs = role ? `?role=${role}` : "";
+    return request<User[]>(`/admin/users${qs}`);
+  },
+  blockUser: (id: number, block: boolean, reason?: string) =>
+    request<User>(`/admin/users/${id}/block`, {
+      method: "POST",
+      body: JSON.stringify({ block, reason }),
+    }),
+  recentRiskDecisions: () =>
+    request<Array<Record<string, unknown>>>("/admin/risk/recent"),
 };
 
 export const healthApi = {
-  check: () => request<HealthCheck>("/health"),
+  check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Money helpers (frontend copies of the backend constants)
+// ─────────────────────────────────────────────────────────────────────────────
 
-export interface User {
-  id: number;
-  email: string;
-  name: string;
-  role: string;
+export function halalasToSar(halalas: number | null | undefined): number {
+  if (halalas == null) return 0;
+  return halalas / 100;
 }
 
-export interface Store {
-  id: number;
-  name: string;
-  type: string;
-  city: string;
-  cameras: number;
-  createdAt: string;
-}
-
-export interface RecipeSpec {
-  requiredIngredients?: string[];
-  assemblyOrder?: string[];
-  portionConstraints?: Record<string, { min: number; max: number; unit: string }>;
-  presentationRules?: string[];
-  foodSafetyRules?: string[];
-  complianceThreshold?: number;
-}
-
-export interface Recipe {
-  id: number;
-  storeId: number | null;
-  name: string;
-  version: string;
-  isActive: boolean;
-  createdAt: string;
-  specId?: number;
-  specJson?: RecipeSpec;
-  spec?: { id: number; specJson: RecipeSpec };
-}
-
-export interface VideoUpload {
-  id: number;
-  storeId: number;
-  recipeId: number | null;
-  filename: string;
-  originalName: string;
-  durationSec: number | null;
-  status: string;
-  errorMessage: string | null;
-  createdAt: string;
-  storeName?: string;
-  recipeName?: string;
-}
-
-export interface VideoStatus {
-  id: number;
-  status: string;
-  errorMessage: string | null;
-  durationSec: number | null;
-  framesExtracted: number;
-}
-
-export interface ComplianceResult {
-  id: number;
-  videoId: number;
-  recipeId: number;
-  provider: "gemini" | "gpt_frames";
-  scoreTotal: number;
-  ingredientPresenceScore: number | null;
-  assemblyOrderScore: number | null;
-  portionScore: number | null;
-  presentationScore: number | null;
-  safetyScore: number | null;
-  reasonsJson: string[] | null;
-  createdAt: string;
-}
-
-export interface VideoResults {
-  video: VideoUpload & { storeName?: string; recipeName?: string };
-  frames: number;
-  gemini: {
-    id: number;
-    model: string;
-    normalizedJson: Record<string, unknown>;
-    summaryText: string | null;
-    status: string;
-    error: string | null;
-  } | null;
-  gpt: {
-    framesAnalyzed: number;
-    analyses: Array<{
-      id: number;
-      frameId: number | null;
-      normalizedJson: Record<string, unknown> | null;
-      status: string;
-      error: string | null;
-    }>;
-  };
-  compliance: ComplianceResult[];
-  agreementPct: number | null;
-  missingProviders: {
-    gemini: boolean;
-    openai: boolean;
-  };
-}
-
-export interface Alert {
-  id: number;
-  storeId: number;
-  videoId: number | null;
-  provider: string | null;
-  severity: string;
-  type: string;
-  message: string;
-  status: string;
-  createdAt: string;
-  storeName?: string;
-}
-
-export interface AlertStats {
-  total: number;
-  open: number;
-  critical: number;
-  high: number;
-  byProvider: { gemini: number; gpt_frames: number };
-}
-
-export interface DashboardKPIs {
-  stores: number;
-  totalVideos: number;
-  openAlerts: number;
-  criticalAlerts: number;
-  avgComplianceScore: number | null;
-  recentVideos: VideoUpload[];
-}
-
-export interface DashboardCharts {
-  videosByDay: Array<{ date: string; count: number }>;
-  alertsByDay: Array<{ date: string; count: number; severity: string }>;
-  complianceByProvider: Array<{ provider: string; avgScore: number; count: number }>;
-  storeActivity: Array<{ storeId: number; storeName: string; videoCount: number }>;
-}
-
-export interface DashboardReport {
-  period: string;
-  since: string;
-  summary: {
-    totalVideos: number;
-    doneVideos: number;
-    errorVideos: number;
-    totalAlerts: number;
-    criticalAlerts: number;
-    highAlerts: number;
-    avgComplianceScore: number;
-    complianceChecks: number;
-  };
-  videos: VideoUpload[];
-  alerts: Alert[];
-  compliance: ComplianceResult[];
-}
-
-export interface HealthCheck {
-  ok: boolean;
-  version: string;
-  providers: { gemini: boolean; openai: boolean };
-  timestamp: string;
+export function formatSar(halalas: number | null | undefined): string {
+  const value = halalasToSar(halalas);
+  return `${value.toLocaleString("en-SA", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })} SAR`;
 }

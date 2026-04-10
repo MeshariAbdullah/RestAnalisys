@@ -1,70 +1,137 @@
 import React from "react";
-import { Route, Switch, useLocation, Redirect } from "wouter";
-import Layout from "./components/Layout";
+import { Route, Switch, Redirect } from "wouter";
+import ProtectedRoute from "./components/ProtectedRoute";
+
 import Landing from "./pages/Landing";
-import Dashboard from "./pages/Dashboard";
-import Simulator from "./pages/Simulator";
-import Recipes from "./pages/Recipes";
-import Alerts from "./pages/Alerts";
-import Reports from "./pages/Reports";
-import Employees from "./pages/Employees";
-import Heatmap from "./pages/Heatmap";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
 
-function isAuthenticated() {
-  return !!localStorage.getItem("auth_token");
-}
+// Renter
+import Browse from "./pages/renter/Browse";
+import ItemDetail from "./pages/renter/ItemDetail";
+import LegalCommitmentPage from "./pages/renter/LegalCommitment";
+import MyRentals from "./pages/renter/MyRentals";
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
-  if (!isAuthenticated()) {
-    return <Redirect to="/" />;
-  }
-  return <Layout>{children}</Layout>;
-}
+// Owner
+import OwnerDashboard from "./pages/owner/OwnerDashboard";
+import SubmitAsset from "./pages/owner/SubmitAsset";
+import AssetDetail from "./pages/owner/AssetDetail";
+import Payouts from "./pages/owner/Payouts";
+
+// Inspector
+import InspectorDashboard from "./pages/inspector/InspectorDashboard";
+import InspectionForm from "./pages/inspector/InspectionForm";
+
+// Ops
+import OpsDashboard from "./pages/ops/OpsDashboard";
+import Shipments from "./pages/ops/Shipments";
+import Inventory from "./pages/ops/Inventory";
+import AlertsPage from "./pages/ops/Alerts";
+
+// Admin
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AssetApprovals from "./pages/admin/AssetApprovals";
+import UsersPage from "./pages/admin/Users";
+import DisputesPage from "./pages/admin/Disputes";
+import FinancialOverview from "./pages/admin/FinancialOverview";
+import SanadTracking from "./pages/admin/SanadTracking";
 
 export default function App() {
   return (
     <Switch>
+      {/* Public */}
       <Route path="/" component={Landing} />
-      <Route path="/dashboard">
-        <ProtectedRoute>
-          <Dashboard />
-        </ProtectedRoute>
+      <Route path="/login" component={Login} />
+      <Route path="/register" component={Register} />
+
+      {/* Renter */}
+      <Route path="/browse">
+        <ProtectedRoute roles={["renter"]}><Browse /></ProtectedRoute>
       </Route>
-      <Route path="/simulator">
-        <ProtectedRoute>
-          <Simulator />
-        </ProtectedRoute>
+      <Route path="/browse/:id">
+        {(params) => (
+          <ProtectedRoute roles={["renter"]}>
+            <ItemDetail id={Number(params.id)} />
+          </ProtectedRoute>
+        )}
       </Route>
-      <Route path="/recipes">
-        <ProtectedRoute>
-          <Recipes />
-        </ProtectedRoute>
+      <Route path="/legal/:commitmentId">
+        {(params) => (
+          <ProtectedRoute roles={["renter"]}>
+            <LegalCommitmentPage commitmentId={Number(params.commitmentId)} />
+          </ProtectedRoute>
+        )}
       </Route>
-      <Route path="/alerts">
-        <ProtectedRoute>
-          <Alerts />
-        </ProtectedRoute>
+      <Route path="/my-rentals">
+        <ProtectedRoute roles={["renter"]}><MyRentals /></ProtectedRoute>
       </Route>
-      <Route path="/reports">
-        <ProtectedRoute>
-          <Reports />
-        </ProtectedRoute>
+
+      {/* Owner */}
+      <Route path="/owner">
+        <ProtectedRoute roles={["owner"]}><OwnerDashboard /></ProtectedRoute>
       </Route>
-      <Route path="/employees">
-        <ProtectedRoute>
-          <Employees />
-        </ProtectedRoute>
+      <Route path="/owner/submit">
+        <ProtectedRoute roles={["owner"]}><SubmitAsset /></ProtectedRoute>
       </Route>
-      <Route path="/heatmap">
-        <ProtectedRoute>
-          <Heatmap />
-        </ProtectedRoute>
+      <Route path="/owner/assets/:id">
+        {(params) => (
+          <ProtectedRoute roles={["owner"]}>
+            <AssetDetail id={Number(params.id)} />
+          </ProtectedRoute>
+        )}
       </Route>
+      <Route path="/owner/payouts">
+        <ProtectedRoute roles={["owner"]}><Payouts /></ProtectedRoute>
+      </Route>
+
+      {/* Inspector */}
+      <Route path="/inspector">
+        <ProtectedRoute roles={["inspector"]}><InspectorDashboard /></ProtectedRoute>
+      </Route>
+      <Route path="/inspector/report/:assetId">
+        {(params) => (
+          <ProtectedRoute roles={["inspector"]}>
+            <InspectionForm assetId={Number(params.assetId)} />
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      {/* Operations */}
+      <Route path="/ops">
+        <ProtectedRoute roles={["operations"]}><OpsDashboard /></ProtectedRoute>
+      </Route>
+      <Route path="/ops/shipments">
+        <ProtectedRoute roles={["operations"]}><Shipments /></ProtectedRoute>
+      </Route>
+      <Route path="/ops/inventory">
+        <ProtectedRoute roles={["operations"]}><Inventory /></ProtectedRoute>
+      </Route>
+      <Route path="/ops/alerts">
+        <ProtectedRoute roles={["operations"]}><AlertsPage /></ProtectedRoute>
+      </Route>
+
+      {/* Admin */}
+      <Route path="/admin">
+        <ProtectedRoute roles={["admin", "super_admin"]}><AdminDashboard /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/approvals">
+        <ProtectedRoute roles={["admin", "super_admin"]}><AssetApprovals /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/users">
+        <ProtectedRoute roles={["admin", "super_admin"]}><UsersPage /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/disputes">
+        <ProtectedRoute roles={["admin", "super_admin"]}><DisputesPage /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/finance">
+        <ProtectedRoute roles={["admin", "super_admin"]}><FinancialOverview /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/sanad">
+        <ProtectedRoute roles={["admin", "super_admin"]}><SanadTracking /></ProtectedRoute>
+      </Route>
+
       <Route>
-        <ProtectedRoute>
-          <Dashboard />
-        </ProtectedRoute>
+        <Redirect to="/" />
       </Route>
     </Switch>
   );
