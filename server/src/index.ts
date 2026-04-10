@@ -1,66 +1,86 @@
+/**
+ * Managed Luxury Rental Platform — API entrypoint.
+ *
+ * Module layout:
+ *   /api/auth         — registration, login, Nafath hooks
+ *   /api/assets       — owner submissions, admin approvals, public listings
+ *   /api/inspections  — inspector intake + return reports
+ *   /api/rentals      — rental lifecycle (runs risk engine, produces legal)
+ *   /api/legal        — contract signing, Sanad lifecycle, enforcement
+ *   /api/payments     — gateway + ZATCA invoicing + owner payouts
+ *   /api/disputes     — dispute creation + resolution
+ *   /api/operations   — shipments, inventory, alerts
+ *   /api/admin        — KPIs, risk monitoring, user management
+ */
+
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
 
 import authRouter from "./routes/auth.js";
-import storesRouter from "./routes/stores.js";
-import recipesRouter from "./routes/recipes.js";
-import videosRouter from "./routes/videos.js";
-import alertsRouter from "./routes/alerts.js";
-import dashboardRouter from "./routes/dashboard.js";
+import assetsRouter from "./routes/assets.js";
+import inspectionsRouter from "./routes/inspections.js";
+import rentalsRouter from "./routes/rentals.js";
+import legalRouter from "./routes/legal.js";
+import paymentsRouter from "./routes/payments.js";
+import disputesRouter from "./routes/disputes.js";
+import operationsRouter from "./routes/operations.js";
+import adminRouter from "./routes/admin.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "3001");
 
-app.use(cors({
-  origin: process.env.CLIENT_URL ?? "http://localhost:5173",
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL ?? "http://localhost:5173",
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// Static files for uploads (serve frames if needed)
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
-app.use("/frames", express.static(path.join(process.cwd(), "frames")));
-
-// Health check
-app.get("/api/health", (req, res) => {
+// Health
+app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
+    service: "mlr-platform",
     version: "1.0.0",
-    providers: {
-      gemini: !!process.env.GEMINI_API_KEY,
-      openai: !!process.env.OPENAI_API_KEY,
+    integrations: {
+      nafath: !!process.env.NAFATH_API_KEY,
+      nafith: !!process.env.NAFITH_API_KEY,
+      paymentGateway: !!process.env.PAYMENT_GATEWAY_API_KEY,
+      zatca: !!process.env.ZATCA_API_KEY,
     },
     timestamp: new Date().toISOString(),
   });
 });
 
-// Routes
 app.use("/api/auth", authRouter);
-app.use("/api/stores", storesRouter);
-app.use("/api/recipes", recipesRouter);
-app.use("/api/videos", videosRouter);
-app.use("/api/alerts", alertsRouter);
-app.use("/api/dashboard", dashboardRouter);
+app.use("/api/assets", assetsRouter);
+app.use("/api/inspections", inspectionsRouter);
+app.use("/api/rentals", rentalsRouter);
+app.use("/api/legal", legalRouter);
+app.use("/api/payments", paymentsRouter);
+app.use("/api/disputes", disputesRouter);
+app.use("/api/operations", operationsRouter);
+app.use("/api/admin", adminRouter);
 
-// Error handler
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error(err.stack);
-  res.status(500).json({ error: err.message ?? "Internal server error" });
+// 404
+app.use((req, res) => {
+  res.status(404).json({ error: "Not found", path: req.path });
 });
 
+// Centralized error handler
+app.use(errorHandler);
+
 app.listen(PORT, () => {
-  console.log(`🚀 Franchise Quality Monitor API running on port ${PORT}`);
-  console.log(`   Gemini API: ${process.env.GEMINI_API_KEY ? "✅ configured" : "❌ missing GEMINI_API_KEY"}`);
-  console.log(`   OpenAI API: ${process.env.OPENAI_API_KEY ? "✅ configured" : "❌ missing OPENAI_API_KEY"}`);
+  console.log(`🇸🇦  Managed Luxury Rental Platform API running on :${PORT}`);
+  console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
 });
 
 export default app;
