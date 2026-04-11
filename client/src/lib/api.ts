@@ -580,6 +580,40 @@ export const adminApi = {
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface NotificationItem {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  linkPath?: string | null;
+  readAt?: string | null;
+  payloadJson?: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (opts?: { unreadOnly?: boolean; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (opts?.unreadOnly) qs.set("unread", "1");
+    if (opts?.limit) qs.set("limit", String(opts.limit));
+    const s = qs.toString();
+    return request<NotificationItem[]>(`/notifications${s ? `?${s}` : ""}`);
+  },
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (ids: number[]) =>
+    request<{ updated: number }>("/notifications/read", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
+  markAllRead: () =>
+    request<{ ok: true }>("/notifications/read-all", { method: "POST" }),
+};
+
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };

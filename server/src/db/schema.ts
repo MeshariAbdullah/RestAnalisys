@@ -655,6 +655,50 @@ export const operationalAlerts = pgTable("operational_alerts", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// User notifications (per-user in-app inbox)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "asset_submitted",
+  "asset_approved",
+  "asset_rejected",
+  "asset_inspection_ready",
+  "rental_created",
+  "rental_legal_ready",
+  "rental_signed",
+  "rental_paid",
+  "rental_delivered",
+  "rental_returned",
+  "rental_closed",
+  "rental_cancelled",
+  "dispute_opened",
+  "dispute_resolved",
+  "payout_released",
+  "sanad_issued",
+  "sanad_matured",
+  "generic",
+]);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    type: notificationTypeEnum("type").notNull().default("generic"),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    linkPath: text("link_path"),
+    readAt: timestamp("read_at"),
+    payloadJson: jsonb("payload_json"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    unreadIdx: index("notifications_unread_idx").on(t.userId, t.readAt),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Immutable audit logs
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -713,3 +757,5 @@ export type SanadRecord = typeof sanadRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
 export type Shipment = typeof shipments.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;

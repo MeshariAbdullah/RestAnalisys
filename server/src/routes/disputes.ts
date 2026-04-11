@@ -12,6 +12,7 @@ import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyMany } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -58,6 +59,20 @@ router.post(
       entityType: "dispute",
       entityId: dispute.id,
       after: dispute,
+    });
+
+    // Notify the opposing party (and renter if an admin opened it on their
+    // behalf). De-dup so the opener doesn't get a notification about their
+    // own action.
+    const recipients = Array.from(
+      new Set([rental.renterId, rental.ownerId].filter((uid) => uid !== actorId))
+    );
+    await notifyMany(recipients, {
+      type: "dispute_opened",
+      title: "Dispute opened",
+      body: `A ${input.category} dispute was opened on rental ${rental.reference}.`,
+      linkPath: `/my-rentals`,
+      payload: { rentalId: rental.id, disputeId: dispute.id },
     });
 
     res.status(201).json(dispute);
@@ -149,6 +164,25 @@ router.post(
       entityId: input.disputeId,
       after: updated,
     });
+
+    // Fan out resolution to both parties so everyone is kept in the loop.
+    const [rental] = await db
+      .select()
+      .from(rentals)
+      .where(eq(rentals.id, dispute.rentalId))
+      .limit(1);
+    if (rental) {
+      await notifyMany([rental.renterId, rental.ownerId], {
+        type: "dispute_resolved",
+        title: "Dispute resolved",
+        body: `Dispute on rental ${rental.reference} was resolved: ${input.resolution.replace(
+          /_/g,
+          " "
+        )}.`,
+        linkPath: `/my-rentals`,
+        payload: { rentalId: rental.id, disputeId: input.disputeId },
+      });
+    }
 
     res.json(updated);
   })

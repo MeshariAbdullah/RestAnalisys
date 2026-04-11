@@ -118,8 +118,9 @@ export const OwnerValuationResponseSchema = z.object({
 // Rentals
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Note: req.query always arrives as strings, so use coerce.
 export const RentalQuoteRequestSchema = z.object({
-  assetId: z.number().int().positive(),
+  assetId: z.coerce.number().int().positive(),
   startDate: IsoDate,
   endDate: IsoDate,
 });
@@ -183,6 +184,23 @@ export const DisputeOpenSchema = z.object({
   category: z.enum(["damage", "loss", "fraud", "service", "billing"]),
   summary: z.string().min(10),
   evidence: z.array(z.string().url()).default([]),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const AdminStaffCreateSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().min(2),
+  role: z.enum(["admin", "operations", "inspector"]),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  phone: SaudiPhone.optional(),
+});
+
+export const AdminUserBlockSchema = z.object({
+  block: z.boolean(),
+  reason: z.string().min(3).optional(),
 });
 
 export const DisputeResolveSchema = z.object({

@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify, notifyMany } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -78,16 +79,19 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) throw new NotFoundError("User");
 
-  // Aggregate rental history.
+  // Aggregate rental history, including a late-return count derived from
+  // comparing the actual return timestamp against the contracted end date.
+  // A rental is "late" if it was returned strictly after 23:59:59 of end_date.
   const stats = await db
     .select({
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      lateReturns: sql<number>`count(*) filter (where returned_at is not null and returned_at::date > end_date)`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, lateReturns: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +103,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.lateReturns ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +284,23 @@ router.post(
       after: { rental, decision },
     });
 
+    await notify({
+      userId: renterId,
+      type: "rental_legal_ready",
+      title: "Contract ready to sign",
+      body: `Your rental ${rental.reference} is waiting for your legal signature.`,
+      linkPath: `/legal/${legalCommitment.id}`,
+      payload: { rentalId: rental.id, commitmentId: legalCommitment.id },
+    });
+    await notify({
+      userId: asset.ownerId,
+      type: "rental_created",
+      title: "Your asset is reserved",
+      body: `${asset.brand} ${asset.title} has been reserved under rental ${rental.reference}.`,
+      linkPath: `/owner/assets/${asset.id}`,
+      payload: { rentalId: rental.id, assetId: asset.id },
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -441,6 +462,15 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: rental.renterId,
+      type: "rental_delivered",
+      title: "Item delivered",
+      body: `Your rental ${rental.reference} has been delivered. Enjoy!`,
+      linkPath: `/my-rentals`,
+      payload: { rentalId: rental.id },
+    });
+
     res.json(updated);
   })
 );
@@ -475,6 +505,14 @@ router.post(
       entityType: "rental",
       entityId: id,
       after: updated,
+    });
+
+    await notifyMany([rental.renterId, rental.ownerId], {
+      type: "rental_returned",
+      title: "Item returned",
+      body: `Rental ${rental.reference} has been returned and is under inspection.`,
+      linkPath: `/my-rentals`,
+      payload: { rentalId: rental.id },
     });
 
     res.json(updated);
@@ -515,6 +553,13 @@ router.post(
         entityType: "rental",
         entityId: id,
         after: updated,
+      });
+      await notifyMany([rental.renterId, rental.ownerId], {
+        type: "rental_closed",
+        title: "Rental closed",
+        body: `Rental ${rental.reference} closed cleanly. Thank you!`,
+        linkPath: `/my-rentals`,
+        payload: { rentalId: rental.id, outcome },
       });
       return res.json(updated);
     }
@@ -626,6 +671,14 @@ router.post(
       entityType: "rental",
       entityId: id,
       after: updated,
+    });
+
+    await notifyMany([rental.renterId, rental.ownerId], {
+      type: "rental_cancelled",
+      title: "Rental cancelled",
+      body: `Rental ${rental.reference} was cancelled: ${reason}`,
+      linkPath: `/my-rentals`,
+      payload: { rentalId: rental.id, reason },
     });
 
     res.json(updated);

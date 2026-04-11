@@ -11,6 +11,7 @@ import Browse from "./pages/renter/Browse";
 import ItemDetail from "./pages/renter/ItemDetail";
 import LegalCommitmentPage from "./pages/renter/LegalCommitment";
 import MyRentals from "./pages/renter/MyRentals";
+import Profile from "./pages/renter/Profile";
 
 // Owner
 import OwnerDashboard from "./pages/owner/OwnerDashboard";
@@ -64,6 +65,9 @@ export default function App() {
       </Route>
       <Route path="/my-rentals">
         <ProtectedRoute roles={["renter"]}><MyRentals /></ProtectedRoute>
+      </Route>
+      <Route path="/profile">
+        <ProtectedRoute roles={["renter"]}><Profile /></ProtectedRoute>
       </Route>
 
       {/* Owner */}

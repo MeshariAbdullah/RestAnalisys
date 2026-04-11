@@ -1,19 +1,20 @@
 import React, { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Diamond, Watch, Shirt, Gem } from "lucide-react";
+import { Search, Diamond, Watch, Shirt, Gem, Sparkles } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, formatSar, type Asset } from "@/lib/api";
 
-const CATEGORIES = [
+const CATEGORIES: Array<{ id: string | undefined; label: string; icon: typeof Diamond }> = [
   { id: undefined, label: "All", icon: Diamond },
-  { id: "bag", label: "Bags", icon: Diamond },
+  { id: "handbag", label: "Handbags", icon: Diamond },
   { id: "watch", label: "Watches", icon: Watch },
   { id: "dress", label: "Dresses", icon: Shirt },
   { id: "jewelry", label: "Jewelry", icon: Gem },
+  { id: "accessory", label: "Accessories", icon: Sparkles },
 ];
 
 export default function Browse() {

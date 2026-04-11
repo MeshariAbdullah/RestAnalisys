@@ -19,9 +19,11 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  UserCircle,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
+import NotificationBell from "./NotificationBell";
 
 interface NavItem {
   href: string;
@@ -34,6 +36,7 @@ const NAV: NavItem[] = [
   // Renter
   { href: "/browse", label: "Browse Catalog", icon: ShoppingBag, roles: ["renter"] },
   { href: "/my-rentals", label: "My Rentals", icon: FileText, roles: ["renter"] },
+  { href: "/profile", label: "Profile", icon: UserCircle, roles: ["renter"] },
 
   // Owner
   { href: "/owner", label: "Owner Dashboard", icon: LayoutDashboard, roles: ["owner"] },
@@ -162,7 +165,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="flex-1 overflow-auto flex flex-col">
+        {user && (
+          <header className="sticky top-0 z-30 flex items-center justify-end gap-3 h-14 px-6 bg-white/80 backdrop-blur border-b border-neutral-200">
+            <NotificationBell />
+          </header>
+        )}
+        <div className="flex-1">{children}</div>
+      </main>
     </div>
   );
 }

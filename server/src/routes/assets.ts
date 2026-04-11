@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -58,6 +59,15 @@ router.post(
       entityType: "asset",
       entityId: asset.id,
       after: { title: asset.title, brand: asset.brand },
+    });
+
+    await notify({
+      userId: ownerId,
+      type: "asset_submitted",
+      title: "Submission received",
+      body: `${asset.brand} ${asset.title} is under review by our team.`,
+      linkPath: `/owner/assets/${asset.id}`,
+      payload: { assetId: asset.id },
     });
 
     res.status(201).json(asset);
@@ -254,6 +264,17 @@ router.post(
       entityId: assetId,
       before: asset,
       after: updated,
+    });
+
+    await notify({
+      userId: asset.ownerId,
+      type: approved ? "asset_approved" : "asset_rejected",
+      title: approved ? "Asset approved" : "Asset rejected",
+      body: approved
+        ? `${asset.brand} ${asset.title} was approved. Arrange shipment to our warehouse.`
+        : `${asset.brand} ${asset.title} was rejected: ${rejectionReason ?? "no reason provided"}`,
+      linkPath: `/owner/assets/${asset.id}`,
+      payload: { assetId: asset.id, approved },
     });
 
     res.json(updated);
