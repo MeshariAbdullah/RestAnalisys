@@ -36,6 +36,16 @@ import { generateLegalCommitment } from "../services/legalService.js";
 async function seed() {
   console.log("🌱 Seeding MLR platform...");
 
+  // ── Idempotency guard ────────────────────────────────────────────────
+  // Render re-runs this script on every deploy. If the database already
+  // contains users, skip the seed so we don't crash on unique-constraint
+  // violations.
+  const existing = await db.select({ id: users.id }).from(users).limit(1);
+  if (existing.length > 0) {
+    console.log("Seed skipped — database already seeded.");
+    return;
+  }
+
   // ── Users ─────────────────────────────────────────────────────────────
   const pass = await bcrypt.hash("Mlr@2024!", 10);
 

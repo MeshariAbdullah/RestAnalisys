@@ -13,7 +13,10 @@ const __dirname = path.dirname(__filename);
 const { Pool } = pg;
 
 async function runMigrations() {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : false,
+  });
   const db = drizzle(pool);
 
   console.log("Running migrations...");
