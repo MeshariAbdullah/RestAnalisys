@@ -78,16 +78,22 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) throw new NotFoundError("User");
 
-  // Aggregate rental history.
+  // Aggregate rental history. A return is considered "late" when the inspector
+  // received it after the agreed end_date (end-of-day in the rental's local
+  // timezone — for KSA we compare returned_at::date > end_date).
   const stats = await db
     .select({
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      lateReturns: sql<number>`count(*) filter (
+        where returned_at is not null
+          and returned_at::date > end_date
+      )`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, lateReturns: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +105,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.lateReturns ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -458,9 +464,10 @@ router.post(
       throw new LegalStateError(`Expected active/return_in_transit, got ${rental.status}`);
     }
 
+    const receivedAt = new Date();
     const [updated] = await db
       .update(rentals)
-      .set({ status: "under_inspection", returnedAt: new Date(), updatedAt: new Date() })
+      .set({ status: "under_inspection", returnedAt: receivedAt, updatedAt: new Date() })
       .where(eq(rentals.id, id))
       .returning();
 
@@ -469,15 +476,40 @@ router.post(
       .set({ status: "returned_under_inspection", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
 
+    // Compare returnedAt (UTC) to the rental's end_date (KSA local day). Any
+    // return received *after* the agreed end_date is counted as late.
+    const endDateMs = new Date(rental.endDate + "T23:59:59+03:00").getTime();
+    const wasLate = receivedAt.getTime() > endDateMs;
+    const daysLate = wasLate
+      ? Math.max(1, Math.ceil((receivedAt.getTime() - endDateMs) / (1000 * 60 * 60 * 24)))
+      : 0;
+
+    if (wasLate) {
+      await db.insert(operationalAlerts).values({
+        type: "late_return",
+        severity: daysLate >= 3 ? "high" : "medium",
+        subjectType: "rental",
+        subjectId: rental.id,
+        message: `Rental ${rental.reference} returned ${daysLate} day(s) after end_date (${rental.endDate}).`,
+        payloadJson: {
+          rentalId: rental.id,
+          renterId: rental.renterId,
+          endDate: rental.endDate,
+          returnedAt: receivedAt.toISOString(),
+          daysLate,
+        },
+      });
+    }
+
     await recordAudit({
       req,
       action: "rental.returned",
       entityType: "rental",
       entityId: id,
-      after: updated,
+      after: { ...updated, wasLate, daysLate },
     });
 
-    res.json(updated);
+    res.json({ ...updated, wasLate, daysLate });
   })
 );
 
