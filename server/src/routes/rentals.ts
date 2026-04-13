@@ -33,6 +33,7 @@ import {
   inspections,
   shipments,
   operationalAlerts,
+  inventoryMovements,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission, requireNafath } from "../middleware/rbac.js";
@@ -79,15 +80,24 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
   if (!user) throw new NotFoundError("User");
 
   // Aggregate rental history.
+  //
+  // A rental is counted as "late" when the physical return (returned_at) fell
+  // on or after the day AFTER end_date. We compare against end_date + 1 day so
+  // that returning on the last contracted day counts as on-time. Only rentals
+  // that actually reached the return stage are considered.
   const stats = await db
     .select({
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      late: sql<number>`count(*) filter (
+        where returned_at is not null
+          and returned_at::date > end_date
+      )`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, late: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +109,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.late ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -393,6 +403,14 @@ router.post(
       toAddressJson: rental.deliveryAddressJson as object,
     });
 
+    await db.insert(inventoryMovements).values({
+      assetId: rental.assetId,
+      fromLocation: "warehouse",
+      toLocation: "in_transit_to_renter",
+      movedByUserId: req.user!.userId,
+      reason: `rental.fulfill:${rental.reference}`,
+    });
+
     await recordAudit({
       req,
       action: "rental.fulfill",
@@ -433,6 +451,14 @@ router.post(
       .set({ status: "rented_out", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
 
+    await db.insert(inventoryMovements).values({
+      assetId: rental.assetId,
+      fromLocation: "in_transit_to_renter",
+      toLocation: `renter:${rental.renterId}`,
+      movedByUserId: req.user!.userId,
+      reason: `rental.delivered:${rental.reference}`,
+    });
+
     await recordAudit({
       req,
       action: "rental.delivered",
@@ -468,6 +494,14 @@ router.post(
       .update(assets)
       .set({ status: "returned_under_inspection", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
+
+    await db.insert(inventoryMovements).values({
+      assetId: rental.assetId,
+      fromLocation: `renter:${rental.renterId}`,
+      toLocation: "warehouse_inspection_bay",
+      movedByUserId: req.user!.userId,
+      reason: `rental.returned:${rental.reference}`,
+    });
 
     await recordAudit({
       req,
@@ -509,6 +543,13 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await db.insert(inventoryMovements).values({
+        assetId: rental.assetId,
+        fromLocation: "warehouse_inspection_bay",
+        toLocation: "warehouse_listed",
+        movedByUserId: req.user!.userId,
+        reason: `rental.close_clean:${rental.reference}`,
+      });
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -540,6 +581,13 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await db.insert(inventoryMovements).values({
+        assetId: rental.assetId,
+        fromLocation: "warehouse_inspection_bay",
+        toLocation: "warehouse_listed",
+        movedByUserId: req.user!.userId,
+        reason: `rental.close_penalty:${rental.reference}`,
+      });
       await recordAudit({
         req,
         action: "rental.close_penalty",
@@ -564,6 +612,14 @@ router.post(
         updatedAt: new Date(),
       })
       .where(eq(assets.id, rental.assetId));
+
+    await db.insert(inventoryMovements).values({
+      assetId: rental.assetId,
+      fromLocation: "warehouse_inspection_bay",
+      toLocation: outcome === "loss" ? "lost_or_destroyed" : "warehouse_hold_enforcement",
+      movedByUserId: req.user!.userId,
+      reason: `rental.close_${outcome}:${rental.reference}`,
+    });
 
     await db.insert(operationalAlerts).values({
       type: "sanad_execution_required",
