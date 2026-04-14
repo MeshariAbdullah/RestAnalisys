@@ -10,6 +10,8 @@ import recipesRouter from "./routes/recipes.js";
 import videosRouter from "./routes/videos.js";
 import alertsRouter from "./routes/alerts.js";
 import dashboardRouter from "./routes/dashboard.js";
+import employeesRouter from "./routes/employees.js";
+import heatmapRouter from "./routes/heatmap.js";
 
 dotenv.config();
 
@@ -50,6 +52,8 @@ app.use("/api/recipes", recipesRouter);
 app.use("/api/videos", videosRouter);
 app.use("/api/alerts", alertsRouter);
 app.use("/api/dashboard", dashboardRouter);
+app.use("/api/employees", employeesRouter);
+app.use("/api/heatmap", heatmapRouter);
 
 // Error handler
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {

@@ -31,6 +31,9 @@ export const stores = pgTable("stores", {
   type: text("type").notNull().default("restaurant"),
   city: text("city").notNull(),
   cameras: integer("cameras").notNull().default(1),
+  latitude: real("latitude"),
+  longitude: real("longitude"),
+  address: text("address"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -137,5 +140,33 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   name: text("name").notNull(),
   role: text("role").notNull().default("operator"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const employeeStatusEnum = pgEnum("employee_status", ["active", "on_leave", "terminated"]);
+
+export const employees = pgTable("employees", {
+  id: serial("id").primaryKey(),
+  storeId: integer("store_id").references(() => stores.id).notNull(),
+  name: text("name").notNull(),
+  role: text("role").notNull().default("staff"),
+  shift: text("shift").notNull().default("morning"),
+  phone: text("phone"),
+  email: text("email"),
+  hireDate: timestamp("hire_date").defaultNow().notNull(),
+  status: employeeStatusEnum("status").notNull().default("active"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const employeePerformance = pgTable("employee_performance", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").references(() => employees.id).notNull(),
+  videoId: integer("video_id").references(() => videoUploads.id),
+  complianceScore: real("compliance_score"),
+  safetyScore: real("safety_score"),
+  hygieneScore: real("hygiene_score"),
+  violations: integer("violations").notNull().default(0),
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

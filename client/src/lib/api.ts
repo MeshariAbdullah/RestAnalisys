@@ -130,6 +130,38 @@ export const healthApi = {
   check: () => request<HealthCheck>("/health"),
 };
 
+// ── Employees ─────────────────────────────────────────────────────────────────
+
+export const employeesApi = {
+  list: (params?: { storeId?: number; status?: string; shift?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.storeId) qs.set("storeId", String(params.storeId));
+    if (params?.status) qs.set("status", params.status);
+    if (params?.shift) qs.set("shift", params.shift);
+    return request<Employee[]>(`/employees?${qs}`);
+  },
+  get: (id: number) => request<EmployeeDetail>(`/employees/${id}`),
+  create: (data: Partial<Employee>) =>
+    request<Employee>("/employees", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: number, data: Partial<Employee>) =>
+    request<Employee>(`/employees/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  delete: (id: number) =>
+    request<{ success: boolean }>(`/employees/${id}`, { method: "DELETE" }),
+  stats: () => request<EmployeeStats>("/employees/stats"),
+  leaderboard: () => request<EmployeeLeaderboardEntry[]>("/employees/leaderboard/top"),
+  addPerformance: (id: number, data: Partial<EmployeePerformance>) =>
+    request<EmployeePerformance>(`/employees/${id}/performance`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};
+
+// ── Heatmap ───────────────────────────────────────────────────────────────────
+
+export const heatmapApi = {
+  get: () => request<HeatmapResponse>("/heatmap"),
+};
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface User {
@@ -145,7 +177,104 @@ export interface Store {
   type: string;
   city: string;
   cameras: number;
+  latitude?: number | null;
+  longitude?: number | null;
+  address?: string | null;
   createdAt: string;
+}
+
+export interface Employee {
+  id: number;
+  storeId: number;
+  name: string;
+  role: string;
+  shift: string;
+  phone: string | null;
+  email: string | null;
+  hireDate: string;
+  status: "active" | "on_leave" | "terminated";
+  notes: string | null;
+  createdAt: string;
+  storeName?: string;
+}
+
+export interface EmployeePerformance {
+  id: number;
+  employeeId: number;
+  videoId: number | null;
+  complianceScore: number | null;
+  safetyScore: number | null;
+  hygieneScore: number | null;
+  violations: number;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface EmployeeDetail extends Employee {
+  performance: EmployeePerformance[];
+  summary: {
+    evaluations: number;
+    avgComplianceScore: number | null;
+    totalViolations: number;
+  };
+}
+
+export interface EmployeeStats {
+  total: number;
+  active: number;
+  onLeave: number;
+  terminated: number;
+  avgComplianceScore: number | null;
+  totalViolations: number;
+  byShift: { morning: number; evening: number; night: number };
+}
+
+export interface EmployeeLeaderboardEntry {
+  employeeId: number;
+  name: string;
+  role: string;
+  storeName: string;
+  avgScore: number;
+  evaluations: number;
+  violations: number;
+}
+
+export interface HeatmapPoint {
+  storeId: number;
+  name: string;
+  type: string;
+  city: string;
+  address: string | null;
+  latitude: number;
+  longitude: number;
+  hasExactCoords: boolean;
+  cameras: number;
+  videoCount: number;
+  alerts: { total: number; open: number; high: number; critical: number };
+  compliance: { avgScore: number | null; samples: number };
+  risk: "low" | "medium" | "high" | "critical";
+}
+
+export interface HeatmapCity {
+  city: string;
+  stores: number;
+  videos: number;
+  openAlerts: number;
+  criticalAlerts: number;
+  avgScore: number | null;
+  lat?: number;
+  lng?: number;
+}
+
+export interface HeatmapResponse {
+  points: HeatmapPoint[];
+  cities: HeatmapCity[];
+  summary: {
+    totalStores: number;
+    criticalStores: number;
+    highRiskStores: number;
+    citiesCovered: number;
+  };
 }
 
 export interface RecipeSpec {

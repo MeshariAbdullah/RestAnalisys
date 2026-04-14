@@ -230,6 +230,8 @@ curl "http://localhost:3001/api/videos/$VIDEO_ID/results" \
 | `ai_frame_analysis_gpt` | GPT-4o per-frame analysis results |
 | `recipe_compliance_results` | Compliance scores per provider |
 | `store_alerts` | Generated alerts with severity |
+| `employees` | Staff roster with store + shift + status |
+| `employee_performance` | Per-employee compliance/safety/hygiene scores |
 
 ---
 
@@ -279,6 +281,18 @@ GET  /api/alerts/stats            → AlertStats
 GET  /api/dashboard/kpis          → DashboardKPIs
 GET  /api/dashboard/charts        → DashboardCharts
 GET  /api/dashboard/reports       ?period=daily|weekly|monthly → Report
+
+GET  /api/employees               ?storeId&status&shift → Employee[]
+POST /api/employees               { storeId, name, role, shift, ... } → Employee
+GET  /api/employees/:id           → EmployeeDetail (with performance history)
+PUT  /api/employees/:id           → Employee
+DELETE /api/employees/:id         → { success }
+GET  /api/employees/stats         → EmployeeStats
+GET  /api/employees/leaderboard/top → Top 10 by compliance
+POST /api/employees/:id/performance → EmployeePerformance
+
+GET  /api/heatmap                 → { points, cities, summary } (geo + risk)
+
 GET  /api/health                  → { ok, providers }
 ```
 
@@ -294,8 +308,8 @@ GET  /api/health                  → { ok, providers }
 | `/recipes` | Recipe CRUD + visual spec builder |
 | `/alerts` | Alert list + filtering + status management |
 | `/reports` | Daily/weekly/monthly reports |
-| `/employees` | Placeholder |
-| `/heatmap` | Placeholder |
+| `/employees` | Employee CRUD + performance leaderboard |
+| `/heatmap` | Geographic distribution + risk heatmap of stores |
 
 All pages use **Arabic RTL layout** with Cairo font.
 
