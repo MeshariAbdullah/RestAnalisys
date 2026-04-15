@@ -119,6 +119,25 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | POST   | `/users/:id/block`    | admin / super_admin   | Block or unblock a user                |
 | POST   | `/users`              | super_admin           | Create staff users                     |
 
+## Notifications — `/api/notifications`
+
+Bilingual (EN/AR) user-scoped notifications fed by the rental, legal, payment
+and payout flows. Clients poll `GET /mine` and mark items read.
+
+| Method | Path             | Roles         | Purpose                                       |
+| ------ | ---------------- | ------------- | --------------------------------------------- |
+| GET    | `/mine`          | authenticated | My notifications (`?unread=true` for unread)  |
+| POST   | `/:id/read`      | authenticated | Mark one notification as read                 |
+| POST   | `/read-all`      | authenticated | Mark every unread notification as read        |
+
+Event types currently emitted:
+
+- `rental.legal_ready`, `rental.confirmed`, `rental.out_for_delivery`,
+  `rental.delivered`, `rental.returned`, `rental.closed`,
+  `rental.closed_with_penalty`, `rental.enforcement`
+- `asset.approved`, `asset.rejected`, `asset.valuation_ready`
+- `payout.released`
+
 ## Health
 
 | Method | Path          | Roles  | Purpose                                |

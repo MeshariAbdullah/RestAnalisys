@@ -52,10 +52,15 @@ import {
   computeRentalQuote,
   DEFAULT_PLATFORM_FEE_PCT,
 } from "../utils/money.js";
-import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
+import {
+  computeRiskDecision,
+  RiskFeatures,
+  trustScoreToCategory,
+} from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
-import { issueSanad } from "../services/nafithService.js";
+import { issueSanad, dischargeSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify, rentalCopy } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -74,6 +79,72 @@ function generateRentalReference(): string {
   return `MLR-${year}-${rand}`;
 }
 
+/**
+ * Nudge the renter's trust score after a rental closes. The increments are
+ * intentionally small so a single rental cannot swing a user's standing
+ * dramatically, while repeated bad behaviour keeps dragging the score down.
+ */
+async function adjustTrustScore(
+  userId: number,
+  outcome: "clean" | "penalty" | "major_damage" | "loss" | "dispute"
+): Promise<void> {
+  const delta =
+    outcome === "clean"
+      ? +3
+      : outcome === "penalty"
+      ? -5
+      : outcome === "dispute"
+      ? -8
+      : outcome === "major_damage"
+      ? -20
+      : /* loss */ -30;
+
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) return;
+  const next = Math.max(0, Math.min(100, user.trustScore + delta));
+  await db
+    .update(users)
+    .set({
+      trustScore: next,
+      riskCategory: trustScoreToCategory(next),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId));
+}
+
+/**
+ * Discharge the Sanad tied to a rental (if any) by calling Nafith and
+ * mirroring the state change locally. Safe to call when no Sanad exists.
+ */
+async function dischargeRentalSanad(rentalId: number): Promise<void> {
+  const [sanad] = await db
+    .select()
+    .from(sanadRecords)
+    .where(eq(sanadRecords.rentalId, rentalId))
+    .limit(1);
+  if (!sanad || !sanad.nafithReference) return;
+  if (sanad.status !== "active" && sanad.status !== "issued" && sanad.status !== "signed") return;
+
+  const result = await dischargeSanad(sanad.nafithReference);
+  await db
+    .update(sanadRecords)
+    .set({
+      status: "discharged",
+      rawResponseJson: result as unknown as object,
+      updatedAt: new Date(),
+    })
+    .where(eq(sanadRecords.id, sanad.id));
+
+  await db
+    .update(legalCommitments)
+    .set({
+      status: "discharged",
+      dischargedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(legalCommitments.rentalId, rentalId));
+}
+
 async function buildRiskFeatures(userId: number, assetValueHalalas: number): Promise<RiskFeatures> {
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) throw new NotFoundError("User");
@@ -84,10 +155,19 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      // A "late return" is any rental whose actual returnedAt timestamp exceeds
+      // the agreed end_date, or whose current status is `active`/`return_in_transit`
+      // and the end_date has already passed.
+      late: sql<number>`count(*) filter (
+        where (returned_at is not null and returned_at::date > end_date)
+           or (returned_at is null
+               and status in ('active','return_in_transit','under_inspection')
+               and end_date < current_date)
+      )`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, late: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +179,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.late ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -272,6 +352,22 @@ router.post(
       })
       .returning();
 
+    await notify({
+      userId: renterId,
+      type: "rental.legal_ready",
+      subjectType: "rental",
+      subjectId: rental.id,
+      titleEn: `Sign the legal commitment for rental ${rental.reference}`,
+      titleAr: `قم بتوقيع التعهد القانوني للإيجار ${rental.reference}`,
+      bodyEn: `Commitment ${decision.legalCommitmentPct}% = ${(decision.legalCommitmentHalalas / 100).toFixed(
+        2
+      )} SAR`,
+      bodyAr: `قيمة التعهد ${decision.legalCommitmentPct}% = ${(decision.legalCommitmentHalalas / 100).toFixed(
+        2
+      )} ر.س`,
+      actionUrl: `/renter/rentals/${rental.id}/legal`,
+    });
+
     await recordAudit({
       req,
       action: "rental.create",
@@ -393,6 +489,15 @@ router.post(
       toAddressJson: rental.deliveryAddressJson as object,
     });
 
+    await notify({
+      userId: rental.renterId,
+      type: "rental.out_for_delivery",
+      subjectType: "rental",
+      subjectId: rental.id,
+      ...rentalCopy.outForDelivery(rental.reference),
+      actionUrl: `/renter/rentals/${rental.id}`,
+    });
+
     await recordAudit({
       req,
       action: "rental.fulfill",
@@ -433,6 +538,15 @@ router.post(
       .set({ status: "rented_out", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
 
+    await notify({
+      userId: rental.renterId,
+      type: "rental.delivered",
+      subjectType: "rental",
+      subjectId: rental.id,
+      ...rentalCopy.delivered(rental.reference),
+      actionUrl: `/renter/rentals/${rental.id}`,
+    });
+
     await recordAudit({
       req,
       action: "rental.delivered",
@@ -468,6 +582,15 @@ router.post(
       .update(assets)
       .set({ status: "returned_under_inspection", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
+
+    await notify({
+      userId: rental.renterId,
+      type: "rental.returned",
+      subjectType: "rental",
+      subjectId: rental.id,
+      ...rentalCopy.returned(rental.reference),
+      actionUrl: `/renter/rentals/${rental.id}`,
+    });
 
     await recordAudit({
       req,
@@ -509,6 +632,16 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await dischargeRentalSanad(id);
+      await adjustTrustScore(rental.renterId, "clean");
+      await notify({
+        userId: rental.renterId,
+        type: "rental.closed",
+        subjectType: "rental",
+        subjectId: id,
+        ...rentalCopy.closedClean(rental.reference),
+        actionUrl: `/renter/rentals/${id}`,
+      });
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -540,6 +673,17 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      // Keep the Sanad active until the penalty payment clears; discharge it
+      // when the penalty payment is captured (see /payments/penalty/:id/capture).
+      await adjustTrustScore(rental.renterId, "penalty");
+      await notify({
+        userId: rental.renterId,
+        type: "rental.closed_with_penalty",
+        subjectType: "rental",
+        subjectId: id,
+        ...rentalCopy.closedPenalty(rental.reference),
+        actionUrl: `/renter/rentals/${id}`,
+      });
       await recordAudit({
         req,
         action: "rental.close_penalty",
@@ -565,6 +709,17 @@ router.post(
       })
       .where(eq(assets.id, rental.assetId));
 
+    // Flag the legal commitment as breached so dashboards can surface it.
+    await db
+      .update(legalCommitments)
+      .set({
+        status: "breached",
+        breachedAt: new Date(),
+        breachReason: outcome,
+        updatedAt: new Date(),
+      })
+      .where(eq(legalCommitments.rentalId, id));
+
     await db.insert(operationalAlerts).values({
       type: "sanad_execution_required",
       severity: "critical",
@@ -572,6 +727,16 @@ router.post(
       subjectId: id,
       message: `Rental ${rental.reference} requires Sanad execution for ${outcome}.`,
       payloadJson: { outcome, rentalId: id },
+    });
+
+    await adjustTrustScore(rental.renterId, outcome);
+    await notify({
+      userId: rental.renterId,
+      type: "rental.enforcement",
+      subjectType: "rental",
+      subjectId: id,
+      ...rentalCopy.enforcement(rental.reference, outcome),
+      actionUrl: `/renter/rentals/${id}`,
     });
 
     await recordAudit({

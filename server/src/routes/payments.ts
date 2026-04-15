@@ -6,7 +6,15 @@
 import { Router } from "express";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { payments, rentals, users, assets, payouts } from "../db/schema.js";
+import {
+  payments,
+  rentals,
+  users,
+  assets,
+  payouts,
+  sanadRecords,
+  legalCommitments,
+} from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { PaymentChargeSchema, PaymentRefundSchema } from "../utils/schemas.js";
@@ -19,6 +27,7 @@ import {
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify, rentalCopy } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -110,6 +119,25 @@ router.post(
           updatedAt: new Date(),
         })
         .where(eq(rentals.id, rental.id));
+
+      // Activate the legal backstop: commitment → active, Sanad → active.
+      await db
+        .update(legalCommitments)
+        .set({ status: "active", updatedAt: new Date() })
+        .where(eq(legalCommitments.rentalId, rental.id));
+      await db
+        .update(sanadRecords)
+        .set({ status: "active", updatedAt: new Date() })
+        .where(eq(sanadRecords.rentalId, rental.id));
+
+      await notify({
+        userId: rental.renterId,
+        type: "rental.confirmed",
+        subjectType: "rental",
+        subjectId: rental.id,
+        ...rentalCopy.confirmed(rental.reference),
+        actionUrl: `/renter/rentals/${rental.id}`,
+      });
     }
 
     await recordAudit({
@@ -219,6 +247,18 @@ router.post(
       entityType: "payout",
       entityId: payout.id,
       after: payout,
+    });
+
+    await notify({
+      userId: rental.ownerId,
+      type: "payout.released",
+      subjectType: "payout",
+      subjectId: payout.id,
+      titleEn: `Payout released for rental ${rental.reference}`,
+      titleAr: `تم إصدار دفعة الإيجار ${rental.reference}`,
+      bodyEn: `Net payable: ${(payoutCalc.netHalalas / 100).toFixed(2)} SAR`,
+      bodyAr: `صافي المستحق: ${(payoutCalc.netHalalas / 100).toFixed(2)} ر.س`,
+      actionUrl: `/owner/payouts`,
     });
 
     res.json(payout);

@@ -655,6 +655,38 @@ export const operationalAlerts = pgTable("operational_alerts", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// User-facing notifications (rental state changes, legal events, payouts)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    // Loose enum so new event types can be added without migrations. Values used:
+    //  rental.legal_ready, rental.payment_pending, rental.confirmed,
+    //  rental.out_for_delivery, rental.delivered, rental.returned,
+    //  rental.closed, rental.closed_with_penalty, rental.enforcement,
+    //  payout.released, asset.valuation_ready, asset.rejected,
+    //  sanad.discharged, sanad.execution_started
+    type: text("type").notNull(),
+    subjectType: text("subject_type").notNull(), // rental | asset | payout | sanad | user
+    subjectId: integer("subject_id"),
+    titleEn: text("title_en").notNull(),
+    titleAr: text("title_ar").notNull(),
+    bodyEn: text("body_en"),
+    bodyAr: text("body_ar"),
+    actionUrl: text("action_url"),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    unreadIdx: index("notifications_unread_idx").on(t.userId, t.readAt),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Immutable audit logs
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -713,3 +745,5 @@ export type SanadRecord = typeof sanadRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
 export type Shipment = typeof shipments.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;

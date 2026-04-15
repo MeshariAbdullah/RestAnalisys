@@ -585,6 +585,36 @@ export const healthApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications (bilingual, user-scoped)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  subjectType: string;
+  subjectId: number | null;
+  titleEn: string;
+  titleAr: string;
+  bodyEn: string | null;
+  bodyAr: string | null;
+  actionUrl: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  mine: (unreadOnly = false) =>
+    request<{ items: AppNotification[]; unreadCount: number }>(
+      `/notifications/mine${unreadOnly ? "?unread=true" : ""}`
+    ),
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ marked: number }>("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Money helpers (frontend copies of the backend constants)
 // ─────────────────────────────────────────────────────────────────────────────
 

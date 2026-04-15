@@ -19,6 +19,7 @@ import { InspectionReportSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -82,6 +83,18 @@ router.post(
       .update(assets)
       .set({ status: "inspection_reported", updatedAt: new Date() })
       .where(eq(assets.id, input.assetId));
+
+    await notify({
+      userId: asset.ownerId,
+      type: "asset.valuation_ready",
+      subjectType: "asset",
+      subjectId: input.assetId,
+      titleEn: `Valuation ready for ${asset.title}`,
+      titleAr: `التقييم جاهز لـ ${asset.title}`,
+      bodyEn: `Review the inspector's valuation and approve to proceed to listing.`,
+      bodyAr: `راجع تقييم المفتش ووافق للمتابعة للعرض.`,
+      actionUrl: `/owner/assets/${input.assetId}`,
+    });
 
     await recordAudit({
       req,
