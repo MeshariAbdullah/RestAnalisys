@@ -655,6 +655,31 @@ export const operationalAlerts = pgTable("operational_alerts", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// In-app notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    type: text("type").notNull(), // rental_created | payment_captured | dispute_opened | sanad_signed | shipment_delivered | asset_approved | payout_ready
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    linkUrl: text("link_url"),  // in-app deep link (e.g. /my-rentals, /owner/payouts)
+    referenceType: text("reference_type"), // rental | asset | payment | dispute | shipment
+    referenceId: integer("reference_id"),
+    read: boolean("read").notNull().default(false),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    unreadIdx: index("notifications_unread_idx").on(t.userId, t.read),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Immutable audit logs
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -713,3 +738,4 @@ export type SanadRecord = typeof sanadRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
 export type Shipment = typeof shipments.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;

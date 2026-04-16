@@ -15,6 +15,7 @@
 
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import dotenv from "dotenv";
 
 import authRouter from "./routes/auth.js";
@@ -26,21 +27,39 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import webhooksRouter from "./routes/webhooks.js";
+import uploadsRouter from "./routes/uploads.js";
+import notificationsRouter from "./routes/notifications.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { generalLimiter, authLimiter, paymentLimiter } from "./middleware/rateLimiter.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "3001");
 
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false, // Allow frontend to load assets freely
+  crossOriginEmbedderPolicy: false,
+}));
+
+// Trust proxy for rate limiting behind reverse proxies (Render, etc.)
+app.set("trust proxy", 1);
+
 app.use(
   cors({
     origin: process.env.CLIENT_URL ?? "http://localhost:5173",
     credentials: true,
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// General rate limiting
+app.use("/api/", generalLimiter);
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -58,15 +77,25 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRouter);
+// Stricter rate limits on sensitive endpoints
+app.use("/api/auth", authLimiter, authRouter);
+app.use("/api/payments", paymentLimiter, paymentsRouter);
+
 app.use("/api/assets", assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
 app.use("/api/rentals", rentalsRouter);
 app.use("/api/legal", legalRouter);
-app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/uploads", uploadsRouter);
+app.use("/api/notifications", notificationsRouter);
+
+// Webhook handlers (no auth — validated by signature/token)
+app.use("/api/webhooks", webhooksRouter);
+
+// Serve uploaded files
+app.use("/uploads", express.static("uploads"));
 
 // 404
 app.use((req, res) => {
@@ -77,10 +106,11 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 app.listen(PORT, () => {
-  console.log(`🇸🇦  Managed Luxury Rental Platform API running on :${PORT}`);
+  console.log(`  Managed Luxury Rental Platform API running on :${PORT}`);
   console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   Security: helmet + rate limiting enabled`);
 });
 
 export default app;

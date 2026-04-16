@@ -266,12 +266,26 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: {
+    category?: string;
+    brand?: string;
+    search?: string;
+    minDaily?: number;
+    maxDaily?: number;
+    sortBy?: "price_asc" | "price_desc" | "newest" | "value_desc";
+    limit?: number;
+    cursor?: number;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.minDaily) qs.set("minDaily", String(params.minDaily));
+    if (params?.maxDaily) qs.set("maxDaily", String(params.maxDaily));
+    if (params?.sortBy) qs.set("sortBy", params.sortBy);
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    if (params?.cursor) qs.set("cursor", String(params.cursor));
+    return request<{ items: Asset[]; count: number; total: number; cursor: number }>(`/assets/listings?${qs}`);
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
@@ -578,6 +592,52 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  linkUrl?: string;
+  referenceType?: string;
+  referenceId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (unread?: boolean) => {
+    const qs = unread ? "?unread=true" : "";
+    return request<{ notifications: AppNotification[]; unreadCount: number }>(
+      `/notifications${qs}`
+    );
+  },
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Uploads
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const uploadsApi = {
+  uploadImages: (files: File[]) => {
+    const form = new FormData();
+    files.forEach((f) => form.append("images", f));
+    return request<{ urls: string[]; count: number }>("/uploads/images", {
+      method: "POST",
+      body: form,
+    });
+  },
 };
 
 export const healthApi = {

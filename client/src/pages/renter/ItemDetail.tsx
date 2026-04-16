@@ -30,6 +30,13 @@ export default function ItemDetail({ id }: { id: number }) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Delivery address
+  const [city, setCity] = useState("");
+  const [district, setDistrict] = useState("");
+  const [street, setStreet] = useState("");
+  const [buildingNumber, setBuildingNumber] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+
   const assetQuery = useQuery({
     queryKey: ["asset", id],
     queryFn: () => assetsApi.listingDetail(id),
@@ -42,6 +49,10 @@ export default function ItemDetail({ id }: { id: number }) {
   });
 
   async function handleBook() {
+    if (!city || !district || !street) {
+      setError("Please fill in the delivery address (city, district, street are required).");
+      return;
+    }
     setCreating(true);
     setError(null);
     try {
@@ -49,6 +60,13 @@ export default function ItemDetail({ id }: { id: number }) {
         assetId: id,
         startDate,
         endDate,
+        deliveryAddress: {
+          city,
+          district,
+          street,
+          buildingNumber: buildingNumber || undefined,
+          postalCode: postalCode || undefined,
+        },
       });
       navigate(`/legal/${res.legal.commitmentId}`);
     } catch (err) {
@@ -158,6 +176,55 @@ export default function ItemDetail({ id }: { id: number }) {
                     min={startDate}
                     onChange={(e) => setEndDate(e.target.value)}
                   />
+                </div>
+              </div>
+
+              {/* Delivery address */}
+              <div className="border-t border-amber-200 pt-4 mt-4">
+                <p className="text-xs font-semibold text-neutral-700 mb-2">Delivery Address</p>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <Label className="text-xs">City *</Label>
+                    <Input
+                      placeholder="e.g. Riyadh"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">District *</Label>
+                    <Input
+                      placeholder="e.g. Al Olaya"
+                      value={district}
+                      onChange={(e) => setDistrict(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="mb-3">
+                  <Label className="text-xs">Street *</Label>
+                  <Input
+                    placeholder="e.g. King Fahd Road"
+                    value={street}
+                    onChange={(e) => setStreet(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Building No.</Label>
+                    <Input
+                      placeholder="Optional"
+                      value={buildingNumber}
+                      onChange={(e) => setBuildingNumber(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Postal Code</Label>
+                    <Input
+                      placeholder="Optional"
+                      value={postalCode}
+                      onChange={(e) => setPostalCode(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
 

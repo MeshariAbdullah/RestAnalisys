@@ -29,6 +29,16 @@ services:
         sync: false
       - key: ZATCA_API_KEY
         sync: false
+      - key: PAYMENT_WEBHOOK_SECRET
+        generateValue: true
+      - key: COURIER_WEBHOOK_SECRET
+        generateValue: true
+      - key: NAFITH_WEBHOOK_SECRET
+        generateValue: true
+      - key: NAFATH_WEBHOOK_SECRET
+        generateValue: true
+      - key: API_BASE_URL
+        value: https://mlr-platform-api.onrender.com
 
   # ── Frontend ───────────────────────────────────────────────────
   - type: web

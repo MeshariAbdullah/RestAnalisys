@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify, notifyMany } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -94,12 +95,25 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
   );
 
+  // Late returns: rentals where the actual return date exceeds the agreed end date
+  const lateReturnResult = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`${rentals.returnedAt} IS NOT NULL`,
+        sql`${rentals.returnedAt}::date > ${rentals.endDate}::date`
+      )
+    );
+  const lateReturns = Number(lateReturnResult[0]?.count ?? 0);
+
   return {
     accountAgeDays,
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns,
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +294,17 @@ router.post(
       after: { rental, decision },
     });
 
+    // Notify the asset owner that their item has been reserved
+    await notify({
+      userId: asset.ownerId,
+      type: "rental_created",
+      title: "Your item has been reserved",
+      body: `"${asset.title}" has been reserved (Ref: ${reference}). Awaiting renter's contract signing and payment.`,
+      linkUrl: "/owner",
+      referenceType: "rental",
+      referenceId: rental.id,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -441,6 +466,17 @@ router.post(
       after: updated,
     });
 
+    // Notify renter that item is delivered
+    await notify({
+      userId: rental.renterId,
+      type: "rental_delivered",
+      title: "Your item has arrived!",
+      body: `Your rental (Ref: ${rental.reference}) has been delivered. Enjoy!`,
+      linkUrl: "/my-rentals",
+      referenceType: "rental",
+      referenceId: rental.id,
+    });
+
     res.json(updated);
   })
 );
@@ -516,6 +552,29 @@ router.post(
         entityId: id,
         after: updated,
       });
+
+      // Notify both parties
+      await notifyMany([
+        {
+          userId: rental.renterId,
+          type: "rental_closed",
+          title: "Rental completed",
+          body: `Your rental ${rental.reference} has been closed successfully. Thank you!`,
+          linkUrl: "/my-rentals",
+          referenceType: "rental",
+          referenceId: rental.id,
+        },
+        {
+          userId: rental.ownerId,
+          type: "rental_closed",
+          title: "Rental completed - payout coming",
+          body: `Rental ${rental.reference} for your item closed cleanly. Your payout will be processed shortly.`,
+          linkUrl: "/owner/payouts",
+          referenceType: "rental",
+          referenceId: rental.id,
+        },
+      ]);
+
       return res.json(updated);
     }
 

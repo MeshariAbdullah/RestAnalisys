@@ -11,9 +11,9 @@
  */
 
 import { Router } from "express";
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
+import { assets, inspections, users, inventoryMovements, type Asset } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import {
@@ -310,14 +310,48 @@ router.get(
   "/listings",
   asyncHandler(async (req, res) => {
     const filter = AssetListingFilter.parse(req.query);
-    const conditions = [eq(assets.status, "listed")];
+    const conditions: ReturnType<typeof eq>[] = [eq(assets.status, "listed")];
 
     if (filter.category) conditions.push(eq(assets.category, filter.category));
-    if (filter.brand) conditions.push(eq(assets.brand, filter.brand));
+    if (filter.brand) conditions.push(ilike(assets.brand, `%${filter.brand}%`));
     if (filter.minDaily)
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.search) {
+      const term = `%${filter.search}%`;
+      conditions.push(
+        or(
+          ilike(assets.title, term),
+          ilike(assets.brand, term),
+          ilike(assets.model, term),
+          ilike(assets.description, term)
+        )!
+      );
+    }
+
+    // Determine sort order
+    let orderClause;
+    switch (filter.sortBy) {
+      case "price_asc":
+        orderClause = asc(assets.dailyRentalPriceHalalas);
+        break;
+      case "price_desc":
+        orderClause = desc(assets.dailyRentalPriceHalalas);
+        break;
+      case "value_desc":
+        orderClause = desc(assets.evaluatedValueHalalas);
+        break;
+      case "newest":
+      default:
+        orderClause = desc(assets.updatedAt);
+    }
+
+    // Count total matching (for pagination)
+    const [countResult] = await db
+      .select({ total: sql<number>`count(*)` })
+      .from(assets)
+      .where(and(...conditions));
 
     const rows = await db
       .select({
@@ -326,18 +360,26 @@ router.get(
         brand: assets.brand,
         model: assets.model,
         category: assets.category,
+        description: assets.description,
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
+        submissionImagesJson: assets.submissionImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
       })
       .from(assets)
       .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
-      .limit(filter.limit);
+      .orderBy(orderClause)
+      .limit(filter.limit)
+      .offset(filter.cursor ?? 0);
 
-    res.json({ items: rows, count: rows.length });
+    res.json({
+      items: rows,
+      count: rows.length,
+      total: Number(countResult?.total ?? 0),
+      cursor: (filter.cursor ?? 0) + rows.length,
+    });
   })
 );
 
