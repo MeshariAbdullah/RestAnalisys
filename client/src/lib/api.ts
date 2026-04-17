@@ -259,6 +259,11 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ nationalId }),
     }),
+  updateProfile: (data: { fullName?: string; phone?: string }) =>
+    request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -587,6 +592,21 @@ export const healthApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Money helpers (frontend copies of the backend constants)
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Upload
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const uploadApi = {
+  images: async (files: File[]): Promise<{ urls: string[]; count: number }> => {
+    const formData = new FormData();
+    files.forEach((f) => formData.append("images", f));
+    return request<{ urls: string[]; count: number }>("/upload/images", {
+      method: "POST",
+      body: formData,
+    });
+  },
+};
 
 export function halalasToSar(halalas: number | null | undefined): number {
   if (halalas == null) return 0;

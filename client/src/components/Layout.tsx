@@ -19,6 +19,7 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  UserCircle,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
@@ -132,32 +133,43 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         <div className="p-3 border-t border-neutral-800">
           {sidebarOpen ? (
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">
-                <Shield className="w-4 h-4 text-neutral-950" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
-                <p className="text-[11px] text-neutral-400 truncate">
-                  {user ? roleLabel(user.role) : ""}
-                </p>
-              </div>
+            <div className="space-y-2">
+              <Link href="/profile">
+                <a className="flex items-center gap-3 px-1 py-1 rounded-lg hover:bg-neutral-800 transition-colors">
+                  <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">
+                    <Shield className="w-4 h-4 text-neutral-950" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
+                    <p className="text-[11px] text-neutral-400 truncate">
+                      {user ? roleLabel(user.role) : ""}
+                    </p>
+                  </div>
+                </a>
+              </Link>
               <button
                 onClick={handleLogout}
-                className="p-1.5 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white"
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-neutral-400 hover:bg-neutral-800 hover:text-white transition-colors"
+              >
+                <LogOut className="w-4 h-4 shrink-0" />
+                Logout
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <Link href="/profile">
+                <a className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white" title="Profile">
+                  <UserCircle className="w-4 h-4" />
+                </a>
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400"
                 title="Logout"
               >
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
-          ) : (
-            <button
-              onClick={handleLogout}
-              className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400"
-              title="Logout"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
           )}
         </div>
       </aside>

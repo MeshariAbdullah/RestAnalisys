@@ -15,6 +15,7 @@
 
 import express from "express";
 import cors from "cors";
+import path from "path";
 import dotenv from "dotenv";
 
 import authRouter from "./routes/auth.js";
@@ -26,13 +27,17 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import uploadRouter from "./routes/upload.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { securityHeaders, globalLimiter, authLimiter } from "./middleware/security.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "3001");
 
+app.use(securityHeaders);
+app.use(globalLimiter);
 app.use(
   cors({
     origin: process.env.CLIENT_URL ?? "http://localhost:5173",
@@ -41,6 +46,9 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+const uploadsDir = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
+app.use("/uploads", express.static(uploadsDir));
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -58,7 +66,8 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRouter);
+app.use("/api/auth", authLimiter, authRouter);
+app.use("/api/upload", uploadRouter);
 app.use("/api/assets", assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
 app.use("/api/rentals", rentalsRouter);

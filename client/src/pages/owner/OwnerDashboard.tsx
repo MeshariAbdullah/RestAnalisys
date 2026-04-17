@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, paymentsApi, formatSar, type Asset } from "@/lib/api";
+import ErrorState from "@/components/ErrorState";
 
 function statusColor(s: string): string {
   if (s === "listed" || s === "rented_out") return "bg-green-100 text-green-700";
@@ -95,8 +96,17 @@ export default function OwnerDashboard() {
       </div>
 
       <h2 className="text-xl font-bold mb-4">My assets</h2>
-      {assetsQuery.isLoading ? (
-        <p className="text-neutral-500">Loading…</p>
+      {assetsQuery.isError ? (
+        <ErrorState
+          message="Failed to load your assets."
+          onRetry={() => assetsQuery.refetch()}
+        />
+      ) : assetsQuery.isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-64 rounded-xl bg-neutral-100 animate-pulse" />
+          ))}
+        </div>
       ) : assets.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">

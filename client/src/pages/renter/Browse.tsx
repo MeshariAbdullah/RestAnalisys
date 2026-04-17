@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, formatSar, type Asset } from "@/lib/api";
+import ErrorState from "@/components/ErrorState";
 
 const CATEGORIES = [
   { id: undefined, label: "All", icon: Diamond },
@@ -20,7 +21,7 @@ export default function Browse() {
   const [category, setCategory] = useState<string | undefined>(undefined);
   const [search, setSearch] = useState("");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["listings", category],
     queryFn: () => assetsApi.listings({ category }),
   });
@@ -70,7 +71,12 @@ export default function Browse() {
         </div>
       </div>
 
-      {isLoading ? (
+      {isError ? (
+        <ErrorState
+          message="Failed to load the collection. Please try again."
+          onRetry={() => refetch()}
+        />
+      ) : isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {Array.from({ length: 6 }).map((_, i) => (
             <div

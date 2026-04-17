@@ -6,10 +6,14 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 
+// Shared
+import Profile from "./pages/Profile";
+
 // Renter
 import Browse from "./pages/renter/Browse";
 import ItemDetail from "./pages/renter/ItemDetail";
 import LegalCommitmentPage from "./pages/renter/LegalCommitment";
+import Payment from "./pages/renter/Payment";
 import MyRentals from "./pages/renter/MyRentals";
 
 // Owner
@@ -62,8 +66,20 @@ export default function App() {
           </ProtectedRoute>
         )}
       </Route>
+      <Route path="/pay/:rentalId">
+        {(params) => (
+          <ProtectedRoute roles={["renter"]}>
+            <Payment rentalId={Number(params.rentalId)} />
+          </ProtectedRoute>
+        )}
+      </Route>
       <Route path="/my-rentals">
         <ProtectedRoute roles={["renter"]}><MyRentals /></ProtectedRoute>
+      </Route>
+
+      {/* Profile (all roles) */}
+      <Route path="/profile">
+        <ProtectedRoute><Profile /></ProtectedRoute>
       </Route>
 
       {/* Owner */}

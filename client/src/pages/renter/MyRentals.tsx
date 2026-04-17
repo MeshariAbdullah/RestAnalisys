@@ -1,9 +1,11 @@
 import React from "react";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Package, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { Package, CheckCircle, Clock, AlertCircle, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { rentalsApi, formatSar, type Rental } from "@/lib/api";
+import ErrorState from "@/components/ErrorState";
 
 const STATUS_META: Record<string, { color: string; icon: typeof Clock }> = {
   draft: { color: "bg-neutral-200 text-neutral-700", icon: Clock },
@@ -37,7 +39,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function MyRentals() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["rentals-mine"],
     queryFn: () => rentalsApi.mine(),
   });
@@ -49,7 +51,12 @@ export default function MyRentals() {
         Track contracts, shipments and returns.
       </p>
 
-      {isLoading ? (
+      {isError ? (
+        <ErrorState
+          message="Failed to load your rentals. Please try again."
+          onRetry={() => refetch()}
+        />
+      ) : isLoading ? (
         <div className="space-y-4">
           {Array.from({ length: 3 }).map((_, i) => (
             <div
@@ -91,15 +98,29 @@ export default function MyRentals() {
                       <StatusBadge status={r.status} />
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-neutral-500 uppercase">Total paid</p>
+                  <div className="text-right space-y-1">
+                    <p className="text-xs text-neutral-500 uppercase">Total</p>
                     <p className="font-bold text-lg">
                       {formatSar(r.totalPayableHalalas)}
                     </p>
-                    <p className="text-[11px] text-neutral-500 mt-1">
+                    <p className="text-[11px] text-neutral-500">
                       Commitment {formatSar(r.legalCommitmentHalalas)} (
                       {r.legalCommitmentPct}%)
                     </p>
+                    {r.status === "pending_legal_signing" && (
+                      <Link href={`/legal/${r.id}`}>
+                        <a className="inline-flex items-center gap-1 text-xs text-amber-600 hover:underline font-medium mt-1">
+                          Sign contract <ArrowRight className="w-3 h-3" />
+                        </a>
+                      </Link>
+                    )}
+                    {r.status === "pending_payment" && (
+                      <Link href={`/pay/${r.id}`}>
+                        <a className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:underline font-medium mt-1">
+                          Pay now <ArrowRight className="w-3 h-3" />
+                        </a>
+                      </Link>
+                    )}
                   </div>
                 </div>
               </CardContent>
