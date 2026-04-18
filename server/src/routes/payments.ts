@@ -17,7 +17,8 @@ import {
   ForbiddenError,
 } from "../utils/errors.js";
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
-import { computeOwnerPayout } from "../utils/money.js";
+import { computeOwnerPayout, formatHalalas } from "../utils/money.js";
+import { notifyOwnerPayout } from "../services/notificationService.js";
 import { recordAudit } from "../services/auditService.js";
 
 const router = Router();
@@ -220,6 +221,16 @@ router.post(
       entityId: payout.id,
       after: payout,
     });
+
+    const [owner] = await db.select().from(users).where(eq(users.id, rental.ownerId)).limit(1);
+    if (owner) {
+      notifyOwnerPayout({
+        ownerEmail: owner.email,
+        ownerName: owner.fullName,
+        rentalReference: rental.reference,
+        netSar: formatHalalas(payout.netHalalas),
+      }).catch((err) => console.error("[notification] payout.release failed:", err));
+    }
 
     res.json(payout);
   })

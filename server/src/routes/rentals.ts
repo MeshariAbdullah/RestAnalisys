@@ -56,6 +56,8 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyRentalCreated, notifyRentalDelivered } from "../services/notificationService.js";
+import { formatHalalas } from "../utils/money.js";
 
 const router = Router();
 
@@ -89,6 +91,19 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     .where(eq(rentals.renterId, userId));
   const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
 
+  // Late returns: count rentals where a return inspection was created after the rental end_date
+  const lateReturnRows = await db
+    .select({ cnt: sql<number>`count(distinct r.id)` })
+    .from(sql`rentals r`)
+    .innerJoin(
+      sql`inspections i`,
+      sql`i.rental_id = r.id AND i.type = 'return'`
+    )
+    .where(
+      sql`r.renter_id = ${userId} AND i.created_at::date > r.end_date::date`
+    );
+  const lateReturnCount = Number(lateReturnRows[0]?.cnt ?? 0);
+
   const accountAgeDays = Math.max(
     0,
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
@@ -99,7 +114,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: lateReturnCount,
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +295,18 @@ router.post(
       after: { rental, decision },
     });
 
+    // Fire-and-forget notification (never block the response)
+    notifyRentalCreated({
+      renterName: renter!.fullName,
+      renterEmail: renter!.email,
+      renterPhone: renter!.phoneE164 ?? undefined,
+      rentalReference: rental.reference,
+      assetTitle: asset.title,
+      totalSar: formatHalalas(quote.totalPayableHalalas),
+      startDate: input.startDate,
+      endDate: input.endDate,
+    }).catch((err) => console.error("[notification] rental.create failed:", err));
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -440,6 +467,19 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    // Notify renter of delivery
+    const [renter] = await db.select().from(users).where(eq(users.id, rental.renterId)).limit(1);
+    const [asset] = await db.select().from(assets).where(eq(assets.id, rental.assetId)).limit(1);
+    if (renter && asset) {
+      notifyRentalDelivered({
+        renterEmail: renter.email,
+        renterName: renter.fullName,
+        rentalReference: rental.reference,
+        assetTitle: asset.title,
+        endDate: rental.endDate,
+      }).catch((err) => console.error("[notification] rental.delivered failed:", err));
+    }
 
     res.json(updated);
   })

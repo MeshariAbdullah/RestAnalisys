@@ -12,6 +12,7 @@ import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyDisputeOpened } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -59,6 +60,13 @@ router.post(
       entityId: dispute.id,
       after: dispute,
     });
+
+    notifyDisputeOpened({
+      adminEmail: process.env.ADMIN_ALERT_EMAIL ?? "admin@mlr.sa",
+      rentalReference: rental.reference,
+      category: input.category,
+      summary: input.summary,
+    }).catch((err) => console.error("[notification] dispute.open failed:", err));
 
     res.status(201).json(dispute);
   })

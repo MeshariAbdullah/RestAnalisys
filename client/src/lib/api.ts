@@ -580,8 +580,46 @@ export const adminApi = {
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Address (National Address / SPL)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface NationalAddress {
+  buildingNumber: string;
+  streetName: string;
+  district: string;
+  city: string;
+  postCode: string;
+  additionalCode: string;
+  unitNumber?: string;
+  regionName?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export const addressApi = {
+  validate: (address: Partial<NationalAddress>) =>
+    request<{ valid: boolean; normalized?: NationalAddress; errors?: string[] }>("/address/validate", {
+      method: "POST",
+      body: JSON.stringify(address),
+    }),
+  save: (address: Partial<NationalAddress>) =>
+    request<{ saved: boolean; address: NationalAddress }>("/address/save", {
+      method: "POST",
+      body: JSON.stringify(address),
+    }),
+  lookup: (params: { postCode?: string; lat?: number; lng?: number }) => {
+    const qs = new URLSearchParams();
+    if (params.postCode) qs.set("postCode", params.postCode);
+    if (params.lat != null) qs.set("lat", String(params.lat));
+    if (params.lng != null) qs.set("lng", String(params.lng));
+    return request<{ addresses: NationalAddress[]; totalResults: number }>(`/address/lookup?${qs}`);
+  },
+  mine: () => request<{ address: NationalAddress | null }>("/address/mine"),
+};
+
 export const healthApi = {
-  check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+  check: () => request<{ ok: boolean; service: string; version: string; uptime: number; integrations: Record<string, boolean> }>("/health"),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
