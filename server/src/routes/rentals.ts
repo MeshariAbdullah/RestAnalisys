@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyUser } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -99,7 +100,17 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(
+      (await db
+        .select({ count: sql<number>`count(*)` })
+        .from(rentals)
+        .where(
+          and(
+            eq(rentals.renterId, userId),
+            sql`returned_at IS NOT NULL AND returned_at::date > end_date::date`
+          )
+        ))[0]?.count ?? 0
+    ),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +291,14 @@ router.post(
       after: { rental, decision },
     });
 
+    notifyUser(
+      renterId,
+      renter!.email,
+      renter!.phoneE164,
+      "rental_created",
+      { reference: rental.reference, total: (quote.totalPayableHalalas / 100).toFixed(2) }
+    ).catch(() => {});
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -441,6 +460,17 @@ router.post(
       after: updated,
     });
 
+    const [deliveryRenter] = await db.select().from(users).where(eq(users.id, rental.renterId)).limit(1);
+    if (deliveryRenter) {
+      notifyUser(
+        deliveryRenter.id,
+        deliveryRenter.email,
+        deliveryRenter.phoneE164,
+        "rental_delivered",
+        { reference: rental.reference }
+      ).catch(() => {});
+    }
+
     res.json(updated);
   })
 );
@@ -516,6 +546,14 @@ router.post(
         entityId: id,
         after: updated,
       });
+
+      const [closeRenter] = await db.select().from(users).where(eq(users.id, rental.renterId)).limit(1);
+      if (closeRenter) {
+        notifyUser(closeRenter.id, closeRenter.email, closeRenter.phoneE164, "rental_closed", {
+          reference: rental.reference,
+        }).catch(() => {});
+      }
+
       return res.json(updated);
     }
 

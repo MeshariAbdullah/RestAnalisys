@@ -14,6 +14,7 @@ import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyUser } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -59,6 +60,10 @@ router.post(
       entityId: user.id,
       after: { email: user.email, role: user.role },
     });
+
+    notifyUser(user.id, user.email, input.phone ?? null, "welcome", {
+      name: user.fullName,
+    }).catch(() => {});
 
     return res.status(201).json({
       token,
