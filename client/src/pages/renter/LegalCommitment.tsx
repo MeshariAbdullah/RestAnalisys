@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { legalApi, paymentsApi, formatSar } from "@/lib/api";
+import { useToast } from "@/components/ui/toaster";
 
 export default function LegalCommitmentPage({
   commitmentId,
@@ -14,6 +15,7 @@ export default function LegalCommitmentPage({
 }) {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
+  const toast = useToast();
   const [lang, setLang] = useState<"en" | "ar">("en");
   const [accepted, setAccepted] = useState(false);
   const [signing, setSigning] = useState(false);
@@ -31,8 +33,10 @@ export default function LegalCommitmentPage({
     try {
       await legalApi.sign(commitmentId);
       await qc.invalidateQueries({ queryKey: ["commitment", commitmentId] });
+      toast.success("Contract signed successfully! Sanad issued via Nafith.");
     } catch (err) {
       setError((err as Error).message ?? "Signing failed");
+      toast.error("Signing failed — please try again.");
     } finally {
       setSigning(false);
     }
@@ -44,9 +48,11 @@ export default function LegalCommitmentPage({
     setError(null);
     try {
       await paymentsApi.charge(data.rental.id);
+      toast.success("Payment captured! Your rental is confirmed.");
       navigate("/my-rentals");
     } catch (err) {
       setError((err as Error).message ?? "Payment failed");
+      toast.error("Payment failed — check your card and try again.");
     } finally {
       setPaying(false);
     }

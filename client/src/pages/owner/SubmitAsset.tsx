@@ -14,10 +14,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { assetsApi } from "@/lib/api";
+import { useToast } from "@/components/ui/toaster";
 
 export default function SubmitAsset() {
   const [, navigate] = useLocation();
-  const [category, setCategory] = useState("bag");
+  const toast = useToast();
+  const [category, setCategory] = useState("handbag");
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [title, setTitle] = useState("");
@@ -56,6 +58,7 @@ export default function SubmitAsset() {
         ownerDeclaredValueHalalas: value,
         submissionImages: imageUrls,
       });
+      toast.success("Asset submitted! It will be reviewed by our team.");
       navigate("/owner");
     } catch (err) {
       setError((err as Error).message ?? "Submission failed");
@@ -87,7 +90,7 @@ export default function SubmitAsset() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="bag">Handbag</SelectItem>
+                    <SelectItem value="handbag">Handbag</SelectItem>
                     <SelectItem value="watch">Watch</SelectItem>
                     <SelectItem value="dress">Dress / couture</SelectItem>
                     <SelectItem value="jewelry">Jewelry</SelectItem>
