@@ -13,6 +13,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -218,6 +219,75 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Audit logs viewer ─────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(Number(req.query.limit) || 50, 100);
+    const offset = (page - 1) * limit;
+    const entityType = (req.query.entityType as string) || undefined;
+    const action = (req.query.action as string) || undefined;
+
+    let query = db.select().from(auditLogs);
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (action) conditions.push(sql`${auditLogs.action} ILIKE ${"%" + action + "%"}`);
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as typeof query;
+    }
+
+    const rows = await query
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [countRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(auditLogs);
+
+    res.json({
+      items: rows,
+      total: Number(countRow?.count ?? 0),
+      page,
+      limit,
+    });
+  })
+);
+
+// ── Users list with pagination ────────────────────────────────────────────
+router.get(
+  "/users-paginated",
+  authenticate,
+  requirePermission("user.read"),
+  asyncHandler(async (req, res) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(Number(req.query.limit) || 25, 100);
+    const offset = (page - 1) * limit;
+    const role = (req.query.role as string) || undefined;
+
+    let query = db.select().from(users);
+    if (role) query = query.where(eq(users.role, role as any)) as typeof query;
+
+    const rows = await query.orderBy(desc(users.createdAt)).limit(limit).offset(offset);
+
+    let countQuery = db.select({ count: sql<number>`count(*)` }).from(users);
+    if (role) countQuery = countQuery.where(eq(users.role, role as any)) as typeof countQuery;
+    const [countRow] = await countQuery;
+
+    res.json({
+      items: rows,
+      total: Number(countRow?.count ?? 0),
+      page,
+      limit,
+    });
   })
 );
 

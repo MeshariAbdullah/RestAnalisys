@@ -9,6 +9,7 @@ import {
   FileSignature,
   AlertOctagon,
   TrendingUp,
+  ScrollText,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { adminApi, formatSar } from "@/lib/api";
@@ -118,6 +119,19 @@ export default function AdminDashboard() {
                 <p className="text-2xl font-bold">
                   {isLoading ? "…" : data?.sanadsUnderExecution ?? 0}
                 </p>
+              </CardContent>
+            </Card>
+          </a>
+        </Link>
+        <Link href="/admin/audit">
+          <a>
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardContent className="p-6">
+                <ScrollText className="w-8 h-8 text-neutral-500 mb-3" />
+                <p className="text-sm text-neutral-500">
+                  Audit Logs
+                </p>
+                <p className="text-2xl font-bold text-neutral-600">View →</p>
               </CardContent>
             </Card>
           </a>

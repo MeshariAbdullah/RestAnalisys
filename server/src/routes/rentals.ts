@@ -52,10 +52,11 @@ import {
   computeRentalQuote,
   DEFAULT_PLATFORM_FEE_PCT,
 } from "../utils/money.js";
-import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
+import { computeRiskDecision, RiskFeatures, trustScoreToCategory } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -94,12 +95,22 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
   );
 
+  const lateStats = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`returned_at IS NOT NULL AND returned_at::date > end_date::date`
+      )
+    );
+
   return {
     accountAgeDays,
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateStats[0]?.count ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -271,6 +282,15 @@ router.post(
         commitmentPct: decision.legalCommitmentPct!,
       })
       .returning();
+
+    await notify({
+      userId: asset.ownerId,
+      type: "rental_created",
+      title: "New rental for your asset",
+      body: `A new rental (${rental.reference}) has been created for your asset "${asset.title}".`,
+      entityType: "rental",
+      entityId: rental.id,
+    });
 
     await recordAudit({
       req,
@@ -509,6 +529,26 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      await updateTrustScore(rental.renterId, 3);
+
+      await notify({
+        userId: rental.renterId,
+        type: "rental_closed",
+        title: "Rental completed",
+        body: `Your rental ${rental.reference} has been closed successfully. Thank you!`,
+        entityType: "rental",
+        entityId: id,
+      });
+      await notify({
+        userId: rental.ownerId,
+        type: "rental_closed",
+        title: "Asset returned",
+        body: `Rental ${rental.reference} for your asset has been completed and returned in good condition.`,
+        entityType: "rental",
+        entityId: id,
+      });
+
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -540,6 +580,18 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      await updateTrustScore(rental.renterId, -5);
+
+      await notify({
+        userId: rental.renterId,
+        type: "rental_penalty",
+        title: "Rental closed with penalty",
+        body: `Your rental ${rental.reference} has been closed with a penalty due to minor damage.`,
+        entityType: "rental",
+        entityId: id,
+      });
+
       await recordAudit({
         req,
         action: "rental.close_penalty",
@@ -574,6 +626,25 @@ router.post(
       payloadJson: { outcome, rentalId: id },
     });
 
+    await updateTrustScore(rental.renterId, -15);
+
+    await notify({
+      userId: rental.renterId,
+      type: "rental_enforcement",
+      title: "Enforcement action",
+      body: `Rental ${rental.reference} has been escalated to enforcement for ${outcome}.`,
+      entityType: "rental",
+      entityId: id,
+    });
+    await notify({
+      userId: rental.ownerId,
+      type: "rental_enforcement",
+      title: "Sanad execution initiated",
+      body: `Rental ${rental.reference}: enforcement process has been initiated for your asset.`,
+      entityType: "rental",
+      entityId: id,
+    });
+
     await recordAudit({
       req,
       action: "rental.close_enforcement",
@@ -585,6 +656,18 @@ router.post(
     res.json(updated);
   })
 );
+
+// ── Trust score updater ───────────────────────────────────────────────────
+async function updateTrustScore(userId: number, delta: number): Promise<void> {
+  const [user] = await db.select({ trustScore: users.trustScore }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) return;
+  const newScore = Math.max(0, Math.min(100, user.trustScore + delta));
+  const newCategory = trustScoreToCategory(newScore);
+  await db
+    .update(users)
+    .set({ trustScore: newScore, riskCategory: newCategory, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+}
 
 // ── Renter: cancel before confirmation ─────────────────────────────────────
 router.post(
