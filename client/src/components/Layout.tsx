@@ -133,11 +133,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="p-3 border-t border-neutral-800">
           {sidebarOpen ? (
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">
-                <Shield className="w-4 h-4 text-neutral-950" />
-              </div>
+              <Link href="/profile">
+                <a className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0 hover:bg-amber-400 transition-colors">
+                  <Shield className="w-4 h-4 text-neutral-950" />
+                </a>
+              </Link>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
+                <Link href="/profile">
+                  <a className="text-sm font-medium truncate block hover:text-amber-400 transition-colors">
+                    {user?.fullName ?? "Guest"}
+                  </a>
+                </Link>
                 <p className="text-[11px] text-neutral-400 truncate">
                   {user ? roleLabel(user.role) : ""}
                 </p>
