@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
+import LanguageSwitcher from "./LanguageSwitcher";
 
 interface NavItem {
   href: string;
@@ -162,7 +163,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="flex-1 overflow-auto">
+        <div className="flex justify-end p-2">
+          <LanguageSwitcher />
+        </div>
+        {children}
+      </main>
     </div>
   );
 }

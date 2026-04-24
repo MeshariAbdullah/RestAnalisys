@@ -11,7 +11,7 @@
  */
 
 import { Router } from "express";
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -58,6 +59,12 @@ router.post(
       entityType: "asset",
       entityId: asset.id,
       after: { title: asset.title, brand: asset.brand },
+    });
+
+    notify({
+      event: "asset.submitted",
+      userId: ownerId,
+      data: { title: asset.title, brand: asset.brand },
     });
 
     res.status(201).json(asset);
@@ -256,6 +263,16 @@ router.post(
       after: updated,
     });
 
+    notify({
+      event: approved ? "asset.approved" : "asset.rejected",
+      userId: asset.ownerId,
+      data: {
+        title: asset.title,
+        brand: asset.brand,
+        rejectionReason: rejectionReason,
+      },
+    });
+
     res.json(updated);
   })
 );
@@ -313,11 +330,41 @@ router.get(
     const conditions = [eq(assets.status, "listed")];
 
     if (filter.category) conditions.push(eq(assets.category, filter.category));
-    if (filter.brand) conditions.push(eq(assets.brand, filter.brand));
+    if (filter.brand) conditions.push(ilike(assets.brand, `%${filter.brand}%`));
+    if (filter.search) {
+      const term = `%${filter.search}%`;
+      conditions.push(
+        or(
+          ilike(assets.title, term),
+          ilike(assets.brand, term),
+          ilike(assets.description, term)
+        )!
+      );
+    }
     if (filter.minDaily)
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.minValue)
+      conditions.push(gte(assets.evaluatedValueHalalas, filter.minValue));
+    if (filter.maxValue)
+      conditions.push(lte(assets.evaluatedValueHalalas, filter.maxValue));
+
+    const sortMap = {
+      price_asc: asc(assets.dailyRentalPriceHalalas),
+      price_desc: desc(assets.dailyRentalPriceHalalas),
+      newest: desc(assets.createdAt),
+      value_asc: asc(assets.evaluatedValueHalalas),
+      value_desc: desc(assets.evaluatedValueHalalas),
+    } as const;
+
+    const orderClause = sortMap[filter.sortBy] ?? desc(assets.createdAt);
+
+    const totalResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(assets)
+      .where(and(...conditions));
+    const total = Number(totalResult[0]?.count ?? 0);
 
     const rows = await db
       .select({
@@ -326,6 +373,7 @@ router.get(
         brand: assets.brand,
         model: assets.model,
         category: assets.category,
+        description: assets.description,
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
@@ -334,10 +382,16 @@ router.get(
       })
       .from(assets)
       .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
-      .limit(filter.limit);
+      .orderBy(orderClause)
+      .limit(filter.limit)
+      .offset(filter.cursor ?? 0);
 
-    res.json({ items: rows, count: rows.length });
+    res.json({
+      items: rows,
+      count: rows.length,
+      total,
+      hasMore: (filter.cursor ?? 0) + rows.length < total,
+    });
   })
 );
 
@@ -395,6 +449,15 @@ router.post(
       entityType: "asset",
       entityId: id,
       after: updated,
+    });
+
+    notify({
+      event: "asset.listed",
+      userId: asset.ownerId,
+      data: {
+        title: asset.title,
+        dailyPriceHalalas: asset.dailyRentalPriceHalalas,
+      },
     });
 
     res.json(updated);

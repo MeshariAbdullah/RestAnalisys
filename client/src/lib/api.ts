@@ -266,12 +266,30 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: {
+    category?: string;
+    brand?: string;
+    search?: string;
+    minDaily?: number;
+    maxDaily?: number;
+    minValue?: number;
+    maxValue?: number;
+    sortBy?: "price_asc" | "price_desc" | "newest" | "value_asc" | "value_desc";
+    cursor?: number;
+    limit?: number;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.minDaily) qs.set("minDaily", String(params.minDaily));
+    if (params?.maxDaily) qs.set("maxDaily", String(params.maxDaily));
+    if (params?.minValue) qs.set("minValue", String(params.minValue));
+    if (params?.maxValue) qs.set("maxValue", String(params.maxValue));
+    if (params?.sortBy) qs.set("sortBy", params.sortBy);
+    if (params?.cursor) qs.set("cursor", String(params.cursor));
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    return request<{ items: Asset[]; count: number; total: number; hasMore: boolean }>(`/assets/listings?${qs}`);
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
@@ -394,7 +412,14 @@ export const rentalsApi = {
       body: JSON.stringify(data),
     }),
   mine: () => request<Rental[]>("/rentals/mine"),
-  list: () => request<Rental[]>("/rentals"),
+  list: (params?: { status?: string; search?: string; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    return request<{ items: Rental[]; total: number; hasMore: boolean }>(`/rentals?${qs}`);
+  },
   get: (id: number) =>
     request<{
       rental: Rental;
@@ -578,6 +603,26 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+};
+
+export const uploadsApi = {
+  upload: async (file: File): Promise<{ key: string; url: string }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<{ key: string; url: string }>("/uploads", {
+      method: "POST",
+      body: formData,
+    });
+  },
+  presign: (fileName: string, contentType: string) =>
+    request<{ uploadUrl: string; key: string; expiresInSeconds: number }>("/uploads/presign", {
+      method: "POST",
+      body: JSON.stringify({ fileName, contentType }),
+    }),
+  delete: (key: string) =>
+    request<{ deleted: boolean; key: string }>(`/uploads/${key}`, {
+      method: "DELETE",
+    }),
 };
 
 export const healthApi = {

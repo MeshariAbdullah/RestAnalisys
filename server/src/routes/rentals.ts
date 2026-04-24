@@ -56,6 +56,8 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
+import { eventBus } from "../services/eventBus.js";
 
 const router = Router();
 
@@ -78,7 +80,6 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) throw new NotFoundError("User");
 
-  // Aggregate rental history.
   const stats = await db
     .select({
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
@@ -88,6 +89,19 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     .from(rentals)
     .where(eq(rentals.renterId, userId));
   const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+
+  const lateReturnStats = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`returned_at IS NOT NULL AND returned_at::date > end_date::date`
+      )
+    );
+  const lateReturns = Number(lateReturnStats[0]?.count ?? 0);
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +113,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns,
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +294,29 @@ router.post(
       after: { rental, decision },
     });
 
+    notify({
+      event: "rental.created",
+      userId: renterId,
+      data: {
+        reference: rental.reference,
+        assetTitle: asset.title,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        totalHalalas: quote.totalPayableHalalas,
+      },
+    });
+
+    eventBus.emitDomainEvent("rental.created", {
+      rentalId: rental.id,
+      reference: rental.reference,
+      assetTitle: asset.title,
+      renterId,
+      ownerId: asset.ownerId,
+    }, {
+      targetRoles: ["admin", "super_admin", "operations"],
+      targetUserIds: [renterId, asset.ownerId],
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -316,13 +353,37 @@ router.get(
   "/",
   authenticate,
   requirePermission("rental.read.any"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const status = req.query.status as string | undefined;
+    const search = req.query.search as string | undefined;
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Number(req.query.offset) || 0;
+
+    const conditions = [];
+    if (status) {
+      conditions.push(eq(rentals.status, status as typeof rentals.status.enumValues[number]));
+    }
+    if (search) {
+      conditions.push(sql`reference ILIKE ${'%' + search + '%'}`);
+    }
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const totalResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(rentals)
+      .where(where);
+    const total = Number(totalResult[0]?.count ?? 0);
+
     const rows = await db
       .select()
       .from(rentals)
+      .where(where)
       .orderBy(desc(rentals.createdAt))
-      .limit(200);
-    res.json(rows);
+      .limit(limit)
+      .offset(offset);
+
+    res.json({ items: rows, total, hasMore: offset + rows.length < total });
   })
 );
 
@@ -439,6 +500,12 @@ router.post(
       entityType: "rental",
       entityId: id,
       after: updated,
+    });
+
+    notify({
+      event: "rental.delivered",
+      userId: rental.renterId,
+      data: { reference: rental.reference, endDate: rental.endDate },
     });
 
     res.json(updated);
@@ -626,6 +693,12 @@ router.post(
       entityType: "rental",
       entityId: id,
       after: updated,
+    });
+
+    notify({
+      event: "rental.cancelled",
+      userId: rental.renterId,
+      data: { reference: rental.reference, reason },
     });
 
     res.json(updated);

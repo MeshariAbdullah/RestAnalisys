@@ -16,7 +16,8 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-
+import { createServer } from "node:http";
+import path from "node:path";
 import authRouter from "./routes/auth.js";
 import assetsRouter from "./routes/assets.js";
 import inspectionsRouter from "./routes/inspections.js";
@@ -26,7 +27,9 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import uploadsRouter from "./routes/uploads.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { initWebSocketServer } from "./services/wsServer.js";
 
 dotenv.config();
 
@@ -67,6 +70,11 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/uploads", uploadsRouter);
+
+// Serve local uploads in dev mode
+const uploadDir = process.env.LOCAL_UPLOAD_DIR ?? "/tmp/mlr-uploads";
+app.use("/uploads", express.static(uploadDir));
 
 // 404
 app.use((req, res) => {
@@ -76,11 +84,15 @@ app.use((req, res) => {
 // Centralized error handler
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`🇸🇦  Managed Luxury Rental Platform API running on :${PORT}`);
+const server = createServer(app);
+initWebSocketServer(server);
+
+server.listen(PORT, () => {
+  console.log(`  Managed Luxury Rental Platform API running on :${PORT}`);
   console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
 });
 
+export { server };
 export default app;
