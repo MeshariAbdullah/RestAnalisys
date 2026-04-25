@@ -11,6 +11,7 @@ import Browse from "./pages/renter/Browse";
 import ItemDetail from "./pages/renter/ItemDetail";
 import LegalCommitmentPage from "./pages/renter/LegalCommitment";
 import MyRentals from "./pages/renter/MyRentals";
+import NafathVerify from "./pages/renter/NafathVerify";
 
 // Owner
 import OwnerDashboard from "./pages/owner/OwnerDashboard";
@@ -21,6 +22,7 @@ import Payouts from "./pages/owner/Payouts";
 // Inspector
 import InspectorDashboard from "./pages/inspector/InspectorDashboard";
 import InspectionForm from "./pages/inspector/InspectionForm";
+import ReturnInspectionForm from "./pages/inspector/ReturnInspectionForm";
 
 // Ops
 import OpsDashboard from "./pages/ops/OpsDashboard";
@@ -35,6 +37,7 @@ import UsersPage from "./pages/admin/Users";
 import DisputesPage from "./pages/admin/Disputes";
 import FinancialOverview from "./pages/admin/FinancialOverview";
 import SanadTracking from "./pages/admin/SanadTracking";
+import AuditLogs from "./pages/admin/AuditLogs";
 
 export default function App() {
   return (
@@ -65,6 +68,9 @@ export default function App() {
       <Route path="/my-rentals">
         <ProtectedRoute roles={["renter"]}><MyRentals /></ProtectedRoute>
       </Route>
+      <Route path="/verify">
+        <ProtectedRoute roles={["renter"]}><NafathVerify /></ProtectedRoute>
+      </Route>
 
       {/* Owner */}
       <Route path="/owner">
@@ -92,6 +98,14 @@ export default function App() {
         {(params) => (
           <ProtectedRoute roles={["inspector"]}>
             <InspectionForm assetId={Number(params.assetId)} />
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/inspector/return/:assetId">
+        {(params) => (
+          <ProtectedRoute roles={["inspector"]}>
+            <ReturnInspectionForm assetId={Number(params.assetId)} />
           </ProtectedRoute>
         )}
       </Route>
@@ -128,6 +142,9 @@ export default function App() {
       </Route>
       <Route path="/admin/sanad">
         <ProtectedRoute roles={["admin", "super_admin"]}><SanadTracking /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/audit">
+        <ProtectedRoute roles={["admin", "super_admin"]}><AuditLogs /></ProtectedRoute>
       </Route>
 
       <Route>

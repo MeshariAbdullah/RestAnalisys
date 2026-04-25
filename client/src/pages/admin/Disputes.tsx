@@ -22,7 +22,7 @@ type Resolution =
 
 function statusColor(s: string): string {
   if (s === "open") return "bg-amber-100 text-amber-800";
-  if (s === "under_review") return "bg-blue-100 text-blue-700";
+  if (s === "investigating") return "bg-blue-100 text-blue-700";
   if (s.startsWith("resolved")) return "bg-green-100 text-green-700";
   if (s === "escalated_to_legal") return "bg-red-100 text-red-700";
   return "bg-neutral-200 text-neutral-700";

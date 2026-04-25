@@ -1,11 +1,11 @@
 import React from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardCheck, Diamond } from "lucide-react";
+import { ClipboardCheck, Diamond, RotateCcw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { inspectionsApi, formatSar, type Asset } from "@/lib/api";
+import { inspectionsApi, rentalsApi, formatSar, type Asset } from "@/lib/api";
 
 export default function InspectorDashboard() {
   const { data, isLoading } = useQuery({
@@ -62,11 +62,20 @@ export default function InspectorDashboard() {
                     </span>
                   </div>
                 </div>
-                <Link href={`/inspector/report/${asset.id}`}>
-                  <Button className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
-                    Inspect
-                  </Button>
-                </Link>
+                {asset.status === "returned_under_inspection" ? (
+                  <Link href={`/inspector/return/${asset.id}`}>
+                    <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                      <RotateCcw className="w-4 h-4 mr-1" />
+                      Return inspect
+                    </Button>
+                  </Link>
+                ) : (
+                  <Link href={`/inspector/report/${asset.id}`}>
+                    <Button className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
+                      Inspect
+                    </Button>
+                  </Link>
+                )}
               </CardContent>
             </Card>
           ))}

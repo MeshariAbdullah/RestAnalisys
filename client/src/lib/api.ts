@@ -395,6 +395,8 @@ export const rentalsApi = {
     }),
   mine: () => request<Rental[]>("/rentals/mine"),
   list: () => request<Rental[]>("/rentals"),
+  forAsset: (assetId: number) =>
+    request<Rental[]>(`/rentals?assetId=${assetId}`),
   get: (id: number) =>
     request<{
       rental: Rental;
@@ -578,6 +580,21 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (entityType?: string, limit = 100, offset = 0) => {
+    const qs = new URLSearchParams();
+    if (entityType) qs.set("entityType", entityType);
+    qs.set("limit", String(limit));
+    qs.set("offset", String(offset));
+    return request<Array<{
+      id: number;
+      actorUserId?: number;
+      actorRole?: string;
+      action: string;
+      entityType: string;
+      entityId?: number;
+      createdAt: string;
+    }>>(`/admin/audit-logs?${qs}`);
+  },
 };
 
 export const healthApi = {
