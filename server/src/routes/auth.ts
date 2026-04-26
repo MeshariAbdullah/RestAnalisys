@@ -14,6 +14,7 @@ import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
+import { validateAddress, lookupByNationalId } from "../services/splService.js";
 
 const router = Router();
 
@@ -186,6 +187,44 @@ router.get(
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
     });
+  })
+);
+
+router.post(
+  "/address/validate",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const { buildingNumber, postalCode, additionalCode } = req.body;
+    const result = await validateAddress({ buildingNumber, postalCode, additionalCode });
+    return res.json(result);
+  })
+);
+
+router.get(
+  "/address/lookup",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const [user] = await db
+      .select({ nationalId: users.nationalId })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user?.nationalId) {
+      return res.json({ addresses: [], totalResults: 0, provider: "spl" });
+    }
+
+    const result = await lookupByNationalId(user.nationalId);
+
+    if (result.addresses.length > 0) {
+      await db
+        .update(users)
+        .set({ nationalAddressJson: result.addresses[0] })
+        .where(eq(users.id, userId));
+    }
+
+    return res.json(result);
   })
 );
 

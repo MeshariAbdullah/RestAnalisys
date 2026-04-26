@@ -580,6 +580,44 @@ export const adminApi = {
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  titleAr?: string;
+  body: string;
+  bodyAr?: string;
+  entityType?: string;
+  entityId?: number;
+  actionUrl?: string;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (opts?: { limit?: number; offset?: number; unread?: boolean }) => {
+    const qs = new URLSearchParams();
+    if (opts?.limit) qs.set("limit", String(opts.limit));
+    if (opts?.offset) qs.set("offset", String(opts.offset));
+    if (opts?.unread) qs.set("unread", "true");
+    return request<{ items: AppNotification[]; unreadCount: number; limit: number; offset: number }>(
+      `/notifications?${qs}`
+    );
+  },
+  unreadCount: () =>
+    request<{ unreadCount: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "PATCH" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/mark-all-read", { method: "POST" }),
+};
+
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };
