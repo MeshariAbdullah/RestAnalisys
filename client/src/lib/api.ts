@@ -356,6 +356,7 @@ export const inspectionsApi = {
     }),
   forAsset: (assetId: number) =>
     request<Inspection[]>(`/inspections/asset/${assetId}`),
+  get: (id: number) => request<Inspection>(`/inspections/${id}`),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -545,9 +546,24 @@ export const operationsApi = {
       body: JSON.stringify(data),
     }),
   inventory: () =>
-    request<Array<{ id: number; title: string; brand: string; status: string }>>(
-      "/operations/inventory"
-    ),
+    request<Array<{
+      id: number;
+      title: string;
+      brand: string;
+      status: string;
+      warehouseLocationCode?: string;
+      evaluatedValueHalalas?: number;
+      updatedAt: string;
+    }>>("/operations/inventory"),
+  inventoryMovements: (assetId: number) =>
+    request<Array<{
+      id: number;
+      assetId: number;
+      fromLocation?: string;
+      toLocation: string;
+      reason?: string;
+      createdAt: string;
+    }>>(`/operations/inventory/${assetId}/movements`),
   alerts: () =>
     request<Array<{ id: number; type: string; severity: string; message: string; status: string; createdAt: string }>>(
       "/operations/alerts"
@@ -578,6 +594,16 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  createStaffUser: (data: {
+    email: string;
+    fullName: string;
+    role: "admin" | "operations" | "inspector";
+    password: string;
+  }) =>
+    request<User>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 export const healthApi = {

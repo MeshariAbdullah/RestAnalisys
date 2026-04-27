@@ -11,7 +11,7 @@
  */
 
 import { Router } from "express";
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -209,7 +209,9 @@ router.get(
         title: assets.title,
         brand: assets.brand,
         category: assets.category,
+        status: assets.status,
         ownerDeclaredValueHalalas: assets.ownerDeclaredValueHalalas,
+        evaluatedValueHalalas: assets.evaluatedValueHalalas,
         submissionImagesJson: assets.submissionImagesJson,
         createdAt: assets.createdAt,
         ownerId: assets.ownerId,
@@ -217,7 +219,12 @@ router.get(
       })
       .from(assets)
       .leftJoin(users, eq(assets.ownerId, users.id))
-      .where(eq(assets.status, "pending_approval"))
+      .where(
+        or(
+          eq(assets.status, "pending_approval"),
+          eq(assets.status, "ready_for_listing")
+        )
+      )
       .orderBy(asc(assets.createdAt));
     res.json(rows);
   })

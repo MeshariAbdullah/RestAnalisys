@@ -1,9 +1,17 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users as UsersIcon, ShieldAlert, ShieldCheck } from "lucide-react";
+import {
+  Users as UsersIcon,
+  ShieldAlert,
+  ShieldCheck,
+  UserPlus,
+  X,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -23,6 +31,16 @@ function riskColor(c: string): string {
 export default function UsersPage() {
   const qc = useQueryClient();
   const [role, setRole] = useState<string>("all");
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  const [newEmail, setNewEmail] = useState("");
+  const [newFullName, setNewFullName] = useState("");
+  const [newRole, setNewRole] = useState<"admin" | "operations" | "inspector">(
+    "inspector"
+  );
+  const [newPassword, setNewPassword] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users", role],
@@ -39,12 +57,127 @@ export default function UsersPage() {
     await qc.invalidateQueries({ queryKey: ["admin-users"] });
   }
 
+  async function handleCreateStaff(e: React.FormEvent) {
+    e.preventDefault();
+    setCreating(true);
+    setCreateError(null);
+    try {
+      await adminApi.createStaffUser({
+        email: newEmail,
+        fullName: newFullName,
+        role: newRole,
+        password: newPassword,
+      });
+      setShowCreateForm(false);
+      setNewEmail("");
+      setNewFullName("");
+      setNewPassword("");
+      setNewRole("inspector");
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (err) {
+      setCreateError((err as Error).message);
+    } finally {
+      setCreating(false);
+    }
+  }
+
   return (
     <div className="p-8 max-w-6xl mx-auto">
-      <h1 className="text-3xl font-bold mb-2">Users</h1>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-3xl font-bold">Users</h1>
+        <Button
+          onClick={() => setShowCreateForm(!showCreateForm)}
+          className="bg-amber-500 text-neutral-950 hover:bg-amber-400"
+        >
+          {showCreateForm ? (
+            <>
+              <X className="w-4 h-4 mr-1" /> Cancel
+            </>
+          ) : (
+            <>
+              <UserPlus className="w-4 h-4 mr-1" /> Add staff
+            </>
+          )}
+        </Button>
+      </div>
       <p className="text-neutral-500 mb-6">
         All accounts across the platform.
       </p>
+
+      {showCreateForm && (
+        <Card className="mb-6 border-amber-200">
+          <CardContent className="p-6">
+            <h2 className="font-semibold mb-4">Create staff account</h2>
+            <form onSubmit={handleCreateStaff} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Full name</Label>
+                  <Input
+                    value={newFullName}
+                    onChange={(e) => setNewFullName(e.target.value)}
+                    required
+                    placeholder="Ahmed Al-Rashid"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Email</Label>
+                  <Input
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    required
+                    placeholder="staff@mlr.sa"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Role</Label>
+                  <Select
+                    value={newRole}
+                    onValueChange={(v) =>
+                      setNewRole(v as "admin" | "operations" | "inspector")
+                    }
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="inspector">Inspector</SelectItem>
+                      <SelectItem value="operations">Operations</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Password</Label>
+                  <Input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    placeholder="Min 8 characters"
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              {createError && (
+                <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
+                  {createError}
+                </div>
+              )}
+              <Button
+                type="submit"
+                disabled={creating}
+                className="bg-amber-500 text-neutral-950 hover:bg-amber-400"
+              >
+                {creating ? "Creating…" : "Create account"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex items-center gap-3 mb-5">
         <Select value={role} onValueChange={setRole}>
@@ -82,13 +215,14 @@ export default function UsersPage() {
                   <th className="p-4 font-medium">Role</th>
                   <th className="p-4 font-medium">Trust</th>
                   <th className="p-4 font-medium">Risk</th>
+                  <th className="p-4 font-medium">KYC</th>
                   <th className="p-4 font-medium">Status</th>
                   <th className="p-4 font-medium" />
                 </tr>
               </thead>
               <tbody>
                 {data.map((u) => (
-                  <tr key={u.id} className="border-b last:border-0">
+                  <tr key={u.id} className="border-b last:border-0 hover:bg-neutral-50">
                     <td className="p-4 font-medium">{u.fullName}</td>
                     <td className="p-4 text-neutral-600">{u.email}</td>
                     <td className="p-4">
@@ -100,6 +234,18 @@ export default function UsersPage() {
                         className={`border-0 ${riskColor(u.riskCategory)}`}
                       >
                         {u.riskCategory}
+                      </Badge>
+                    </td>
+                    <td className="p-4">
+                      <Badge
+                        variant="outline"
+                        className={
+                          u.kycStatus === "verified"
+                            ? "border-green-300 text-green-700"
+                            : ""
+                        }
+                      >
+                        {u.kycStatus}
                       </Badge>
                     </td>
                     <td className="p-4">

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardCheck } from "lucide-react";
+import { ClipboardCheck, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,8 +18,17 @@ import { assetsApi, inspectionsApi } from "@/lib/api";
 
 type Grade = "A" | "B" | "C" | "D";
 type Risk = "low" | "medium" | "high" | "ultra_high";
+type InspectionType = "intake" | "return";
 
-export default function InspectionForm({ assetId }: { assetId: number }) {
+export default function InspectionForm({
+  assetId,
+  inspectionType = "intake",
+  rentalId,
+}: {
+  assetId: number;
+  inspectionType?: InspectionType;
+  rentalId?: number;
+}) {
   const [, navigate] = useLocation();
   const [authenticityVerified, setAuthenticityVerified] = useState(true);
   const [authenticityNotes, setAuthenticityNotes] = useState("");
@@ -37,6 +46,8 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
     queryFn: () => assetsApi.get(assetId),
   });
 
+  const isReturn = inspectionType === "return";
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
@@ -49,17 +60,35 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
       if (!marketValueHalalas || !recommendedDailyPriceHalalas) {
         throw new Error("Market value and daily price are required");
       }
-      await inspectionsApi.createIntake({
-        assetId,
-        authenticityVerified,
-        authenticityNotes: authenticityNotes || undefined,
-        conditionScore,
-        conditionGrade,
-        conditionNotes: conditionNotes || undefined,
-        marketValueHalalas,
-        recommendedDailyPriceHalalas,
-        riskCategory,
-      });
+
+      if (isReturn) {
+        if (!rentalId) {
+          throw new Error("Rental ID is required for return inspections");
+        }
+        await inspectionsApi.createReturn({
+          assetId,
+          rentalId,
+          authenticityVerified,
+          conditionScore,
+          conditionGrade,
+          conditionNotes: conditionNotes || undefined,
+          marketValueHalalas,
+          recommendedDailyPriceHalalas,
+          riskCategory,
+        });
+      } else {
+        await inspectionsApi.createIntake({
+          assetId,
+          authenticityVerified,
+          authenticityNotes: authenticityNotes || undefined,
+          conditionScore,
+          conditionGrade,
+          conditionNotes: conditionNotes || undefined,
+          marketValueHalalas,
+          recommendedDailyPriceHalalas,
+          riskCategory,
+        });
+      }
       navigate("/inspector");
     } catch (err) {
       setError((err as Error).message ?? "Submission failed");
@@ -71,14 +100,25 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
   return (
     <div className="p-8 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-2 text-sm text-neutral-500">
-        <ClipboardCheck className="w-4 h-4" />
-        Intake inspection
+        {isReturn ? (
+          <RotateCcw className="w-4 h-4" />
+        ) : (
+          <ClipboardCheck className="w-4 h-4" />
+        )}
+        {isReturn ? "Return inspection" : "Intake inspection"}
+        {isReturn && rentalId && (
+          <span className="font-mono text-xs bg-neutral-100 px-2 py-0.5 rounded">
+            Rental #{rentalId}
+          </span>
+        )}
       </div>
       <h1 className="text-3xl font-bold mb-1">
         {asset ? `${asset.brand} — ${asset.title}` : "Inspection report"}
       </h1>
       <p className="text-neutral-500 mb-8">
-        Authenticate, grade and valuate the asset.
+        {isReturn
+          ? "Inspect the returned asset's condition and report any damage."
+          : "Authenticate, grade and valuate the asset."}
       </p>
 
       <form onSubmit={handleSubmit}>
@@ -107,7 +147,11 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
               <Textarea
                 value={authenticityNotes}
                 onChange={(e) => setAuthenticityNotes(e.target.value)}
-                placeholder="Serial, hologram, stitching notes…"
+                placeholder={
+                  isReturn
+                    ? "Any concerns about authenticity on return..."
+                    : "Serial, hologram, stitching notes…"
+                }
                 rows={3}
               />
             </section>
@@ -149,14 +193,20 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
               <Textarea
                 value={conditionNotes}
                 onChange={(e) => setConditionNotes(e.target.value)}
-                placeholder="Scratches, scuffs, missing accessories…"
+                placeholder={
+                  isReturn
+                    ? "Compare with intake inspection — note any new scratches, stains, missing items…"
+                    : "Scratches, scuffs, missing accessories…"
+                }
                 rows={3}
                 className="mt-3"
               />
             </section>
 
             <section>
-              <h2 className="font-semibold mb-3">Valuation & pricing</h2>
+              <h2 className="font-semibold mb-3">
+                {isReturn ? "Post-return valuation" : "Valuation & pricing"}
+              </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label>Market value (SAR)</Label>
@@ -215,7 +265,11 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
             disabled={submitting}
             className="bg-amber-500 text-neutral-950 hover:bg-amber-400"
           >
-            {submitting ? "Submitting…" : "Submit inspection report"}
+            {submitting
+              ? "Submitting…"
+              : isReturn
+              ? "Submit return report"
+              : "Submit inspection report"}
           </Button>
           <Button
             type="button"

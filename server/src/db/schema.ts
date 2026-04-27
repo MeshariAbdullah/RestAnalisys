@@ -333,6 +333,7 @@ export const inspections = pgTable(
   (t) => ({
     assetIdx: index("inspections_asset_idx").on(t.assetId),
     inspectorIdx: index("inspections_inspector_idx").on(t.inspectorId),
+    assetTypeIdx: index("inspections_asset_type_idx").on(t.assetId, t.type),
   })
 );
 
@@ -401,6 +402,8 @@ export const rentals = pgTable(
     ownerIdx: index("rentals_owner_idx").on(t.ownerId),
     assetIdx: index("rentals_asset_idx").on(t.assetId),
     statusIdx: index("rentals_status_idx").on(t.status),
+    renterStatusIdx: index("rentals_renter_status_idx").on(t.renterId, t.status),
+    createdAtIdx: index("rentals_created_at_idx").on(t.createdAt),
   })
 );
 
@@ -556,6 +559,8 @@ export const payments = pgTable(
     rentalIdx: index("payments_rental_idx").on(t.rentalId),
     userIdx: index("payments_user_idx").on(t.userId),
     typeIdx: index("payments_type_idx").on(t.type),
+    statusIdx: index("payments_status_idx").on(t.status),
+    userTypeIdx: index("payments_user_type_idx").on(t.userId, t.type),
   })
 );
 
