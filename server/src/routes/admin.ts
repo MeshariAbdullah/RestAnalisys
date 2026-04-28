@@ -3,13 +3,14 @@
  */
 
 import { Router } from "express";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   users,
   assets,
   rentals,
   payments,
+  payouts,
   disputes,
   sanadRecords,
   riskScores,
@@ -19,6 +20,7 @@ import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { halalasToSar } from "../utils/money.js";
 
 const router = Router();
 
@@ -218,6 +220,119 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Finance export (CSV-style JSON for reconciliation) ────────────────────
+router.get(
+  "/finance/export",
+  authenticate,
+  requirePermission("finance.export"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const from = (req.query.from as string) ?? null;
+    const to = (req.query.to as string) ?? null;
+
+    const conditions = [];
+    if (from) conditions.push(sql`${rentals.createdAt} >= ${from}::timestamp`);
+    if (to) conditions.push(sql`${rentals.createdAt} <= ${to}::timestamp`);
+
+    const rentalRows = await db
+      .select({
+        reference: rentals.reference,
+        status: rentals.status,
+        startDate: rentals.startDate,
+        endDate: rentals.endDate,
+        durationDays: rentals.durationDays,
+        rentalSubtotalHalalas: rentals.rentalSubtotalHalalas,
+        platformFeeHalalas: rentals.platformFeeHalalas,
+        vatHalalas: rentals.vatHalalas,
+        totalPayableHalalas: rentals.totalPayableHalalas,
+        createdAt: rentals.createdAt,
+        closedAt: rentals.closedAt,
+      })
+      .from(rentals)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(rentals.createdAt))
+      .limit(5000);
+
+    const paymentRows = await db
+      .select({
+        rentalReference: rentals.reference,
+        paymentType: payments.type,
+        paymentStatus: payments.status,
+        amountHalalas: payments.amountHalalas,
+        gateway: payments.gateway,
+        invoiceNumber: payments.invoiceNumber,
+        capturedAt: payments.capturedAt,
+        createdAt: payments.createdAt,
+      })
+      .from(payments)
+      .leftJoin(rentals, eq(payments.rentalId, rentals.id))
+      .orderBy(desc(payments.createdAt))
+      .limit(5000);
+
+    const payoutRows = await db
+      .select({
+        ownerEmail: users.email,
+        ownerName: users.fullName,
+        grossHalalas: payouts.grossHalalas,
+        commissionHalalas: payouts.commissionHalalas,
+        netHalalas: payouts.netHalalas,
+        status: payouts.status,
+        paidAt: payouts.paidAt,
+        createdAt: payouts.createdAt,
+      })
+      .from(payouts)
+      .leftJoin(users, eq(payouts.ownerId, users.id))
+      .orderBy(desc(payouts.createdAt))
+      .limit(5000);
+
+    const summary = {
+      totalRentals: rentalRows.length,
+      totalRevenueHalalas: rentalRows.reduce((s, r) => s + r.totalPayableHalalas, 0),
+      totalPlatformFeeHalalas: rentalRows.reduce((s, r) => s + r.platformFeeHalalas, 0),
+      totalVatHalalas: rentalRows.reduce((s, r) => s + r.vatHalalas, 0),
+      totalPayoutNetHalalas: payoutRows.reduce((s, p) => s + p.netHalalas, 0),
+      totalPayments: paymentRows.length,
+      totalPayouts: payoutRows.length,
+    };
+
+    await recordAudit({
+      req,
+      action: "finance.export",
+      entityType: "finance",
+      after: { from, to, rentalCount: rentalRows.length },
+    });
+
+    res.json({
+      summary,
+      rentals: rentalRows,
+      payments: paymentRows,
+      payouts: payoutRows,
+      exportedAt: new Date().toISOString(),
+    });
+  })
+);
+
+// ── Finance monthly breakdown ─────────────────────────────────────────────
+router.get(
+  "/finance/monthly",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select to_char(date_trunc('month', created_at), 'YYYY-MM') as month,
+             count(*) as rental_count,
+             sum(rental_subtotal_halalas) as subtotal_halalas,
+             sum(platform_fee_halalas) as platform_fee_halalas,
+             sum(vat_halalas) as vat_halalas,
+             sum(total_payable_halalas) as total_halalas
+      from rentals
+      where created_at >= now() - interval '12 months'
+      group by 1
+      order by 1 desc
+    `);
+    res.json(rows.rows);
   })
 );
 

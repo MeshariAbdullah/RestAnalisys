@@ -119,6 +119,28 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | POST   | `/users/:id/block`    | admin / super_admin   | Block or unblock a user                |
 | POST   | `/users`              | super_admin           | Create staff users                     |
 
+## Address (SPL National Address) — `/api/address`
+
+| Method | Path        | Roles         | Purpose                                      |
+| ------ | ----------- | ------------- | -------------------------------------------- |
+| POST   | `/lookup`   | authenticated | Look up National Address via Nafath ID        |
+| POST   | `/validate` | authenticated | Validate a specific address                  |
+| GET    | `/mine`     | authenticated | Get stored National Address for current user |
+
+## Uploads — `/api/uploads`
+
+| Method | Path             | Roles         | Purpose                                        |
+| ------ | ---------------- | ------------- | ---------------------------------------------- |
+| POST   | `/presign`       | authenticated | Get a pre-signed URL for single file upload    |
+| POST   | `/presign/batch` | authenticated | Get pre-signed URLs for multiple file uploads  |
+
+## Admin (Extended) — `/api/admin`
+
+| Method | Path               | Roles               | Purpose                                      |
+| ------ | ------------------ | -------------------- | -------------------------------------------- |
+| GET    | `/finance/export`  | admin / super_admin  | Export rentals, payments, payouts (CSV-ready) |
+| GET    | `/finance/monthly` | admin / super_admin  | Monthly revenue breakdown (12 months)        |
+
 ## Health
 
 | Method | Path          | Roles  | Purpose                                |

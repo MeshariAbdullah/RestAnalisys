@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyRentalEvent } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -94,12 +95,24 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
   );
 
+  const lateReturnStats = await db
+    .select({
+      count: sql<number>`count(*) filter (where ${rentals.returnedAt} > (${rentals.endDate}::date + interval '1 day'))`,
+    })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`${rentals.returnedAt} is not null`
+      )
+    );
+
   return {
     accountAgeDays,
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateReturnStats[0]?.count ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +293,12 @@ router.post(
       after: { rental, decision },
     });
 
+    notifyRentalEvent(renterId, renter!.email, "rental_created", {
+      reference: rental.reference,
+      assetTitle: asset.title,
+      totalPayableHalalas: quote.totalPayableHalalas,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -441,6 +460,17 @@ router.post(
       after: updated,
     });
 
+    const [renterUser] = await db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, rental.renterId))
+      .limit(1);
+    if (renterUser) {
+      notifyRentalEvent(rental.renterId, renterUser.email, "rental_delivered", {
+        reference: rental.reference,
+      });
+    }
+
     res.json(updated);
   })
 );
@@ -516,6 +546,19 @@ router.post(
         entityId: id,
         after: updated,
       });
+
+      const [renterUser] = await db
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, rental.renterId))
+        .limit(1);
+      if (renterUser) {
+        notifyRentalEvent(rental.renterId, renterUser.email, "rental_closed", {
+          reference: rental.reference,
+          outcome: "clean",
+        });
+      }
+
       return res.json(updated);
     }
 

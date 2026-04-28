@@ -29,6 +29,28 @@ services:
         sync: false
       - key: ZATCA_API_KEY
         sync: false
+      - key: SPL_API_KEY
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMS_API_KEY
+        sync: false
 
   # ── Frontend ───────────────────────────────────────────────────
   - type: web

@@ -580,6 +580,107 @@ export const adminApi = {
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Address (SPL National Address)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface NationalAddress {
+  buildingNumber: string;
+  street: string;
+  district: string;
+  city: string;
+  postCode: string;
+  additionalCode: string;
+  latitude?: number;
+  longitude?: number;
+  isPrimary: boolean;
+}
+
+export const addressApi = {
+  lookup: (language: "ar" | "en" = "ar") =>
+    request<{ addresses: NationalAddress[]; requestId: string }>("/address/lookup", {
+      method: "POST",
+      body: JSON.stringify({ language }),
+    }),
+  validate: (buildingNumber: string, postCode: string, additionalCode: string) =>
+    request<{ valid: boolean; normalizedAddress?: NationalAddress }>("/address/validate", {
+      method: "POST",
+      body: JSON.stringify({ buildingNumber, postCode, additionalCode }),
+    }),
+  mine: () => request<{ address: NationalAddress | null }>("/address/mine"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Uploads (pre-signed URLs)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PresignedUrl {
+  uploadUrl: string;
+  publicUrl: string;
+  key: string;
+  expiresAt: string;
+}
+
+export const uploadsApi = {
+  presign: (data: {
+    category: string;
+    fileName: string;
+    contentType: string;
+    entityId: number;
+  }) =>
+    request<PresignedUrl>("/uploads/presign", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  presignBatch: (data: {
+    category: string;
+    files: Array<{ fileName: string; contentType: string }>;
+    entityId: number;
+  }) =>
+    request<PresignedUrl[]>("/uploads/presign/batch", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin (extended with finance export)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const adminApiExtended = {
+  financeExport: (from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
+    return request<{
+      summary: {
+        totalRentals: number;
+        totalRevenueHalalas: number;
+        totalPlatformFeeHalalas: number;
+        totalVatHalalas: number;
+        totalPayoutNetHalalas: number;
+        totalPayments: number;
+        totalPayouts: number;
+      };
+      rentals: Array<Record<string, unknown>>;
+      payments: Array<Record<string, unknown>>;
+      payouts: Array<Record<string, unknown>>;
+      exportedAt: string;
+    }>(`/admin/finance/export?${qs}`);
+  },
+  financeMonthly: () =>
+    request<
+      Array<{
+        month: string;
+        rental_count: string;
+        subtotal_halalas: string;
+        platform_fee_halalas: string;
+        vat_halalas: string;
+        total_halalas: string;
+      }>
+    >("/admin/finance/monthly"),
+};
+
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };

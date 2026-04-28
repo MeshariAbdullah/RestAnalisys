@@ -19,6 +19,7 @@ import {
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyRentalEvent } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -119,6 +120,14 @@ router.post(
       entityId: payment.id,
       after: { payment, invoice },
     });
+
+    if (result.status === "captured" && user) {
+      notifyRentalEvent(req.user!.userId, user.fullName, "payment_captured", {
+        reference: rental.reference,
+        amountHalalas: rental.totalPayableHalalas,
+        invoiceNumber: invoice.invoiceNumber,
+      });
+    }
 
     res.json({ payment, invoice });
   })

@@ -17,9 +17,10 @@ MLR is a classical 3-tier application:
                                           └───────────────┘
                                                  │
                               ┌──────────────────┼──────────────────┐
-                              ▼                  ▼                  ▼
-                         Nafath API        Nafith API           Payment gateway
-                         (identity)        (Sanad)              + ZATCA
+                    ┌─────────┼─────────┬──────────┼──────────┬──────────┐
+                    ▼         ▼         ▼          ▼          ▼          ▼
+               Nafath API  Nafith API  Payment   SPL API    S3 Storage  SMTP/SMS
+               (identity)  (Sanad)     + ZATCA   (address)  (uploads)   (notify)
 ```
 
 ## Tech stack
@@ -44,8 +45,9 @@ MLR is a classical 3-tier application:
 **Infrastructure (target)**
 - Render.com (see `render.yaml`) — swap to your PaaS of choice
 - Postgres managed
-- S3-compatible storage for images (implementation pending; API accepts
-  pre-uploaded URLs today)
+- S3-compatible storage for images (pre-signed URL service with dev stubs)
+- SPL National Address integration (dev stubs included)
+- Email/SMS notification service (dev stubs log to console)
 
 ## Directory layout
 
