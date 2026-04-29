@@ -1,8 +1,34 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Receipt, TrendingUp } from "lucide-react";
+import { Receipt, TrendingUp, DollarSign } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { adminApi, formatSar } from "@/lib/api";
+import { adminApi, formatSar, halalasToSar } from "@/lib/api";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+} from "recharts";
+
+function ChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border rounded-lg shadow-lg p-3 text-sm">
+      <p className="font-medium mb-1">{label}</p>
+      <p className="text-amber-600">
+        Revenue: {formatSar(Number(payload[0]?.payload?.total_halalas ?? 0))}
+      </p>
+      <p className="text-neutral-500">
+        Rentals: {payload[0]?.payload?.rentals ?? 0}
+      </p>
+    </div>
+  );
+}
 
 export default function FinancialOverview() {
   const kpisQuery = useQuery({
@@ -16,20 +42,30 @@ export default function FinancialOverview() {
   });
 
   const kpis = kpisQuery.data;
-  const trend = trendQuery.data ?? [];
-  const maxTotal = Math.max(
-    ...trend.map((t) => Number(t.total_halalas ?? 0)),
-    1
+  const trend = (trendQuery.data ?? []).map((t) => ({
+    ...t,
+    day_label: new Date(t.day).toLocaleDateString("en-SA", {
+      month: "short",
+      day: "numeric",
+    }),
+    revenue_sar: halalasToSar(Number(t.total_halalas ?? 0)),
+    rentals_count: Number(t.rentals ?? 0),
+  }));
+
+  const totalRentals30d = trend.reduce((s, t) => s + t.rentals_count, 0);
+  const totalRevenue30d = trend.reduce(
+    (s, t) => s + Number(t.total_halalas ?? 0),
+    0
   );
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="p-8 max-w-6xl mx-auto">
       <h1 className="text-3xl font-bold mb-2">Financial overview</h1>
       <p className="text-neutral-500 mb-8">
         Revenue, fees and VAT across all confirmed rentals.
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Card className="bg-gradient-to-br from-amber-500/10 to-neutral-50">
           <CardContent className="p-6">
             <div className="flex items-center gap-2 text-sm text-neutral-500 mb-2">
@@ -63,41 +99,76 @@ export default function FinancialOverview() {
             </p>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 text-sm text-neutral-500 mb-2">
+              <DollarSign className="w-4 h-4" />
+              30-day revenue
+            </div>
+            <p className="text-3xl font-bold text-green-600">
+              {formatSar(totalRevenue30d)}
+            </p>
+            <p className="text-xs text-neutral-400 mt-1">
+              {totalRentals30d} rentals
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
-      <h2 className="text-lg font-semibold mb-3">Last 30 days</h2>
-      <Card>
+      <h2 className="text-lg font-semibold mb-3">Revenue trend — last 30 days</h2>
+      <Card className="mb-8">
         <CardContent className="p-6">
           {trend.length === 0 ? (
             <p className="text-neutral-500 text-sm">No recent rentals.</p>
           ) : (
-            <div className="space-y-2">
-              {trend.map((t) => {
-                const pct = (Number(t.total_halalas) / maxTotal) * 100;
-                return (
-                  <div
-                    key={t.day}
-                    className="flex items-center gap-3 text-sm"
-                  >
-                    <span className="w-24 text-neutral-500 shrink-0">
-                      {new Date(t.day).toLocaleDateString()}
-                    </span>
-                    <div className="flex-1 h-6 bg-neutral-100 rounded">
-                      <div
-                        className="h-full bg-amber-500 rounded"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="w-24 text-right font-mono">
-                      {formatSar(Number(t.total_halalas))}
-                    </span>
-                    <span className="w-16 text-right text-xs text-neutral-500">
-                      {t.rentals} rentals
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+            <ResponsiveContainer width="100%" height={320}>
+              <AreaChart data={trend}>
+                <defs>
+                  <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                <XAxis dataKey="day_label" tick={{ fontSize: 12 }} />
+                <YAxis
+                  tickFormatter={(v) => `${v} SAR`}
+                  tick={{ fontSize: 12 }}
+                  width={90}
+                />
+                <Tooltip content={<ChartTooltip />} />
+                <Area
+                  type="monotone"
+                  dataKey="revenue_sar"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  fill="url(#revenueGrad)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      <h2 className="text-lg font-semibold mb-3">Rentals per day</h2>
+      <Card>
+        <CardContent className="p-6">
+          {trend.length === 0 ? (
+            <p className="text-neutral-500 text-sm">No data.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={trend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                <XAxis dataKey="day_label" tick={{ fontSize: 12 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar
+                  dataKey="rentals_count"
+                  fill="#f59e0b"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
           )}
         </CardContent>
       </Card>

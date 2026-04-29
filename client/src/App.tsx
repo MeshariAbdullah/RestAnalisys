@@ -1,6 +1,7 @@
 import React from "react";
 import { Route, Switch, Redirect } from "wouter";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { Toaster } from "./components/Toaster";
 
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
@@ -133,6 +134,7 @@ export default function App() {
       <Route>
         <Redirect to="/" />
       </Route>
+      <Toaster />
     </Switch>
   );
 }

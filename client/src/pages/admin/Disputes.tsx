@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { disputesApi, type Dispute } from "@/lib/api";
+import { toast } from "@/hooks/useToast";
 
 type Resolution =
   | "resolved_for_renter"
@@ -46,11 +47,14 @@ export default function DisputesPage() {
     setError(null);
     try {
       await disputesApi.resolve({ disputeId: id, resolution, notes });
+      toast({ title: "Dispute resolved", description: `Dispute #${id} resolved.`, variant: "success" });
       setOpenId(null);
       setNotes("");
       await qc.invalidateQueries({ queryKey: ["disputes"] });
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message;
+      setError(msg);
+      toast({ title: "Resolution failed", description: msg, variant: "destructive" });
     }
   }
 
