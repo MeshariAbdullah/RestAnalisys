@@ -1,16 +1,26 @@
 import React from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Truck, AlertTriangle, PackageSearch, Activity } from "lucide-react";
+import { Truck, AlertTriangle, PackageSearch, Activity, FileText } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { operationsApi } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { operationsApi, rentalsApi, formatSar, type Rental } from "@/lib/api";
 
 export default function OpsDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["ops-summary"],
     queryFn: () => operationsApi.summary(),
   });
+
+  const { data: activeRentals } = useQuery({
+    queryKey: ["rentals-active"],
+    queryFn: () => rentalsApi.list(),
+  });
+
+  const actionableRentals = (activeRentals ?? []).filter((r: Rental) =>
+    ["confirmed", "out_for_delivery", "active", "under_inspection"].includes(r.status)
+  );
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -65,6 +75,30 @@ export default function OpsDashboard() {
           </Card>
         ))}
       </div>
+
+      {actionableRentals.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold mb-3">Rentals requiring action</h2>
+          <div className="space-y-2">
+            {actionableRentals.slice(0, 8).map((r: Rental) => (
+              <Link key={r.id} href={`/rental/${r.id}`}>
+                <a>
+                  <Card className="hover:shadow-md transition-shadow cursor-pointer">
+                    <CardContent className="p-4 flex items-center gap-4">
+                      <FileText className="w-5 h-5 text-neutral-400 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <span className="font-mono text-sm font-medium">{r.reference}</span>
+                        <span className="text-neutral-500 text-sm ml-3">{formatSar(r.totalPayableHalalas)}</span>
+                      </div>
+                      <Badge variant="outline">{r.status.replace(/_/g, " ")}</Badge>
+                    </CardContent>
+                  </Card>
+                </a>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <QuickLink

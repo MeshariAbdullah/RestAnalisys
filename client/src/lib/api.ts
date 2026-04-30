@@ -362,6 +362,16 @@ export const inspectionsApi = {
 // Rentals
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface InventoryMovement {
+  id: number;
+  assetId: number;
+  fromLocation: string | null;
+  toLocation: string;
+  movedBy: number;
+  reason: string;
+  createdAt: string;
+}
+
 export const rentalsApi = {
   quote: (assetId: number, startDate: string, endDate: string) => {
     const qs = new URLSearchParams({
@@ -548,6 +558,8 @@ export const operationsApi = {
     request<Array<{ id: number; title: string; brand: string; status: string }>>(
       "/operations/inventory"
     ),
+  inventoryMovements: (assetId: number) =>
+    request<InventoryMovement[]>(`/operations/inventory/${assetId}/movements`),
   alerts: () =>
     request<Array<{ id: number; type: string; severity: string; message: string; status: string; createdAt: string }>>(
       "/operations/alerts"
@@ -578,6 +590,16 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  createStaffUser: (data: {
+    email: string;
+    password: string;
+    fullName: string;
+    role: "admin" | "inspector" | "operations";
+  }) =>
+    request<User>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 export const healthApi = {

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
+import { Link } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users as UsersIcon, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Users as UsersIcon, ShieldAlert, ShieldCheck, UserPlus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { adminApi, type User } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 function riskColor(c: string): string {
   if (c === "low") return "bg-green-100 text-green-700";
@@ -23,20 +35,43 @@ function riskColor(c: string): string {
 export default function UsersPage() {
   const qc = useQueryClient();
   const [role, setRole] = useState<string>("all");
+  const [blockTarget, setBlockTarget] = useState<User | null>(null);
+  const [blockReason, setBlockReason] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users", role],
     queryFn: () => adminApi.users(role === "all" ? undefined : role),
   });
 
-  async function toggleBlock(u: User) {
-    const block = !u.isBlocked;
-    const reason = block
-      ? prompt("Reason for blocking?") ?? undefined
-      : undefined;
-    if (block && !reason) return;
-    await adminApi.blockUser(u.id, block, reason);
-    await qc.invalidateQueries({ queryKey: ["admin-users"] });
+  function startBlock(u: User) {
+    if (u.isBlocked) {
+      doUnblock(u);
+    } else {
+      setBlockTarget(u);
+      setBlockReason("");
+    }
+  }
+
+  async function doUnblock(u: User) {
+    try {
+      await adminApi.blockUser(u.id, false);
+      toast({ title: `${u.fullName} unblocked`, variant: "success" });
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    }
+  }
+
+  async function confirmBlock() {
+    if (!blockTarget || !blockReason.trim()) return;
+    try {
+      await adminApi.blockUser(blockTarget.id, true, blockReason);
+      toast({ title: `${blockTarget.fullName} blocked`, variant: "destructive" });
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    }
+    setBlockTarget(null);
   }
 
   return (
@@ -47,6 +82,12 @@ export default function UsersPage() {
       </p>
 
       <div className="flex items-center gap-3 mb-5">
+        <Link href="/admin/staff/new">
+          <Button size="sm" className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
+            <UserPlus className="w-4 h-4 mr-1.5" />
+            New staff user
+          </Button>
+        </Link>
         <Select value={role} onValueChange={setRole}>
           <SelectTrigger className="w-48">
             <SelectValue />
@@ -121,7 +162,7 @@ export default function UsersPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => toggleBlock(u)}
+                        onClick={() => startBlock(u)}
                       >
                         {u.isBlocked ? (
                           <>
@@ -143,6 +184,36 @@ export default function UsersPage() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={blockTarget !== null} onOpenChange={(open) => { if (!open) setBlockTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Block user</DialogTitle>
+            <DialogDescription>
+              Block <strong>{blockTarget?.fullName}</strong> ({blockTarget?.email}). They will be unable to log in or perform any actions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Label>Reason for blocking</Label>
+            <Input
+              value={blockReason}
+              onChange={(e) => setBlockReason(e.target.value)}
+              placeholder="e.g. Suspected fraud, policy violation..."
+              className="mt-1"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBlockTarget(null)}>Cancel</Button>
+            <Button
+              onClick={confirmBlock}
+              disabled={!blockReason.trim()}
+              className="bg-red-600 text-white hover:bg-red-500"
+            >
+              Block user
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
