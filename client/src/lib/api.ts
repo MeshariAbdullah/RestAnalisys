@@ -580,6 +580,86 @@ export const adminApi = {
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Reports
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface FinancialReport {
+  period: { from: string; to: string };
+  rental: {
+    totalRentals: number;
+    subtotalHalalas: number;
+    platformFeesHalalas: number;
+    vatHalalas: number;
+    totalCollectedHalalas: number;
+  };
+  payments: {
+    captured: number;
+    failed: number;
+    refunded: number;
+    totalCapturedHalalas: number;
+    totalRefundedHalalas: number;
+  };
+  payouts: {
+    total: number;
+    paidHalalas: number;
+    pendingHalalas: number;
+    commissionHalalas: number;
+  };
+  statusBreakdown: Array<{ status: string; count: number }>;
+}
+
+export interface AssetReport {
+  byCategory: Array<{ category: string; total: number; totalValueHalalas: number }>;
+  byStatus: Array<{ status: string; count: number }>;
+  topAssets: Array<{ assetId: number; rentalCount: number; totalRevenueHalalas: number }>;
+}
+
+export interface UserReport {
+  byRole: Array<{ role: string; total: number; blocked: number; nafathVerified: number }>;
+  renterRisk: Array<{ riskCategory: string; count: number; avgTrustScore: number }>;
+  topRenters: Array<{ renterId: number; rentalCount: number; totalSpentHalalas: number }>;
+}
+
+export interface DisputeReport {
+  byCategory: Array<{
+    category: string;
+    total: number;
+    resolved: number;
+    open: number;
+    totalResolutionAmountHalalas: number;
+  }>;
+  avgResolutionDays: number;
+}
+
+export const reportsApi = {
+  financial: (from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
+    return request<FinancialReport>(`/reports/financial?${qs}`);
+  },
+  assets: () => request<AssetReport>("/reports/assets"),
+  users: () => request<UserReport>("/reports/users"),
+  disputes: () => request<DisputeReport>("/reports/disputes"),
+  exportRentals: (from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
+    const token = getToken();
+    const base = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : "/api";
+    window.open(`${base}/reports/export/rentals?${qs}&token=${token}`, "_blank");
+  },
+  exportPayments: (from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
+    const token = getToken();
+    const base = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : "/api";
+    window.open(`${base}/reports/export/payments?${qs}&token=${token}`, "_blank");
+  },
+};
+
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };

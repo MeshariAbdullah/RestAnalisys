@@ -19,6 +19,7 @@ import { InspectionReportSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyInspectionComplete } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -90,6 +91,14 @@ router.post(
       entityId: inspection.id,
       after: inspection,
     });
+
+    notifyInspectionComplete(
+      asset.ownerId,
+      asset.title,
+      input.conditionGrade,
+      input.conditionScore,
+      input.marketValueHalalas
+    ).catch(() => {});
 
     res.status(201).json(inspection);
   })
