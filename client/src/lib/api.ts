@@ -320,6 +320,17 @@ export const assetsApi = {
   get: (id: number) => request<Asset>(`/assets/${id}`),
   withdraw: (id: number) =>
     request<Asset>(`/assets/${id}/withdraw`, { method: "POST" }),
+  myStats: () =>
+    request<{
+      assets: Array<{ status: string; count: number }>;
+      categories: Array<{ category: string; count: number }>;
+      rentals: {
+        total: number;
+        active: number;
+        completed: number;
+        totalRevenueHalalas: number;
+      };
+    }>("/assets/stats/mine"),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

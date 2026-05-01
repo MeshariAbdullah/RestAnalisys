@@ -13,7 +13,7 @@
 import { Router } from "express";
 import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
+import { assets, inspections, users, inventoryMovements, rentals } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import {
@@ -414,6 +414,55 @@ router.get(
       throw new ForbiddenError();
     }
     res.json(asset);
+  })
+);
+
+// ── Owner: stats for my assets ───────────────────────────────────────────
+router.get(
+  "/stats/mine",
+  authenticate,
+  requirePermission("asset.read.own"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const ownerId = req.user!.userId;
+
+    const statusCounts = await db
+      .select({
+        status: assets.status,
+        count: sql<number>`count(*)`,
+      })
+      .from(assets)
+      .where(eq(assets.ownerId, ownerId))
+      .groupBy(assets.status);
+
+    const rentalStats = await db
+      .select({
+        total: sql<number>`count(*)`,
+        active: sql<number>`count(*) filter (where ${rentals.status} in ('active','out_for_delivery'))`,
+        completed: sql<number>`count(*) filter (where ${rentals.status} in ('closed','closed_with_penalty'))`,
+        totalRevenue: sql<number>`coalesce(sum(${rentals.rentalSubtotalHalalas}), 0)`,
+      })
+      .from(rentals)
+      .where(eq(rentals.ownerId, ownerId));
+
+    const categoryCounts = await db
+      .select({
+        category: assets.category,
+        count: sql<number>`count(*)`,
+      })
+      .from(assets)
+      .where(eq(assets.ownerId, ownerId))
+      .groupBy(assets.category);
+
+    res.json({
+      assets: statusCounts.map((r) => ({ status: r.status, count: Number(r.count) })),
+      categories: categoryCounts.map((r) => ({ category: r.category, count: Number(r.count) })),
+      rentals: {
+        total: Number(rentalStats[0]?.total ?? 0),
+        active: Number(rentalStats[0]?.active ?? 0),
+        completed: Number(rentalStats[0]?.completed ?? 0),
+        totalRevenueHalalas: Number(rentalStats[0]?.totalRevenue ?? 0),
+      },
+    });
   })
 );
 

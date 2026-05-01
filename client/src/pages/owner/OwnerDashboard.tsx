@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Diamond, Plus, TrendingUp, Package, Wallet } from "lucide-react";
+import { Diamond, Plus, TrendingUp, Package, Wallet, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,11 @@ export default function OwnerDashboard() {
   const payoutsQuery = useQuery({
     queryKey: ["my-payouts"],
     queryFn: () => paymentsApi.myPayouts(),
+  });
+
+  const statsQuery = useQuery({
+    queryKey: ["owner-stats"],
+    queryFn: () => assetsApi.myStats(),
   });
 
   const assets = assetsQuery.data ?? [];
@@ -93,6 +98,35 @@ export default function OwnerDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Rental activity */}
+      {statsQuery.data && (
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <h2 className="font-semibold mb-3 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" /> Rental Activity
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <p className="text-neutral-500">Total Rentals</p>
+                <p className="text-xl font-bold">{statsQuery.data.rentals.total}</p>
+              </div>
+              <div>
+                <p className="text-neutral-500">Active Now</p>
+                <p className="text-xl font-bold text-green-600">{statsQuery.data.rentals.active}</p>
+              </div>
+              <div>
+                <p className="text-neutral-500">Completed</p>
+                <p className="text-xl font-bold">{statsQuery.data.rentals.completed}</p>
+              </div>
+              <div>
+                <p className="text-neutral-500">Gross Revenue</p>
+                <p className="text-xl font-bold text-amber-600">{formatSar(statsQuery.data.rentals.totalRevenueHalalas)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <h2 className="text-xl font-bold mb-4">My assets</h2>
       {assetsQuery.isLoading ? (
