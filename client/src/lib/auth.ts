@@ -19,6 +19,10 @@ export function clearSession(): void {
   localStorage.removeItem(USER_KEY);
 }
 
+export function setCurrentUser(user: User): void {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
 export function getCurrentUser(): User | null {
   const raw = localStorage.getItem(USER_KEY);
   if (!raw) return null;

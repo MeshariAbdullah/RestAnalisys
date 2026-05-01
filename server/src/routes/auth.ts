@@ -189,4 +189,84 @@ router.get(
   })
 );
 
+// ── Update user profile ───────────────────────────────────────────────────
+router.patch(
+  "/profile",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const { fullName, phone } = req.body as {
+      fullName?: string;
+      phone?: string;
+    };
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (fullName && fullName.length >= 2) updates.fullName = fullName;
+    if (phone) updates.phoneE164 = phone;
+
+    const [updated] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning();
+
+    await recordAudit({
+      req,
+      action: "user.profile_update",
+      entityType: "user",
+      entityId: userId,
+      after: { fullName, phone },
+    });
+
+    return res.json({
+      id: updated.id,
+      email: updated.email,
+      fullName: updated.fullName,
+      role: updated.role,
+      phoneE164: updated.phoneE164,
+      nafathVerified: updated.nafathVerified,
+      kycStatus: updated.kycStatus,
+      trustScore: updated.trustScore,
+    });
+  })
+);
+
+// ── Change password ───────────────────────────────────────────────────────
+router.post(
+  "/change-password",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const { currentPassword, newPassword } = req.body as {
+      currentPassword: string;
+      newPassword: string;
+    };
+
+    if (!currentPassword || !newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: "New password must be at least 8 characters" });
+    }
+
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) throw new UnauthorizedError("Current password is incorrect");
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await db
+      .update(users)
+      .set({ passwordHash: newHash, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+
+    await recordAudit({
+      req,
+      action: "user.password_change",
+      entityType: "user",
+      entityId: userId,
+    });
+
+    return res.json({ message: "Password changed successfully" });
+  })
+);
+
 export default router;

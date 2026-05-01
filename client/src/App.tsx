@@ -36,6 +36,8 @@ import DisputesPage from "./pages/admin/Disputes";
 import FinancialOverview from "./pages/admin/FinancialOverview";
 import SanadTracking from "./pages/admin/SanadTracking";
 import Reports from "./pages/admin/Reports";
+import AuditLog from "./pages/admin/AuditLog";
+import Profile from "./pages/Profile";
 
 export default function App() {
   return (
@@ -132,6 +134,16 @@ export default function App() {
       </Route>
       <Route path="/admin/reports">
         <ProtectedRoute roles={["admin", "super_admin"]}><Reports /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/audit">
+        <ProtectedRoute roles={["admin", "super_admin"]}><AuditLog /></ProtectedRoute>
+      </Route>
+
+      {/* Profile — any authenticated user */}
+      <Route path="/profile">
+        <ProtectedRoute roles={["renter", "owner", "inspector", "operations", "admin", "super_admin"]}>
+          <Profile />
+        </ProtectedRoute>
       </Route>
 
       <Route>

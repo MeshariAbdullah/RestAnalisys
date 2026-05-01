@@ -259,6 +259,16 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ nationalId }),
     }),
+  updateProfile: (data: { fullName?: string; phone?: string }) =>
+    request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ message: string }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -578,6 +588,28 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  ownerStats: (ownerId: number) =>
+    request<{
+      owner: { fullName: string; email: string; createdAt: string } | null;
+      assets: { total: number; listed: number; rented: number; totalValueHalalas: number };
+      rentals: { total: number; totalRevenueHalalas: number };
+    }>(`/admin/owner-stats/${ownerId}`),
+  auditLog: (params?: { limit?: number; offset?: number; entityType?: string; action?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    return request<Array<{
+      id: number;
+      actorUserId: number | null;
+      actorRole: string | null;
+      action: string;
+      entityType: string;
+      entityId: number | null;
+      createdAt: string;
+    }>>(`/admin/audit-log?${qs}`);
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

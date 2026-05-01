@@ -206,6 +206,82 @@ router.post(
   })
 );
 
+// ── Owner earnings summary ────────────────────────────────────────────────
+router.get(
+  "/owner-stats/:ownerId",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (req, res) => {
+    const ownerId = Number(req.params.ownerId);
+
+    const assetStats = await db
+      .select({
+        total: sql<number>`count(*)`,
+        listed: sql<number>`count(*) filter (where status = 'listed')`,
+        rented: sql<number>`count(*) filter (where status = 'rented_out')`,
+        totalValue: sql<number>`coalesce(sum(evaluated_value_halalas), 0)`,
+      })
+      .from(assets)
+      .where(eq(assets.ownerId, ownerId));
+
+    const rentalStats = await db
+      .select({
+        total: sql<number>`count(*)`,
+        totalRevenue: sql<number>`coalesce(sum(rental_subtotal_halalas), 0)`,
+      })
+      .from(rentals)
+      .where(eq(rentals.ownerId, ownerId));
+
+    const [owner] = await db
+      .select({ fullName: users.fullName, email: users.email, createdAt: users.createdAt })
+      .from(users)
+      .where(eq(users.id, ownerId))
+      .limit(1);
+
+    res.json({
+      owner: owner ?? null,
+      assets: {
+        total: Number(assetStats[0]?.total ?? 0),
+        listed: Number(assetStats[0]?.listed ?? 0),
+        rented: Number(assetStats[0]?.rented ?? 0),
+        totalValueHalalas: Number(assetStats[0]?.totalValue ?? 0),
+      },
+      rentals: {
+        total: Number(rentalStats[0]?.total ?? 0),
+        totalRevenueHalalas: Number(rentalStats[0]?.totalRevenue ?? 0),
+      },
+    });
+  })
+);
+
+// ── Platform audit log viewer ─────────────────────────────────────────────
+router.get(
+  "/audit-log",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit ?? 50), 200);
+    const offset = Number(req.query.offset ?? 0);
+    const entityType = req.query.entityType as string | undefined;
+    const action = req.query.action as string | undefined;
+
+    const { auditLogs } = await import("../db/schema.js");
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (action) conditions.push(sql`action like ${`%${action}%`}`);
+
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    res.json(rows);
+  })
+);
+
 // ── Recent risk decisions (for audit) ──────────────────────────────────────
 router.get(
   "/risk/recent",
