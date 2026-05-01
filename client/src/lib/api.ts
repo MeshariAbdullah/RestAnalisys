@@ -605,6 +605,12 @@ export const adminApi = {
       assets: { total: number; listed: number; rented: number; totalValueHalalas: number };
       rentals: { total: number; totalRevenueHalalas: number };
     }>(`/admin/owner-stats/${ownerId}`),
+  search: (q: string) =>
+    request<{
+      users: Array<{ id: number; email: string; fullName: string; role: string }>;
+      assets: Array<{ id: number; title: string; brand: string; status: string; category: string }>;
+      rentals: Array<{ id: number; reference: string; status: string; totalPayableHalalas: number }>;
+    }>(`/admin/search?q=${encodeURIComponent(q)}`),
   auditLog: (params?: { limit?: number; offset?: number; entityType?: string; action?: string }) => {
     const qs = new URLSearchParams();
     if (params?.limit) qs.set("limit", String(params.limit));

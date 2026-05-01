@@ -282,6 +282,65 @@ router.get(
   })
 );
 
+// ── Global search ─────────────────────────────────────────────────────────
+router.get(
+  "/search",
+  authenticate,
+  requirePermission("user.read"),
+  asyncHandler(async (req, res) => {
+    const q = (req.query.q as string ?? "").trim();
+    if (q.length < 2) {
+      return res.json({ users: [], assets: [], rentals: [] });
+    }
+
+    const pattern = `%${q}%`;
+
+    const userResults = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        fullName: users.fullName,
+        role: users.role,
+      })
+      .from(users)
+      .where(
+        sql`(email ilike ${pattern} or full_name ilike ${pattern} or national_id like ${pattern})`
+      )
+      .limit(10);
+
+    const assetResults = await db
+      .select({
+        id: assets.id,
+        title: assets.title,
+        brand: assets.brand,
+        status: assets.status,
+        category: assets.category,
+      })
+      .from(assets)
+      .where(
+        sql`(title ilike ${pattern} or brand ilike ${pattern} or model ilike ${pattern})`
+      )
+      .limit(10);
+
+    const rentalResults = await db
+      .select({
+        id: rentals.id,
+        reference: rentals.reference,
+        status: rentals.status,
+        totalPayableHalalas: rentals.totalPayableHalalas,
+      })
+      .from(rentals)
+      .where(sql`reference ilike ${pattern}`)
+      .limit(10);
+
+    res.json({
+      users: userResults,
+      assets: assetResults,
+      rentals: rentalResults,
+    });
+  })
+);
+
 // ── Recent risk decisions (for audit) ──────────────────────────────────────
 router.get(
   "/risk/recent",
