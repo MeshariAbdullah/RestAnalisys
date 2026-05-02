@@ -242,6 +242,19 @@ export interface AdminKPIs {
 // Auth
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
 export const authApi = {
   login: (email: string, password: string) =>
     request<{ token: string; user: User }>("/auth/login", {
@@ -259,6 +272,29 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ nationalId }),
     }),
+  updateProfile: (data: { fullName?: string; email?: string; phone?: string }) =>
+    request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ message: string }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+};
+
+export const notificationsApi = {
+  list: (opts?: { unread?: boolean; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (opts?.unread) qs.set("unread", "true");
+    if (opts?.limit) qs.set("limit", String(opts.limit));
+    return request<{ notifications: AppNotification[]; unreadCount: number }>(`/notifications?${qs}`);
+  },
+  markRead: (id: number) =>
+    request(`/notifications/read/${id}`, { method: "POST" }),
+  markAllRead: () =>
+    request("/notifications/read-all", { method: "POST" }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
