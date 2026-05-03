@@ -52,16 +52,42 @@ export function getSeverityLabel(severity: string) {
 
 export function getStatusLabel(status: string) {
   const labels: Record<string, string> = {
+    // Rental statuses
+    pending_risk_review: "مراجعة المخاطر",
+    pending_legal_signing: "بانتظار التوقيع",
+    pending_payment: "بانتظار الدفع",
+    confirmed: "مؤكد",
+    out_for_delivery: "قيد التوصيل",
+    active: "نشط",
+    return_in_transit: "إرجاع قيد النقل",
+    under_inspection: "تحت الفحص",
+    closed: "مغلق",
+    closed_with_penalty: "مغلق (غرامة)",
+    in_dispute: "نزاع",
+    enforcement: "تنفيذ",
+    cancelled: "ملغي",
+    // Asset statuses
+    pending_approval: "بانتظار الموافقة",
+    rejected: "مرفوض",
+    awaiting_shipment: "بانتظار الشحن",
+    in_inspection: "قيد الفحص",
+    inspection_reported: "تم إعداد تقرير الفحص",
+    owner_rejected_valuation: "المالك رفض التقييم",
+    ready_for_listing: "جاهز للعرض",
+    listed: "معروض",
+    reserved: "محجوز",
+    rented_out: "مؤجّر",
+    returned_under_inspection: "مرتجع تحت الفحص",
+    completed: "مكتمل",
+    withdrawn: "مسحوب",
+    lost_or_destroyed: "مفقود أو تالف",
+    // Legacy
     uploaded: "تم الرفع",
-    extracting_frames: "استخراج الإطارات",
-    analyzing_gpt: "تحليل GPT-4o",
-    analyzing_gemini: "تحليل Gemini",
-    saving_results: "حفظ النتائج",
     done: "مكتمل",
     error: "خطأ",
     queued: "في الانتظار",
   };
-  return labels[status] ?? status;
+  return labels[status] ?? status.replace(/_/g, " ");
 }
 
 export function getStatusIcon(status: string) {

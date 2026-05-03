@@ -48,6 +48,7 @@ import {
   RiskRejectionError,
   ForbiddenError,
 } from "../utils/errors.js";
+import { optimisticUpdate } from "../utils/optimisticLock.js";
 import {
   computeRentalQuote,
   DEFAULT_PLATFORM_FEE_PCT,
@@ -89,6 +90,19 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     .where(eq(rentals.renterId, userId));
   const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
 
+  const lateReturnStats = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`${rentals.returnedAt} IS NOT NULL`,
+        sql`${rentals.returnedAt}::date > ${rentals.endDate}::date`
+      )
+    );
+
   const accountAgeDays = Math.max(
     0,
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
@@ -99,7 +113,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateReturnStats[0]?.count ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -500,11 +514,12 @@ router.post(
     }
 
     if (outcome === "clean") {
-      const [updated] = await db
-        .update(rentals)
-        .set({ status: "closed", closedAt: new Date(), updatedAt: new Date() })
-        .where(eq(rentals.id, id))
-        .returning();
+      const updated = await optimisticUpdate({
+        table: rentals,
+        id,
+        currentUpdatedAt: rental.updatedAt,
+        set: { status: "closed", closedAt: new Date() },
+      });
       await db
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
@@ -520,15 +535,12 @@ router.post(
     }
 
     if (outcome === "penalty") {
-      const [updated] = await db
-        .update(rentals)
-        .set({
-          status: "closed_with_penalty",
-          closedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(rentals.id, id))
-        .returning();
+      const updated = await optimisticUpdate({
+        table: rentals,
+        id,
+        currentUpdatedAt: rental.updatedAt,
+        set: { status: "closed_with_penalty", closedAt: new Date() },
+      });
       await db.insert(payments).values({
         rentalId: id,
         userId: rental.renterId,
@@ -551,11 +563,12 @@ router.post(
     }
 
     // Major damage or loss → enforcement
-    const [updated] = await db
-      .update(rentals)
-      .set({ status: "enforcement", updatedAt: new Date() })
-      .where(eq(rentals.id, id))
-      .returning();
+    const updated = await optimisticUpdate({
+      table: rentals,
+      id,
+      currentUpdatedAt: rental.updatedAt,
+      set: { status: "enforcement" },
+    });
 
     await db
       .update(assets)

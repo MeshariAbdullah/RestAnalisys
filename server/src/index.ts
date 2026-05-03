@@ -26,7 +26,9 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import uploadsRouter from "./routes/uploads.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { rateLimiter } from "./middleware/rateLimiter.js";
 
 dotenv.config();
 
@@ -41,6 +43,10 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Rate limiting for public endpoints
+const publicLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 60, keyPrefix: "public" });
+const authLimiter = rateLimiter({ windowMs: 60_000, maxRequests: 10, keyPrefix: "auth" });
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -58,8 +64,8 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRouter);
-app.use("/api/assets", assetsRouter);
+app.use("/api/auth", authLimiter, authRouter);
+app.use("/api/assets", publicLimiter, assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
 app.use("/api/rentals", rentalsRouter);
 app.use("/api/legal", legalRouter);
@@ -67,6 +73,10 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/uploads", uploadsRouter);
+
+// Serve uploaded files in dev mode
+app.use("/uploads", express.static(process.env.UPLOAD_DIR ?? "uploads"));
 
 // 404
 app.use((req, res) => {

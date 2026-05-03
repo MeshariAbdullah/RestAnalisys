@@ -584,6 +584,28 @@ export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };
 
+export const uploadsApi = {
+  upload: async (file: File, folder: string = "assets"): Promise<{ url: string; key: string }> => {
+    const token = getToken();
+    const buffer = await file.arrayBuffer();
+    const res = await fetch(`${API_BASE}/uploads?folder=${folder}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-Filename": file.name,
+        "X-Content-Type": file.type,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: buffer,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as any).error ?? "Upload failed");
+    }
+    return res.json();
+  },
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Money helpers (frontend copies of the backend constants)
 // ─────────────────────────────────────────────────────────────────────────────

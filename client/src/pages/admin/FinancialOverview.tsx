@@ -1,8 +1,36 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Receipt, TrendingUp } from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
-import { adminApi, formatSar } from "@/lib/api";
+import { adminApi, formatSar, halalasToSar } from "@/lib/api";
+
+function SarTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-neutral-200 rounded-lg shadow-lg p-3 text-sm">
+      <p className="font-medium text-neutral-700 mb-1">
+        {new Date(label).toLocaleDateString("en-SA", { month: "short", day: "numeric" })}
+      </p>
+      {payload.map((p: any) => (
+        <p key={p.dataKey} style={{ color: p.color }}>
+          {p.name}: {formatSar(p.value * 100)}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 export default function FinancialOverview() {
   const kpisQuery = useQuery({
@@ -17,10 +45,13 @@ export default function FinancialOverview() {
 
   const kpis = kpisQuery.data;
   const trend = trendQuery.data ?? [];
-  const maxTotal = Math.max(
-    ...trend.map((t) => Number(t.total_halalas ?? 0)),
-    1
-  );
+
+  const chartData = trend.map((t) => ({
+    day: t.day,
+    revenue: halalasToSar(Number(t.total_halalas ?? 0)),
+    fees: halalasToSar(Number(t.fee_halalas ?? 0)),
+    rentals: Number(t.rentals ?? 0),
+  }));
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -65,39 +96,88 @@ export default function FinancialOverview() {
         </Card>
       </div>
 
-      <h2 className="text-lg font-semibold mb-3">Last 30 days</h2>
-      <Card>
+      <h2 className="text-lg font-semibold mb-3">Revenue trend (last 30 days)</h2>
+      <Card className="mb-8">
         <CardContent className="p-6">
-          {trend.length === 0 ? (
+          {chartData.length === 0 ? (
             <p className="text-neutral-500 text-sm">No recent rentals.</p>
           ) : (
-            <div className="space-y-2">
-              {trend.map((t) => {
-                const pct = (Number(t.total_halalas) / maxTotal) * 100;
-                return (
-                  <div
-                    key={t.day}
-                    className="flex items-center gap-3 text-sm"
-                  >
-                    <span className="w-24 text-neutral-500 shrink-0">
-                      {new Date(t.day).toLocaleDateString()}
-                    </span>
-                    <div className="flex-1 h-6 bg-neutral-100 rounded">
-                      <div
-                        className="h-full bg-amber-500 rounded"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="w-24 text-right font-mono">
-                      {formatSar(Number(t.total_halalas))}
-                    </span>
-                    <span className="w-16 text-right text-xs text-neutral-500">
-                      {t.rentals} rentals
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+            <ResponsiveContainer width="100%" height={320}>
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="feeGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={(v) =>
+                    new Date(v).toLocaleDateString("en-SA", { month: "short", day: "numeric" })
+                  }
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={(v) => `${v.toLocaleString()} SAR`}
+                />
+                <Tooltip content={<SarTooltip />} />
+                <Legend />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  name="Revenue"
+                  stroke="#f59e0b"
+                  fillOpacity={1}
+                  fill="url(#revenueGrad)"
+                  strokeWidth={2}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="fees"
+                  name="Platform Fees"
+                  stroke="#8b5cf6"
+                  fillOpacity={1}
+                  fill="url(#feeGrad)"
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      <h2 className="text-lg font-semibold mb-3">Daily rental volume</h2>
+      <Card>
+        <CardContent className="p-6">
+          {chartData.length === 0 ? (
+            <p className="text-neutral-500 text-sm">No recent rentals.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={(v) =>
+                    new Date(v).toLocaleDateString("en-SA", { day: "numeric" })
+                  }
+                />
+                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                <Tooltip
+                  formatter={(value: number) => [`${value} rentals`, "Count"]}
+                  labelFormatter={(v) =>
+                    new Date(v).toLocaleDateString("en-SA", { month: "short", day: "numeric" })
+                  }
+                />
+                <Bar dataKey="rentals" name="Rentals" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           )}
         </CardContent>
       </Card>

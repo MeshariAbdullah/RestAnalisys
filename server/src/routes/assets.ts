@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { optimisticUpdate } from "../utils/optimisticLock.js";
 
 const router = Router();
 
@@ -237,15 +238,15 @@ router.post(
       throw new LegalStateError(`Asset is in status ${asset.status}, not pending_approval`);
     }
 
-    const [updated] = await db
-      .update(assets)
-      .set({
+    const updated = await optimisticUpdate({
+      table: assets,
+      id: assetId,
+      currentUpdatedAt: asset.updatedAt,
+      set: {
         status: approved ? "awaiting_shipment" : "rejected",
         rejectionReason: approved ? null : rejectionReason ?? null,
-        updatedAt: new Date(),
-      })
-      .where(eq(assets.id, assetId))
-      .returning();
+      },
+    });
 
     await recordAudit({
       req,
