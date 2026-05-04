@@ -238,6 +238,54 @@ export interface AdminKPIs {
   sanadsUnderExecution: number;
 }
 
+export interface AuditLog {
+  id: number;
+  actorUserId?: number;
+  actorRole?: string;
+  action: string;
+  entityType: string;
+  entityId?: number;
+  beforeJson?: Record<string, unknown>;
+  afterJson?: Record<string, unknown>;
+  ip?: string;
+  createdAt: string;
+}
+
+export interface IntegrationEvent {
+  id: number;
+  provider: string;
+  eventType: string;
+  referenceId?: string;
+  payloadJson?: Record<string, unknown>;
+  processed: boolean;
+  error?: string;
+  createdAt: string;
+}
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  linkUrl?: string;
+  status: "unread" | "read" | "dismissed";
+  createdAt: string;
+  readAt?: string;
+}
+
+export interface OwnerAgreement {
+  id: number;
+  ownerId: number;
+  version: string;
+  commissionPct: number;
+  guaranteeAccepted: boolean;
+  signedAt?: string;
+  effectiveFrom?: string;
+  effectiveUntil?: string;
+  createdAt: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Auth
 // ─────────────────────────────────────────────────────────────────────────────
@@ -578,10 +626,52 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: { entityType?: string; action?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    return request<AuditLog[]>(`/admin/audit-logs?${qs}`);
+  },
+  integrationEvents: (params?: { provider?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.provider) qs.set("provider", params.provider);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    return request<IntegrationEvent[]>(`/admin/integration-events?${qs}`);
+  },
 };
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notificationsApi = {
+  list: (limit?: number) =>
+    request<AppNotification[]>(`/notifications${limit ? `?limit=${limit}` : ""}`),
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Owner Agreements
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ownerAgreementsApi = {
+  mine: () => request<OwnerAgreement[]>("/owner-agreements/mine"),
+  create: (commissionPct?: number) =>
+    request<OwnerAgreement>("/owner-agreements", {
+      method: "POST",
+      body: JSON.stringify({ commissionPct }),
+    }),
+  sign: (id: number) =>
+    request<OwnerAgreement>(`/owner-agreements/${id}/sign`, { method: "POST" }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

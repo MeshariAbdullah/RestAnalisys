@@ -13,6 +13,8 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
+  integrationEvents,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -217,6 +219,50 @@ router.get(
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
+    res.json(rows);
+  })
+);
+
+// ── Audit logs viewer ─────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const entityType = req.query.entityType as string | undefined;
+    const action = req.query.action as string | undefined;
+
+    let query = db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(limit).$dynamic();
+
+    if (entityType) {
+      query = query.where(eq(auditLogs.entityType, entityType));
+    }
+    if (action) {
+      query = query.where(eq(auditLogs.action, action));
+    }
+
+    const rows = await query;
+    res.json(rows);
+  })
+);
+
+// ── Integration events viewer ─────────────────────────────────────────────
+router.get(
+  "/integration-events",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const provider = req.query.provider as string | undefined;
+
+    let query = db.select().from(integrationEvents).orderBy(desc(integrationEvents.createdAt)).limit(limit).$dynamic();
+
+    if (provider) {
+      query = query.where(eq(integrationEvents.provider, provider));
+    }
+
+    const rows = await query;
     res.json(rows);
   })
 );

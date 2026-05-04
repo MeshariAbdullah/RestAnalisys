@@ -4,7 +4,7 @@
  */
 
 import { db } from "../db/index.js";
-import { auditLogs } from "../db/schema.js";
+import { auditLogs, notifications } from "../db/schema.js";
 import type { AuthedRequest } from "../middleware/auth.js";
 
 export interface AuditInput {
@@ -39,5 +39,27 @@ export async function recordAudit(input: AuditInput): Promise<void> {
   } catch (err) {
     // Never let audit failures break the primary flow
     console.error("[audit] write failed:", err);
+  }
+}
+
+export async function createNotification(input: {
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  linkUrl?: string;
+  metadata?: unknown;
+}): Promise<void> {
+  try {
+    await db.insert(notifications).values({
+      userId: input.userId,
+      type: input.type,
+      title: input.title,
+      message: input.message,
+      linkUrl: input.linkUrl ?? null,
+      metadata: (input.metadata as object) ?? null,
+    });
+  } catch (err) {
+    console.error("[notification] create failed:", err);
   }
 }

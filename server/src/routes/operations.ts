@@ -146,12 +146,17 @@ router.get(
   "/inventory",
   authenticate,
   requirePermission("operations.read"),
-  asyncHandler(async (_req, res) => {
-    const rows = await db
+  asyncHandler(async (req, res) => {
+    const status = req.query.status as string | undefined;
+    const brand = req.query.brand as string | undefined;
+    const search = req.query.search as string | undefined;
+
+    let query = db
       .select({
         id: assets.id,
         title: assets.title,
         brand: assets.brand,
+        category: assets.category,
         status: assets.status,
         warehouseLocationCode: assets.warehouseLocationCode,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
@@ -159,7 +164,20 @@ router.get(
       })
       .from(assets)
       .orderBy(desc(assets.updatedAt))
-      .limit(500);
+      .limit(500)
+      .$dynamic();
+
+    if (status) {
+      query = query.where(eq(assets.status, status as any));
+    }
+    if (brand) {
+      query = query.where(eq(assets.brand, brand));
+    }
+    if (search) {
+      query = query.where(sql`(title ILIKE ${'%' + search + '%'} OR brand ILIKE ${'%' + search + '%'})`);
+    }
+
+    const rows = await query;
     res.json(rows);
   })
 );
@@ -184,12 +202,25 @@ router.get(
   "/alerts",
   authenticate,
   requirePermission("operations.read"),
-  asyncHandler(async (_req, res) => {
-    const rows = await db
+  asyncHandler(async (req, res) => {
+    const severity = req.query.severity as string | undefined;
+    const status = req.query.status as string | undefined;
+
+    let query = db
       .select()
       .from(operationalAlerts)
       .orderBy(desc(operationalAlerts.createdAt))
-      .limit(200);
+      .limit(200)
+      .$dynamic();
+
+    if (severity) {
+      query = query.where(eq(operationalAlerts.severity, severity));
+    }
+    if (status) {
+      query = query.where(eq(operationalAlerts.status, status));
+    }
+
+    const rows = await query;
     res.json(rows);
   })
 );
