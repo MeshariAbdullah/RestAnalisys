@@ -266,10 +266,12 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: { category?: string; brand?: string; q?: string; sortBy?: string; limit?: number }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.q) qs.set("q", params.q);
+    if (params?.sortBy) qs.set("sortBy", params.sortBy);
     if (params?.limit) qs.set("limit", String(params.limit));
     return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
   },
@@ -582,6 +584,98 @@ export const adminApi = {
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  channel: string;
+  type: string;
+  title: string;
+  titleAr: string;
+  body: string;
+  bodyAr: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (limit?: number) => {
+    const qs = limit ? `?limit=${limit}` : "";
+    return request<AppNotification[]>(`/notifications${qs}`);
+  },
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request("/notifications/" + id + "/read", { method: "POST" }),
+  markAllRead: () =>
+    request("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reviews
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ReviewItem {
+  id: number;
+  rentalId: number;
+  assetId: number;
+  reviewerId: number;
+  rating: number;
+  comment?: string;
+  reviewerName?: string;
+  createdAt: string;
+}
+
+export interface ReviewStats {
+  averageRating: number | null;
+  totalReviews: number;
+}
+
+export const reviewsApi = {
+  create: (data: { rentalId: number; rating: number; comment?: string }) =>
+    request<ReviewItem>("/reviews", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  forAsset: (assetId: number) =>
+    request<{ reviews: ReviewItem[]; stats: ReviewStats }>(`/reviews/asset/${assetId}`),
+  mine: () => request<ReviewItem[]>("/reviews/mine"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Damage Penalty
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PenaltyBreakdown {
+  damageLevel: string;
+  damagePenaltyHalalas: number;
+  damagePenaltyPct: number;
+  lateDays: number;
+  latePenaltyHalalas: number;
+  latePenaltyPct: number;
+  totalPenaltyHalalas: number;
+  description: string;
+  descriptionAr: string;
+  outcome: "clean" | "penalty" | "major_damage" | "loss";
+}
+
+export const penaltyApi = {
+  calculate: (rentalId: number, data: { conditionScoreAfter?: number; damageLevel?: string }) =>
+    request<PenaltyBreakdown>(`/rentals/${rentalId}/calculate-penalty`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  damageRules: () =>
+    request<Array<{ level: string; penaltyPct: number; description: string; descriptionAr: string }>>(
+      "/rentals/damage-rules"
+    ),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

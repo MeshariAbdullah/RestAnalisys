@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Diamond, Calendar, Shield, Info } from "lucide-react";
+import { Diamond, Calendar, Shield, Info, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { assetsApi, rentalsApi, formatSar } from "@/lib/api";
+import { assetsApi, rentalsApi, reviewsApi, formatSar } from "@/lib/api";
 
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -39,6 +39,11 @@ export default function ItemDetail({ id }: { id: number }) {
     queryKey: ["quote", id, startDate, endDate],
     queryFn: () => rentalsApi.quote(id, startDate, endDate),
     enabled: !!startDate && !!endDate && startDate < endDate,
+  });
+
+  const reviewsQuery = useQuery({
+    queryKey: ["reviews", id],
+    queryFn: () => reviewsApi.forAsset(id),
   });
 
   async function handleBook() {
@@ -210,6 +215,46 @@ export default function ItemDetail({ id }: { id: number }) {
           </Card>
         </div>
       </div>
+
+      {/* Reviews Section */}
+      {reviewsQuery.data && (reviewsQuery.data.stats.totalReviews > 0) && (
+        <div className="mt-12">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Star className="w-5 h-5 text-amber-500" />
+            Reviews
+            {reviewsQuery.data.stats.averageRating && (
+              <span className="text-base font-normal text-neutral-500">
+                ({reviewsQuery.data.stats.averageRating.toFixed(1)} avg · {reviewsQuery.data.stats.totalReviews} review{reviewsQuery.data.stats.totalReviews !== 1 ? "s" : ""})
+              </span>
+            )}
+          </h2>
+          <div className="space-y-3">
+            {reviewsQuery.data.reviews.map((r) => (
+              <Card key={r.id}>
+                <CardContent className="py-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="flex">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-4 h-4 ${i < r.rating ? "text-amber-500 fill-amber-500" : "text-neutral-200"}`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-sm font-medium">{r.reviewerName ?? "Anonymous"}</span>
+                    <span className="text-xs text-neutral-400">
+                      {new Date(r.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  {r.comment && (
+                    <p className="text-sm text-neutral-600 mt-1">{r.comment}</p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -19,8 +20,10 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
+import { notificationsApi } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
 
 interface NavItem {
@@ -67,6 +70,30 @@ function roleLabel(role: Role): string {
     admin: "Admin",
     super_admin: "Super Admin",
   }[role];
+}
+
+function NotificationBar() {
+  const { data } = useQuery({
+    queryKey: ["unread-count"],
+    queryFn: () => notificationsApi.unreadCount(),
+    refetchInterval: 30000,
+  });
+  const count = data?.count ?? 0;
+
+  return (
+    <div className="flex items-center justify-end px-6 py-2 border-b bg-white">
+      <Link href="/notifications">
+        <a className="relative p-2 rounded-lg hover:bg-neutral-100 transition-colors">
+          <Bell className="w-5 h-5 text-neutral-600" />
+          {count > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+              {count > 99 ? "99+" : count}
+            </span>
+          )}
+        </a>
+      </Link>
+    </div>
+  );
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -162,7 +189,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {user && <NotificationBar />}
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
     </div>
   );
 }

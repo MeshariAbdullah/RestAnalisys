@@ -655,6 +655,63 @@ export const operationalAlerts = pgTable("operational_alerts", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications (in-app notification center)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notificationChannelEnum = pgEnum("notification_channel", [
+  "in_app",
+  "email",
+  "sms",
+]);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    channel: notificationChannelEnum("channel").notNull().default("in_app"),
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    titleAr: text("title_ar").notNull(),
+    body: text("body").notNull(),
+    bodyAr: text("body_ar").notNull(),
+    entityType: text("entity_type"),
+    entityId: integer("entity_id"),
+    read: boolean("read").notNull().default(false),
+    readAt: timestamp("read_at"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    userReadIdx: index("notifications_user_read_idx").on(t.userId, t.read),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reviews (post-rental feedback)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const reviews = pgTable(
+  "reviews",
+  {
+    id: serial("id").primaryKey(),
+    rentalId: integer("rental_id").references(() => rentals.id).notNull(),
+    assetId: integer("asset_id").references(() => assets.id).notNull(),
+    reviewerId: integer("reviewer_id").references(() => users.id).notNull(),
+    rating: integer("rating").notNull(),
+    comment: text("comment"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    rentalIdx: uniqueIndex("reviews_rental_idx").on(t.rentalId),
+    assetIdx: index("reviews_asset_idx").on(t.assetId),
+    reviewerIdx: index("reviews_reviewer_idx").on(t.reviewerId),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Immutable audit logs
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -713,3 +770,7 @@ export type SanadRecord = typeof sanadRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
 export type Shipment = typeof shipments.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;
+export type Review = typeof reviews.$inferSelect;
+export type NewReview = typeof reviews.$inferInsert;

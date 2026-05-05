@@ -56,6 +56,8 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { computePenalty, getDamageRules } from "../services/damageMatrix.js";
+import { sendNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -78,16 +80,16 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) throw new NotFoundError("User");
 
-  // Aggregate rental history.
   const stats = await db
     .select({
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      lateReturns: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty','under_inspection') and returned_at is not null and returned_at::date > end_date::date)`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, lateReturns: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +101,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.lateReturns ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +282,21 @@ router.post(
       after: { rental, decision },
     });
 
+    sendNotification({
+      userId: renterId,
+      type: "rental.created",
+      vars: { reference: rental.reference, assetTitle: asset.title },
+      entityType: "rental",
+      entityId: rental.id,
+    });
+    sendNotification({
+      userId: asset.ownerId,
+      type: "asset.rented",
+      vars: { reference: rental.reference, assetTitle: asset.title },
+      entityType: "rental",
+      entityId: rental.id,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -441,6 +458,14 @@ router.post(
       after: updated,
     });
 
+    sendNotification({
+      userId: rental.renterId,
+      type: "rental.delivered",
+      vars: { reference: rental.reference },
+      entityType: "rental",
+      entityId: id,
+    });
+
     res.json(updated);
   })
 );
@@ -516,6 +541,13 @@ router.post(
         entityId: id,
         after: updated,
       });
+      sendNotification({
+        userId: rental.renterId,
+        type: "rental.closed",
+        vars: { reference: rental.reference },
+        entityType: "rental",
+        entityId: id,
+      });
       return res.json(updated);
     }
 
@@ -583,6 +615,59 @@ router.post(
     });
 
     res.json(updated);
+  })
+);
+
+// ── Damage rules reference ─────────────────────────────────────────────────
+router.get(
+  "/damage-rules",
+  asyncHandler(async (_req, res) => {
+    res.json(getDamageRules());
+  })
+);
+
+// ── Calculate penalty for a rental ────────────────────────────────────────
+router.post(
+  "/:id/calculate-penalty",
+  authenticate,
+  requirePermission("rental.close"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const id = Number(req.params.id);
+    const { conditionScoreAfter, damageLevel } = req.body as {
+      conditionScoreAfter?: number;
+      damageLevel?: string;
+    };
+
+    const [rental] = await db.select().from(rentals).where(eq(rentals.id, id)).limit(1);
+    if (!rental) throw new NotFoundError("Rental");
+
+    const [asset] = await db.select().from(assets).where(eq(assets.id, rental.assetId)).limit(1);
+    if (!asset) throw new NotFoundError("Asset");
+
+    const [intakeInspection] = await db
+      .select()
+      .from(inspections)
+      .where(and(eq(inspections.assetId, rental.assetId), eq(inspections.type, "intake")))
+      .orderBy(desc(inspections.createdAt))
+      .limit(1);
+
+    const conditionScoreBefore = intakeInspection?.conditionScore ?? 100;
+    const endDate = new Date(rental.endDate + "T00:00:00Z");
+    const returnDate = rental.returnedAt ?? new Date();
+    const lateDays = Math.max(
+      0,
+      Math.floor((new Date(returnDate).getTime() - endDate.getTime()) / (1000 * 60 * 60 * 24))
+    );
+
+    const penalty = computePenalty({
+      assetValueHalalas: asset.evaluatedValueHalalas ?? 0,
+      conditionScoreBefore,
+      conditionScoreAfter: conditionScoreAfter ?? conditionScoreBefore,
+      lateDays,
+      damageLevel: damageLevel as any,
+    });
+
+    res.json(penalty);
   })
 );
 
