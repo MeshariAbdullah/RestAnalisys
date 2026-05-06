@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api";
 import { saveSession, homeForRole } from "@/lib/auth";
+import { toast } from "@/hooks/use-toast";
 
 export default function Register() {
   const [, navigate] = useLocation();
@@ -23,6 +24,7 @@ export default function Register() {
     try {
       const res = await authApi.register(email, password, fullName, role);
       saveSession(res.token, res.user);
+      toast({ title: "Account created", description: "Welcome to MLR! Complete your Nafath verification to get started.", variant: "success" });
       navigate(homeForRole(res.user.role));
     } catch (err) {
       setError((err as Error).message ?? "Registration failed");

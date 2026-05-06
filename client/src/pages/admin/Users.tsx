@@ -4,6 +4,7 @@ import { Users as UsersIcon, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -11,7 +12,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
 import { adminApi, type User } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 function riskColor(c: string): string {
   if (c === "low") return "bg-green-100 text-green-700";
@@ -23,28 +34,51 @@ function riskColor(c: string): string {
 export default function UsersPage() {
   const qc = useQueryClient();
   const [role, setRole] = useState<string>("all");
+  const [blockTarget, setBlockTarget] = useState<User | null>(null);
+  const [blockReason, setBlockReason] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users", role],
     queryFn: () => adminApi.users(role === "all" ? undefined : role),
   });
 
-  async function toggleBlock(u: User) {
-    const block = !u.isBlocked;
-    const reason = block
-      ? prompt("Reason for blocking?") ?? undefined
-      : undefined;
-    if (block && !reason) return;
-    await adminApi.blockUser(u.id, block, reason);
-    await qc.invalidateQueries({ queryKey: ["admin-users"] });
+  function initiateToggle(u: User) {
+    if (u.isBlocked) {
+      performUnblock(u);
+    } else {
+      setBlockTarget(u);
+      setBlockReason("");
+    }
+  }
+
+  async function performUnblock(u: User) {
+    try {
+      await adminApi.blockUser(u.id, false);
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+      toast({ title: "User unblocked", description: `${u.fullName} has been unblocked.`, variant: "success" });
+    } catch (err) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
+    }
+  }
+
+  async function confirmBlock() {
+    if (!blockTarget || !blockReason.trim()) return;
+    try {
+      await adminApi.blockUser(blockTarget.id, true, blockReason);
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+      toast({ title: "User blocked", description: `${blockTarget.fullName} has been blocked.`, variant: "success" });
+    } catch (err) {
+      toast({ title: "Error", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setBlockTarget(null);
+      setBlockReason("");
+    }
   }
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
       <h1 className="text-3xl font-bold mb-2">Users</h1>
-      <p className="text-neutral-500 mb-6">
-        All accounts across the platform.
-      </p>
+      <p className="text-neutral-500 mb-6">All accounts across the platform.</p>
 
       <div className="flex items-center gap-3 mb-5">
         <Select value={role} onValueChange={setRole}>
@@ -63,7 +97,11 @@ export default function UsersPage() {
       </div>
 
       {isLoading ? (
-        <p className="text-neutral-500">Loading…</p>
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-14 rounded bg-neutral-100 animate-pulse" />
+          ))}
+        </div>
       ) : !data || data.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">
@@ -91,48 +129,26 @@ export default function UsersPage() {
                   <tr key={u.id} className="border-b last:border-0">
                     <td className="p-4 font-medium">{u.fullName}</td>
                     <td className="p-4 text-neutral-600">{u.email}</td>
-                    <td className="p-4">
-                      <Badge variant="outline">{u.role}</Badge>
-                    </td>
+                    <td className="p-4"><Badge variant="outline">{u.role}</Badge></td>
                     <td className="p-4 font-mono">{u.trustScore}</td>
                     <td className="p-4">
-                      <Badge
-                        className={`border-0 ${riskColor(u.riskCategory)}`}
-                      >
-                        {u.riskCategory}
-                      </Badge>
+                      <Badge className={`border-0 ${riskColor(u.riskCategory)}`}>{u.riskCategory}</Badge>
                     </td>
                     <td className="p-4">
                       {u.isBlocked ? (
-                        <Badge className="bg-red-100 text-red-700 border-0">
-                          Blocked
-                        </Badge>
+                        <Badge className="bg-red-100 text-red-700 border-0">Blocked</Badge>
                       ) : u.nafathVerified ? (
-                        <Badge className="bg-green-100 text-green-700 border-0">
-                          Active
-                        </Badge>
+                        <Badge className="bg-green-100 text-green-700 border-0">Active</Badge>
                       ) : (
-                        <Badge className="bg-amber-100 text-amber-800 border-0">
-                          Unverified
-                        </Badge>
+                        <Badge className="bg-amber-100 text-amber-800 border-0">Unverified</Badge>
                       )}
                     </td>
                     <td className="p-4 text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => toggleBlock(u)}
-                      >
+                      <Button size="sm" variant="outline" onClick={() => initiateToggle(u)}>
                         {u.isBlocked ? (
-                          <>
-                            <ShieldCheck className="w-4 h-4 mr-1" />
-                            Unblock
-                          </>
+                          <><ShieldCheck className="w-4 h-4 mr-1" />Unblock</>
                         ) : (
-                          <>
-                            <ShieldAlert className="w-4 h-4 mr-1" />
-                            Block
-                          </>
+                          <><ShieldAlert className="w-4 h-4 mr-1" />Block</>
                         )}
                       </Button>
                     </td>
@@ -143,6 +159,31 @@ export default function UsersPage() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={!!blockTarget} onOpenChange={(open) => { if (!open) { setBlockTarget(null); setBlockReason(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Block user</DialogTitle>
+            <DialogDescription>
+              Provide a reason for blocking {blockTarget?.fullName} ({blockTarget?.email}). They will be unable to use the platform.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            placeholder="Reason for blocking..."
+            value={blockReason}
+            onChange={(e) => setBlockReason(e.target.value)}
+            rows={4}
+          />
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button variant="destructive" onClick={confirmBlock} disabled={!blockReason.trim()}>
+              Block user
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

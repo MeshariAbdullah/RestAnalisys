@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { legalApi, paymentsApi, formatSar } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 export default function LegalCommitmentPage({
   commitmentId,
@@ -31,6 +32,7 @@ export default function LegalCommitmentPage({
     try {
       await legalApi.sign(commitmentId);
       await qc.invalidateQueries({ queryKey: ["commitment", commitmentId] });
+      toast({ title: "Contract signed", description: "Sanad issued via Nafith. Proceed to payment.", variant: "success" });
     } catch (err) {
       setError((err as Error).message ?? "Signing failed");
     } finally {
@@ -44,6 +46,7 @@ export default function LegalCommitmentPage({
     setError(null);
     try {
       await paymentsApi.charge(data.rental.id);
+      toast({ title: "Payment successful", description: "Your rental is confirmed! Track it in My Rentals.", variant: "success" });
       navigate("/my-rentals");
     } catch (err) {
       setError((err as Error).message ?? "Payment failed");

@@ -5,6 +5,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ProfilePage from "./pages/Profile";
 
 // Renter
 import Browse from "./pages/renter/Browse";
@@ -43,6 +44,11 @@ export default function App() {
       <Route path="/" component={Landing} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+
+      {/* Profile (all authenticated users) */}
+      <Route path="/profile">
+        <ProtectedRoute roles={["renter", "owner", "inspector", "operations", "admin", "super_admin"]}><ProfilePage /></ProtectedRoute>
+      </Route>
 
       {/* Renter */}
       <Route path="/browse">

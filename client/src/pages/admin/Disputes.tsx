@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { disputesApi, type Dispute } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 type Resolution =
   | "resolved_for_renter"
@@ -31,11 +32,8 @@ function statusColor(s: string): string {
 export default function DisputesPage() {
   const qc = useQueryClient();
   const [openId, setOpenId] = useState<number | null>(null);
-  const [resolution, setResolution] = useState<Resolution>(
-    "resolved_for_renter"
-  );
+  const [resolution, setResolution] = useState<Resolution>("resolved_for_renter");
   const [notes, setNotes] = useState("");
-  const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["disputes"],
@@ -43,26 +41,28 @@ export default function DisputesPage() {
   });
 
   async function resolve(id: number) {
-    setError(null);
     try {
       await disputesApi.resolve({ disputeId: id, resolution, notes });
       setOpenId(null);
       setNotes("");
       await qc.invalidateQueries({ queryKey: ["disputes"] });
+      toast({ title: "Dispute resolved", description: `Dispute #${id} has been resolved.`, variant: "success" });
     } catch (err) {
-      setError((err as Error).message);
+      toast({ title: "Resolution failed", description: (err as Error).message, variant: "destructive" });
     }
   }
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
       <h1 className="text-3xl font-bold mb-2">Disputes</h1>
-      <p className="text-neutral-500 mb-8">
-        Cases between renters, owners and the platform.
-      </p>
+      <p className="text-neutral-500 mb-8">Cases between renters, owners and the platform.</p>
 
       {isLoading ? (
-        <p className="text-neutral-500">Loading…</p>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-28 rounded-xl bg-neutral-100 animate-pulse" />
+          ))}
+        </div>
       ) : !data || data.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">
@@ -82,29 +82,20 @@ export default function DisputesPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold">Dispute #{d.id}</p>
-                      <Badge className={`border-0 ${statusColor(d.status)}`}>
-                        {d.status.replace(/_/g, " ")}
-                      </Badge>
+                      <Badge className={`border-0 ${statusColor(d.status)}`}>{d.status.replace(/_/g, " ")}</Badge>
                       <Badge variant="outline">{d.category}</Badge>
                       <Badge variant="outline">{d.severity}</Badge>
                     </div>
                     <p className="text-sm text-neutral-600 mt-1">{d.summary}</p>
                     <p className="text-xs text-neutral-400 mt-2">
-                      Rental #{d.rentalId} · Opened{" "}
-                      {new Date(d.openedAt).toLocaleDateString()}
+                      Rental #{d.rentalId} &middot; Opened {new Date(d.openedAt).toLocaleDateString()}
                     </p>
                   </div>
                   {d.status !== "resolved_for_renter" &&
                     d.status !== "resolved_for_platform" &&
                     d.status !== "resolved_for_owner" &&
                     d.status !== "escalated_to_legal" && (
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          setOpenId(openId === d.id ? null : d.id)
-                        }
-                        className="bg-neutral-900 hover:bg-neutral-800"
-                      >
+                      <Button size="sm" onClick={() => setOpenId(openId === d.id ? null : d.id)} className="bg-neutral-900 hover:bg-neutral-800">
                         Resolve
                       </Button>
                     )}
@@ -112,39 +103,17 @@ export default function DisputesPage() {
 
                 {openId === d.id && (
                   <div className="mt-4 pt-4 border-t space-y-3">
-                    <Select
-                      value={resolution}
-                      onValueChange={(v) => setResolution(v as Resolution)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Select value={resolution} onValueChange={(v) => setResolution(v as Resolution)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="resolved_for_renter">
-                          Resolve for renter
-                        </SelectItem>
-                        <SelectItem value="resolved_for_platform">
-                          Resolve for platform
-                        </SelectItem>
-                        <SelectItem value="resolved_for_owner">
-                          Resolve for owner
-                        </SelectItem>
-                        <SelectItem value="escalated_to_legal">
-                          Escalate to legal / Nafith
-                        </SelectItem>
+                        <SelectItem value="resolved_for_renter">Resolve for renter</SelectItem>
+                        <SelectItem value="resolved_for_platform">Resolve for platform</SelectItem>
+                        <SelectItem value="resolved_for_owner">Resolve for owner</SelectItem>
+                        <SelectItem value="escalated_to_legal">Escalate to legal / Nafith</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Textarea
-                      placeholder="Resolution notes (mandatory)"
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      rows={3}
-                    />
-                    <Button
-                      onClick={() => resolve(d.id)}
-                      className="bg-amber-500 text-neutral-950 hover:bg-amber-400"
-                      disabled={!notes.trim()}
-                    >
+                    <Textarea placeholder="Resolution notes (mandatory)" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
+                    <Button onClick={() => resolve(d.id)} className="bg-amber-500 text-neutral-950 hover:bg-amber-400" disabled={!notes.trim()}>
                       Submit resolution
                     </Button>
                   </div>
@@ -152,12 +121,6 @@ export default function DisputesPage() {
               </CardContent>
             </Card>
           ))}
-        </div>
-      )}
-
-      {error && (
-        <div className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
-          {error}
         </div>
       )}
     </div>

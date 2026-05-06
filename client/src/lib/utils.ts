@@ -52,27 +52,59 @@ export function getSeverityLabel(severity: string) {
 
 export function getStatusLabel(status: string) {
   const labels: Record<string, string> = {
-    uploaded: "تم الرفع",
-    extracting_frames: "استخراج الإطارات",
-    analyzing_gpt: "تحليل GPT-4o",
-    analyzing_gemini: "تحليل Gemini",
-    saving_results: "حفظ النتائج",
-    done: "مكتمل",
-    error: "خطأ",
-    queued: "في الانتظار",
+    pending_approval: "بانتظار الموافقة",
+    in_inspection: "قيد الفحص",
+    awaiting_owner_approval: "بانتظار موافقة المالك",
+    in_vault: "في المستودع",
+    listed: "معروض",
+    rented_out: "مؤجر",
+    withdrawn: "مسحوب",
+    rejected: "مرفوض",
+    pending_legal_signing: "بانتظار التوقيع",
+    pending_payment: "بانتظار الدفع",
+    confirmed: "مؤكد",
+    delivered: "تم التسليم",
+    returned: "تم الإرجاع",
+    closed: "مغلق",
+    closed_clean: "مغلق بنجاح",
+    closed_with_penalty: "مغلق مع غرامة",
+    cancelled: "ملغي",
+    disputed: "متنازع عليه",
+    open: "مفتوح",
+    resolved: "محلول",
+    active: "نشط",
+    blocked: "محظور",
+    verified: "موثق",
+    unverified: "غير موثق",
   };
   return labels[status] ?? status;
 }
 
 export function getStatusIcon(status: string) {
   switch (status) {
-    case "done": return "✅";
-    case "error": return "❌";
-    case "uploaded": return "📤";
-    case "extracting_frames": return "🎞️";
-    case "analyzing_gpt": return "🤖";
-    case "analyzing_gemini": return "💎";
-    case "saving_results": return "💾";
-    default: return "⏳";
+    case "listed":
+    case "confirmed":
+    case "delivered":
+    case "closed_clean":
+    case "verified":
+    case "active":
+      return "✅";
+    case "rejected":
+    case "cancelled":
+    case "blocked":
+      return "❌";
+    case "pending_approval":
+    case "pending_payment":
+    case "pending_legal_signing":
+      return "⏳";
+    case "in_inspection":
+    case "in_vault":
+      return "🔍";
+    case "rented_out":
+      return "📦";
+    case "disputed":
+      return "⚠️";
+    default:
+      return "📋";
   }
 }

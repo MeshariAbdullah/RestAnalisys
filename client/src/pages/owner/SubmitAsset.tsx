@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { assetsApi } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 export default function SubmitAsset() {
   const [, navigate] = useLocation();
@@ -41,12 +42,8 @@ export default function SubmitAsset() {
     setError(null);
     try {
       const value = Math.round(Number(declaredValueSar) * 100);
-      if (!value || value <= 0) {
-        throw new Error("Declared value must be a positive number");
-      }
-      if (imageUrls.length === 0) {
-        throw new Error("At least one photo is required");
-      }
+      if (!value || value <= 0) throw new Error("Declared value must be a positive number");
+      if (imageUrls.length === 0) throw new Error("At least one photo is required");
       await assetsApi.submit({
         category,
         brand,
@@ -56,6 +53,7 @@ export default function SubmitAsset() {
         ownerDeclaredValueHalalas: value,
         submissionImages: imageUrls,
       });
+      toast({ title: "Asset submitted", description: "Your asset has been submitted for inspection. We'll notify you once it's reviewed.", variant: "success" });
       navigate("/owner");
     } catch (err) {
       setError((err as Error).message ?? "Submission failed");
@@ -68,12 +66,11 @@ export default function SubmitAsset() {
     <div className="p-8 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-2 text-sm text-neutral-500">
         <Diamond className="w-4 h-4" />
-        Submit asset · step 1 of 2
+        Submit asset
       </div>
       <h1 className="text-3xl font-bold mb-2">Submit a new asset</h1>
       <p className="text-neutral-500 mb-8">
-        Tell us about your piece. Our experts will authenticate and evaluate it
-        before listing.
+        Tell us about your piece. Our experts will authenticate and evaluate it before listing.
       </p>
 
       <form onSubmit={handleSubmit}>
@@ -83,9 +80,7 @@ export default function SubmitAsset() {
               <div>
                 <Label>Category</Label>
                 <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="bag">Handbag</SelectItem>
                     <SelectItem value="watch">Watch</SelectItem>
@@ -97,99 +92,44 @@ export default function SubmitAsset() {
               </div>
               <div>
                 <Label>Declared value (SAR)</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  step="0.01"
-                  value={declaredValueSar}
-                  onChange={(e) => setDeclaredValueSar(e.target.value)}
-                  placeholder="e.g. 180000"
-                  className="mt-1"
-                  required
-                />
+                <Input type="number" min="1" step="0.01" value={declaredValueSar} onChange={(e) => setDeclaredValueSar(e.target.value)} placeholder="e.g. 180000" className="mt-1" required />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>Brand</Label>
-                <Input
-                  value={brand}
-                  onChange={(e) => setBrand(e.target.value)}
-                  placeholder="e.g. Hermès"
-                  className="mt-1"
-                  required
-                />
+                <Input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="e.g. Hermes" className="mt-1" required />
               </div>
               <div>
                 <Label>Model (optional)</Label>
-                <Input
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  placeholder="e.g. Birkin 30 Togo"
-                  className="mt-1"
-                />
+                <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="e.g. Birkin 30 Togo" className="mt-1" />
               </div>
             </div>
 
             <div>
               <Label>Title</Label>
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Hermès Birkin 30 Gold Togo PHW"
-                className="mt-1"
-                required
-              />
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Hermes Birkin 30 Gold Togo PHW" className="mt-1" required />
             </div>
 
             <div>
               <Label>Description</Label>
-              <Textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Condition, history, accessories included…"
-                className="mt-1"
-                rows={4}
-              />
+              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Condition, history, accessories included..." className="mt-1" rows={4} />
             </div>
 
             <div>
               <Label>Photos</Label>
-              <p className="text-xs text-neutral-500 mb-2">
-                Paste image URLs (at least 1, up to 10). Proper uploads connect
-                to S3 in production.
-              </p>
+              <p className="text-xs text-neutral-500 mb-2">Paste image URLs (at least 1, up to 10).</p>
               <div className="flex gap-2">
-                <Input
-                  value={imageDraft}
-                  onChange={(e) => setImageDraft(e.target.value)}
-                  placeholder="https://…/photo.jpg"
-                />
-                <Button type="button" onClick={addImage} variant="outline">
-                  <Upload className="w-4 h-4 mr-1" />
-                  Add
-                </Button>
+                <Input value={imageDraft} onChange={(e) => setImageDraft(e.target.value)} placeholder="https://.../photo.jpg" />
+                <Button type="button" onClick={addImage} variant="outline"><Upload className="w-4 h-4 mr-1" />Add</Button>
               </div>
               {imageUrls.length > 0 && (
                 <div className="grid grid-cols-4 gap-2 mt-3">
                   {imageUrls.map((url, i) => (
-                    <div
-                      key={i}
-                      className="relative aspect-square bg-neutral-100 rounded overflow-hidden border"
-                    >
-                      <img
-                        src={url}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setImageUrls(imageUrls.filter((_, j) => j !== i))
-                        }
-                        className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1 hover:bg-black"
-                      >
+                    <div key={i} className="relative aspect-square bg-neutral-100 rounded overflow-hidden border">
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      <button type="button" onClick={() => setImageUrls(imageUrls.filter((_, j) => j !== i))} className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1 hover:bg-black">
                         <X className="w-3 h-3" />
                       </button>
                     </div>
@@ -201,26 +141,14 @@ export default function SubmitAsset() {
         </Card>
 
         {error && (
-          <div className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
-            {error}
-          </div>
+          <div className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">{error}</div>
         )}
 
         <div className="flex gap-3 mt-6">
-          <Button
-            type="submit"
-            disabled={loading}
-            className="bg-amber-500 text-neutral-950 hover:bg-amber-400"
-          >
-            {loading ? "Submitting…" : "Submit for inspection"}
+          <Button type="submit" disabled={loading} className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
+            {loading ? "Submitting..." : "Submit for inspection"}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate("/owner")}
-          >
-            Cancel
-          </Button>
+          <Button type="button" variant="outline" onClick={() => navigate("/owner")}>Cancel</Button>
         </div>
       </form>
     </div>
