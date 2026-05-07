@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
+import NotificationBell from "./NotificationBell";
+import LanguageToggle from "./LanguageToggle";
 
 interface NavItem {
   href: string;
@@ -162,7 +164,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="h-14 border-b border-neutral-200 bg-white flex items-center justify-end gap-2 px-6 shrink-0">
+          <LanguageToggle />
+          <NotificationBell />
+        </header>
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
     </div>
   );
 }

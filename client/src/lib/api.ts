@@ -580,6 +580,64 @@ export const adminApi = {
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  titleAr?: string;
+  body: string;
+  bodyAr?: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  actionUrl?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (opts?: { limit?: number; offset?: number; unread?: boolean }) => {
+    const qs = new URLSearchParams();
+    if (opts?.limit) qs.set("limit", String(opts.limit));
+    if (opts?.offset) qs.set("offset", String(opts.offset));
+    if (opts?.unread) qs.set("unread", "true");
+    return request<{ items: AppNotification[]; unreadCount: number }>(`/notifications?${qs}`);
+  },
+  unreadCount: () => request<{ unreadCount: number }>("/notifications/count"),
+  markRead: (id: number) =>
+    request<{ ok: boolean }>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean; marked: number }>("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Uploads
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UploadedFile {
+  filename: string;
+  originalName: string;
+  size: number;
+  mimeType: string;
+  url: string;
+}
+
+export const uploadsApi = {
+  upload: async (files: File[]): Promise<{ files: UploadedFile[] }> => {
+    const formData = new FormData();
+    files.forEach((f) => formData.append("files", f));
+    return request<{ files: UploadedFile[] }>("/uploads", {
+      method: "POST",
+      body: formData,
+    });
+  },
+};
+
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };

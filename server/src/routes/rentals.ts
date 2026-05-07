@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -280,6 +281,18 @@ router.post(
       after: { rental, decision },
     });
 
+    notify({
+      userId: asset.ownerId,
+      type: "rental_status_change",
+      title: "Asset Reserved",
+      titleAr: "تم حجز الأصل",
+      body: `Your asset "${asset.title}" has been reserved (ref: ${reference}).`,
+      bodyAr: `تم حجز أصلك "${asset.title}" (المرجع: ${reference}).`,
+      entityType: "rental",
+      entityId: rental.id,
+      actionUrl: `/owner/assets/${asset.id}`,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -441,6 +454,18 @@ router.post(
       after: updated,
     });
 
+    notify({
+      userId: rental.renterId,
+      type: "rental_status_change",
+      title: "Item Delivered",
+      titleAr: "تم تسليم المنتج",
+      body: `Your rental ${rental.reference} has been delivered. Enjoy!`,
+      bodyAr: `تم تسليم إيجارك ${rental.reference}. استمتع!`,
+      entityType: "rental",
+      entityId: id,
+      actionUrl: `/my-rentals`,
+    });
+
     res.json(updated);
   })
 );
@@ -516,6 +541,30 @@ router.post(
         entityId: id,
         after: updated,
       });
+
+      notify({
+        userId: rental.ownerId,
+        type: "payout_released",
+        title: "Rental Closed — Payout Ready",
+        titleAr: "تم إغلاق الإيجار — الدفعة جاهزة",
+        body: `Rental ${rental.reference} closed cleanly. Your payout is being processed.`,
+        bodyAr: `تم إغلاق الإيجار ${rental.reference} بنجاح. يتم مع��لجة دفعتك.`,
+        entityType: "rental",
+        entityId: id,
+        actionUrl: `/owner/payouts`,
+      });
+      notify({
+        userId: rental.renterId,
+        type: "rental_status_change",
+        title: "Rental Closed",
+        titleAr: "تم إغلاق الإيجار",
+        body: `Your rental ${rental.reference} has been closed successfully.`,
+        bodyAr: `تم إغلاق إيجارك ${rental.reference} بنجاح.`,
+        entityType: "rental",
+        entityId: id,
+        actionUrl: `/my-rentals`,
+      });
+
       return res.json(updated);
     }
 

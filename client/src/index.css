@@ -60,14 +60,11 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: "Cairo", "Tajawal", Arial, sans-serif;
-    direction: rtl;
+    font-family: "Inter", "Cairo", Arial, sans-serif;
   }
-}
-
-/* RTL fixes */
-.ltr {
-  direction: ltr;
+  html[dir="rtl"] body {
+    font-family: "Cairo", "Tajawal", Arial, sans-serif;
+  }
 }
 
 /* Custom scrollbar */
