@@ -11,7 +11,7 @@
  */
 
 import { Router } from "express";
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, lte, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { sendNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -256,6 +257,24 @@ router.post(
       after: updated,
     });
 
+    const [owner] = await db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, asset.ownerId))
+      .limit(1);
+    if (owner) {
+      sendNotification({
+        to: owner.email,
+        channel: "email",
+        templateKey: approved ? "asset.approved" : "asset.rejected",
+        locale: "ar",
+        variables: {
+          title: asset.title,
+          reason: rejectionReason ?? "",
+        },
+      }).catch(() => {});
+    }
+
     res.json(updated);
   })
 );
@@ -313,11 +332,34 @@ router.get(
     const conditions = [eq(assets.status, "listed")];
 
     if (filter.category) conditions.push(eq(assets.category, filter.category));
-    if (filter.brand) conditions.push(eq(assets.brand, filter.brand));
+    if (filter.brand) conditions.push(ilike(assets.brand, `%${filter.brand}%`));
+    if (filter.q) {
+      conditions.push(
+        or(
+          ilike(assets.title, `%${filter.q}%`),
+          ilike(assets.brand, `%${filter.q}%`),
+          ilike(assets.model, `%${filter.q}%`),
+          ilike(assets.description, `%${filter.q}%`)
+        )!
+      );
+    }
     if (filter.minDaily)
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.minValue)
+      conditions.push(gte(assets.evaluatedValueHalalas, filter.minValue));
+    if (filter.maxValue)
+      conditions.push(lte(assets.evaluatedValueHalalas, filter.maxValue));
+    if (filter.cursor) conditions.push(lte(assets.id, filter.cursor));
+
+    const sortMap = {
+      price_asc: asc(assets.dailyRentalPriceHalalas),
+      price_desc: desc(assets.dailyRentalPriceHalalas),
+      newest: desc(assets.createdAt),
+      value_desc: desc(assets.evaluatedValueHalalas),
+    } as const;
+    const orderBy = sortMap[filter.sort];
 
     const rows = await db
       .select({
@@ -326,18 +368,24 @@ router.get(
         brand: assets.brand,
         model: assets.model,
         category: assets.category,
+        description: assets.description,
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
+        createdAt: assets.createdAt,
       })
       .from(assets)
       .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
-      .limit(filter.limit);
+      .orderBy(orderBy)
+      .limit(filter.limit + 1);
 
-    res.json({ items: rows, count: rows.length });
+    const hasMore = rows.length > filter.limit;
+    const items = hasMore ? rows.slice(0, filter.limit) : rows;
+    const nextCursor = hasMore ? items[items.length - 1]?.id : undefined;
+
+    res.json({ items, count: items.length, hasMore, nextCursor });
   })
 );
 
