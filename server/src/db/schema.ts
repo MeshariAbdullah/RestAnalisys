@@ -681,6 +681,30 @@ export const auditLogs = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    type: text("type").notNull(),
+    channel: text("channel").notNull().default("in_app"),
+    subject: text("subject").notNull(),
+    body: text("body").notNull(),
+    metadataJson: jsonb("metadata_json"),
+    read: boolean("read").notNull().default(false),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    readIdx: index("notifications_read_idx").on(t.userId, t.read),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Integration webhooks (Nafath, Nafith, payment gateway, courier)
 // ─────────────────────────────────────────────────────────────────────────────
 

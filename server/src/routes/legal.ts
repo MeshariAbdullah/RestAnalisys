@@ -146,6 +146,26 @@ router.post(
       })
       .returning();
 
+    // 3b) Sign the Sanad (renter acknowledgement via Nafith)
+    const sanadSig = await signSanad(sanad.nafithReference!);
+    if (sanadSig.status === "signed") {
+      await db
+        .update(sanadRecords)
+        .set({
+          status: "active",
+          signedAt: sanadSig.signedAt ? new Date(sanadSig.signedAt) : new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(sanadRecords.id, sanad.id));
+      sanad.status = "active";
+    }
+
+    // 3c) Advance commitment to active now that Sanad is signed
+    await db
+      .update(legalCommitments)
+      .set({ status: "active", updatedAt: new Date() })
+      .where(eq(legalCommitments.id, legalCommitmentId));
+
     // 4) Advance the rental to pending_payment
     await db
       .update(rentals)

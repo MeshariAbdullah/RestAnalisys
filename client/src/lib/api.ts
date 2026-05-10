@@ -578,6 +578,49 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: { entityType?: string; action?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    return request<Array<{
+      id: number;
+      actorUserId: number | null;
+      actorRole: string | null;
+      action: string;
+      entityType: string;
+      entityId: number | null;
+      beforeJson: unknown;
+      afterJson: unknown;
+      ip: string | null;
+      createdAt: string;
+    }>>(`/admin/audit-logs?${qs}`);
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  channel: string;
+  subject: string;
+  body: string;
+  read: boolean;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: () => request<Notification[]>("/notifications"),
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request("/notifications/mark-all-read", { method: "POST" }),
 };
 
 export const healthApi = {
