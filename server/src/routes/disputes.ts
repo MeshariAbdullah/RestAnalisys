@@ -12,6 +12,7 @@ import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { sendNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -148,6 +149,17 @@ router.post(
       entityType: "dispute",
       entityId: input.disputeId,
       after: updated,
+    });
+
+    await sendNotification({
+      userId: dispute.openedByUserId,
+      type: "dispute.resolved",
+      title: "Dispute Resolved",
+      titleAr: "تم حل النزاع",
+      body: `Your dispute has been resolved: ${input.resolution.replace(/_/g, " ")}.`,
+      bodyAr: `تم حل النزاع الخاص بك.`,
+      entityType: "dispute",
+      entityId: dispute.id,
     });
 
     res.json(updated);

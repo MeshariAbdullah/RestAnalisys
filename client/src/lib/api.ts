@@ -585,6 +585,95 @@ export const healthApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id: number;
+  userId: number;
+  channel: string;
+  type: string;
+  title: string;
+  titleAr?: string;
+  body: string;
+  bodyAr?: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+}
+
+export const notificationsApi = {
+  list: (params?: { page?: number; limit?: number; unread?: boolean }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.unread) qs.set("unread", "true");
+    return request<PaginatedResponse<Notification>>(`/notifications?${qs}`);
+  },
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Uploads
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UploadResult {
+  id: number;
+  url: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  purpose: string;
+}
+
+export const uploadsApi = {
+  uploadFile: async (file: File, purpose: string, entityType?: string, entityId?: number) => {
+    const qs = new URLSearchParams({ purpose });
+    if (entityType) qs.set("entityType", entityType);
+    if (entityId) qs.set("entityId", String(entityId));
+
+    const buffer = await file.arrayBuffer();
+    return request<UploadResult>(`/uploads?${qs}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-File-Name": file.name,
+        "X-File-Type": file.type,
+      },
+      body: buffer as any,
+    });
+  },
+  uploadBatch: (
+    files: Array<{ data: string; name: string; mimeType: string }>,
+    purpose: string,
+    entityType?: string,
+    entityId?: number
+  ) =>
+    request<{ uploads: UploadResult[] }>("/uploads/batch", {
+      method: "POST",
+      body: JSON.stringify({ files, purpose, entityType, entityId }),
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Money helpers (frontend copies of the backend constants)
 // ─────────────────────────────────────────────────────────────────────────────
 

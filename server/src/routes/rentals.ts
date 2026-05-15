@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { sendNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -94,12 +95,23 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
   );
 
+  const [lateResult] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`status in ('closed', 'closed_with_penalty')`,
+        sql`returned_at > (end_date::date + interval '1 day')`
+      )
+    );
+
   return {
     accountAgeDays,
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateResult?.count ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -278,6 +290,28 @@ router.post(
       entityType: "rental",
       entityId: rental.id,
       after: { rental, decision },
+    });
+
+    await sendNotification({
+      userId: renterId,
+      type: "rental.created",
+      title: "Rental Request Created",
+      titleAr: "تم إنشاء طلب الإيجار",
+      body: `Your rental request ${rental.reference} for ${asset.title} is pending legal signing.`,
+      bodyAr: `طلب الإيجار ${rental.reference} بانتظار التوقيع القانوني.`,
+      entityType: "rental",
+      entityId: rental.id,
+    });
+
+    await sendNotification({
+      userId: asset.ownerId,
+      type: "rental.owner_notified",
+      title: "New Rental on Your Asset",
+      titleAr: "إيجار جديد على أصلك",
+      body: `A renter has reserved ${asset.title}. Reference: ${rental.reference}.`,
+      bodyAr: `تم حجز ${asset.title}. المرجع: ${rental.reference}.`,
+      entityType: "rental",
+      entityId: rental.id,
     });
 
     res.status(201).json({

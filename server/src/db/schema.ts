@@ -697,6 +697,72 @@ export const integrationEvents = pgTable("integration_events", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications (in-app notification system)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notificationChannelEnum = pgEnum("notification_channel", [
+  "in_app",
+  "email",
+  "sms",
+  "push",
+]);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    channel: notificationChannelEnum("channel").notNull().default("in_app"),
+
+    type: text("type").notNull(), // rental.confirmed | payment.captured | shipment.delivered | etc.
+    title: text("title").notNull(),
+    titleAr: text("title_ar"),
+    body: text("body").notNull(),
+    bodyAr: text("body_ar"),
+
+    entityType: text("entity_type"), // rental | asset | payment | shipment | dispute
+    entityId: integer("entity_id"),
+
+    read: boolean("read").notNull().default(false),
+    readAt: timestamp("read_at"),
+
+    metadata: jsonb("metadata"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    userReadIdx: index("notifications_user_read_idx").on(t.userId, t.read),
+    typeIdx: index("notifications_type_idx").on(t.type),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// File uploads (managed media storage)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const uploads = pgTable(
+  "uploads",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    originalName: text("original_name").notNull(),
+    storagePath: text("storage_path").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    purpose: text("purpose").notNull(), // asset_submission | inspection | evidence | profile
+    entityType: text("entity_type"),
+    entityId: integer("entity_id"),
+    url: text("url").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("uploads_user_idx").on(t.userId),
+    entityIdx: index("uploads_entity_idx").on(t.entityType, t.entityId),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Type exports
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -713,3 +779,5 @@ export type SanadRecord = typeof sanadRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
 export type Shipment = typeof shipments.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type Upload = typeof uploads.$inferSelect;

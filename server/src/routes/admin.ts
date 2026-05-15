@@ -13,12 +13,14 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { parsePagination, buildPaginatedResponse } from "../utils/pagination.js";
 
 const router = Router();
 
@@ -132,12 +134,28 @@ router.get(
   authenticate,
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
+    const { page, limit, offset } = parsePagination(req);
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
-    const rows = role
-      ? await query.where(eq(users.role, role as any)).limit(200)
-      : await query.limit(200);
-    res.json(rows);
+    const search = (req.query.search as string | undefined) ?? undefined;
+
+    const conditions = [];
+    if (role) conditions.push(eq(users.role, role as any));
+    if (search) conditions.push(sql`(full_name ilike ${"%" + search + "%"} or email ilike ${"%" + search + "%"})`);
+
+    const rows = await db
+      .select()
+      .from(users)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(users.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(users)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    res.json(buildPaginatedResponse(rows, Number(countResult?.count ?? 0), { page, limit, offset }));
   })
 );
 
@@ -211,13 +229,53 @@ router.get(
   "/risk/recent",
   authenticate,
   requirePermission("system.audit"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const { page, limit, offset } = parsePagination(req);
     const rows = await db
       .select()
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
-      .limit(100);
-    res.json(rows);
+      .limit(limit)
+      .offset(offset);
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(riskScores);
+
+    res.json(buildPaginatedResponse(rows, Number(countResult?.count ?? 0), { page, limit, offset }));
+  })
+);
+
+// ── Audit logs viewer ─────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const { page, limit, offset } = parsePagination(req);
+    const entityType = req.query.entityType as string | undefined;
+    const action = req.query.action as string | undefined;
+    const actorId = req.query.actorId ? Number(req.query.actorId) : undefined;
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (action) conditions.push(sql`action ilike ${"%" + action + "%"}`);
+    if (actorId) conditions.push(eq(auditLogs.actorUserId, actorId));
+
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(auditLogs)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    res.json(buildPaginatedResponse(rows, Number(countResult?.count ?? 0), { page, limit, offset }));
   })
 );
 

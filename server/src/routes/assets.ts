@@ -16,6 +16,7 @@ import { db } from "../db/index.js";
 import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
+import { sendNotification } from "../services/notificationService.js";
 import {
   AssetSubmissionSchema,
   AssetApprovalSchema,
@@ -254,6 +255,21 @@ router.post(
       entityId: assetId,
       before: asset,
       after: updated,
+    });
+
+    await sendNotification({
+      userId: asset.ownerId,
+      type: approved ? "asset.approved" : "asset.rejected",
+      title: approved ? "Asset Approved" : "Asset Rejected",
+      titleAr: approved ? "تمت الموافقة على الأصل" : "تم رفض الأصل",
+      body: approved
+        ? `Your asset "${asset.title}" has been approved and is awaiting shipment.`
+        : `Your asset "${asset.title}" was rejected. ${rejectionReason ?? ""}`,
+      bodyAr: approved
+        ? `تمت الموافقة على "${asset.title}" وبانتظار الشحن.`
+        : `تم رفض "${asset.title}". ${rejectionReason ?? ""}`,
+      entityType: "asset",
+      entityId: assetId,
     });
 
     res.json(updated);

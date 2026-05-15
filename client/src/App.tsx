@@ -5,6 +5,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Notifications from "./pages/Notifications";
 
 // Renter
 import Browse from "./pages/renter/Browse";
@@ -35,6 +36,7 @@ import UsersPage from "./pages/admin/Users";
 import DisputesPage from "./pages/admin/Disputes";
 import FinancialOverview from "./pages/admin/FinancialOverview";
 import SanadTracking from "./pages/admin/SanadTracking";
+import AuditLogs from "./pages/admin/AuditLogs";
 
 export default function App() {
   return (
@@ -110,6 +112,13 @@ export default function App() {
         <ProtectedRoute roles={["operations"]}><AlertsPage /></ProtectedRoute>
       </Route>
 
+      {/* Notifications (all authenticated users) */}
+      <Route path="/notifications">
+        <ProtectedRoute roles={["renter", "owner", "inspector", "operations", "admin", "super_admin"]}>
+          <Notifications />
+        </ProtectedRoute>
+      </Route>
+
       {/* Admin */}
       <Route path="/admin">
         <ProtectedRoute roles={["admin", "super_admin"]}><AdminDashboard /></ProtectedRoute>
@@ -128,6 +137,9 @@ export default function App() {
       </Route>
       <Route path="/admin/sanad">
         <ProtectedRoute roles={["admin", "super_admin"]}><SanadTracking /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/audit">
+        <ProtectedRoute roles={["admin", "super_admin"]}><AuditLogs /></ProtectedRoute>
       </Route>
 
       <Route>

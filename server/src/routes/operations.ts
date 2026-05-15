@@ -21,6 +21,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { parsePagination, buildPaginatedResponse } from "../utils/pagination.js";
 
 const router = Router();
 
@@ -70,13 +71,26 @@ router.get(
   "/shipments",
   authenticate,
   requirePermission("operations.read"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const { page, limit, offset } = parsePagination(req);
+    const statusFilter = req.query.status as string | undefined;
+
+    const conditions = statusFilter ? [eq(shipments.status, statusFilter as any)] : [];
+
     const rows = await db
       .select()
       .from(shipments)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(shipments.createdAt))
-      .limit(200);
-    res.json(rows);
+      .limit(limit)
+      .offset(offset);
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(shipments)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    res.json(buildPaginatedResponse(rows, Number(countResult?.count ?? 0), { page, limit, offset }));
   })
 );
 
@@ -146,7 +160,12 @@ router.get(
   "/inventory",
   authenticate,
   requirePermission("operations.read"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const { page, limit, offset } = parsePagination(req);
+    const statusFilter = req.query.status as string | undefined;
+
+    const conditions = statusFilter ? [eq(assets.status, statusFilter as any)] : [];
+
     const rows = await db
       .select({
         id: assets.id,
@@ -158,9 +177,17 @@ router.get(
         updatedAt: assets.updatedAt,
       })
       .from(assets)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(assets.updatedAt))
-      .limit(500);
-    res.json(rows);
+      .limit(limit)
+      .offset(offset);
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(assets)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    res.json(buildPaginatedResponse(rows, Number(countResult?.count ?? 0), { page, limit, offset }));
   })
 );
 
@@ -184,13 +211,26 @@ router.get(
   "/alerts",
   authenticate,
   requirePermission("operations.read"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const { page, limit, offset } = parsePagination(req);
+    const statusFilter = req.query.status as string | undefined;
+
+    const conditions = statusFilter ? [eq(operationalAlerts.status, statusFilter)] : [];
+
     const rows = await db
       .select()
       .from(operationalAlerts)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(operationalAlerts.createdAt))
-      .limit(200);
-    res.json(rows);
+      .limit(limit)
+      .offset(offset);
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(operationalAlerts)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    res.json(buildPaginatedResponse(rows, Number(countResult?.count ?? 0), { page, limit, offset }));
   })
 );
 
