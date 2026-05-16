@@ -12,6 +12,7 @@ import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyDisputeOpened } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -95,6 +96,8 @@ router.post(
       .where(eq(disputes.id, id))
       .returning();
     if (!updated) throw new NotFoundError("Dispute");
+    notifyDisputeOpened(assigneeUserId, id, `Rental #${updated.rentalId}`).catch(() => {});
+
     await recordAudit({
       req,
       action: "dispute.assign",
