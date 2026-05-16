@@ -30,7 +30,10 @@ import adminRouter from "./routes/admin.js";
 import webhooksRouter from "./routes/webhooks.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter, authLimiter } from "./middleware/rateLimiter.js";
+import { requestLogger } from "./middleware/requestLogger.js";
 import { startScheduler } from "./services/schedulerService.js";
+import { db } from "./db/index.js";
+import { sql } from "drizzle-orm";
 
 dotenv.config();
 
@@ -45,13 +48,25 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(requestLogger);
 
 // Health
-app.get("/api/health", (_req, res) => {
-  res.json({
-    ok: true,
+app.get("/api/health", async (_req, res) => {
+  let dbOk = false;
+  try {
+    await db.execute(sql`SELECT 1`);
+    dbOk = true;
+  } catch {
+    /* DB unreachable */
+  }
+
+  const status = dbOk ? 200 : 503;
+  res.status(status).json({
+    ok: dbOk,
     service: "mlr-platform",
     version: "1.0.0",
+    database: dbOk ? "connected" : "unreachable",
+    uptime: Math.floor(process.uptime()),
     integrations: {
       nafath: !!process.env.NAFATH_API_KEY,
       nafith: !!process.env.NAFITH_API_KEY,

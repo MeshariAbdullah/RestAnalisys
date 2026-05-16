@@ -266,10 +266,26 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: {
+    category?: string;
+    brand?: string;
+    search?: string;
+    minDaily?: number;
+    maxDaily?: number;
+    minValue?: number;
+    maxValue?: number;
+    sortBy?: "price_asc" | "price_desc" | "newest" | "value_desc";
+    limit?: number;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.minDaily) qs.set("minDaily", String(params.minDaily));
+    if (params?.maxDaily) qs.set("maxDaily", String(params.maxDaily));
+    if (params?.minValue) qs.set("minValue", String(params.minValue));
+    if (params?.maxValue) qs.set("maxValue", String(params.maxValue));
+    if (params?.sortBy) qs.set("sortBy", params.sortBy);
     if (params?.limit) qs.set("limit", String(params.limit));
     return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
   },
@@ -599,7 +615,15 @@ export const adminApi = {
 };
 
 export const healthApi = {
-  check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+  check: () =>
+    request<{
+      ok: boolean;
+      service: string;
+      version: string;
+      database: string;
+      uptime: number;
+      integrations: Record<string, boolean>;
+    }>("/health"),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
