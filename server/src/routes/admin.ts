@@ -10,6 +10,7 @@ import {
   assets,
   rentals,
   payments,
+  payouts,
   disputes,
   sanadRecords,
   riskScores,
@@ -218,6 +219,137 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Asset category breakdown ──────────────────────────────────────────────
+router.get(
+  "/analytics/categories",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      SELECT category,
+             count(*) as total,
+             count(*) FILTER (WHERE status = 'listed') as listed,
+             count(*) FILTER (WHERE status = 'rented_out') as rented,
+             COALESCE(AVG(daily_rental_price_halalas) FILTER (WHERE daily_rental_price_halalas > 0), 0) as avg_daily_price_halalas,
+             COALESCE(SUM(evaluated_value_halalas), 0) as total_value_halalas
+      FROM assets
+      GROUP BY category
+      ORDER BY total DESC
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── User growth over time ─────────────────────────────────────────────────
+router.get(
+  "/analytics/user-growth",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      SELECT to_char(date_trunc('week', created_at), 'YYYY-MM-DD') as week,
+             count(*) as new_users,
+             count(*) FILTER (WHERE role = 'renter') as new_renters,
+             count(*) FILTER (WHERE role = 'owner') as new_owners
+      FROM users
+      WHERE created_at >= now() - interval '90 days'
+      GROUP BY 1
+      ORDER BY 1 ASC
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Rental conversion funnel ──────────────────────────────────────────────
+router.get(
+  "/analytics/funnel",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      SELECT
+        count(*) as total_rentals,
+        count(*) FILTER (WHERE status != 'cancelled') as past_risk,
+        count(*) FILTER (WHERE status NOT IN ('cancelled', 'pending_legal_signing', 'pending_risk_review')) as signed,
+        count(*) FILTER (WHERE status NOT IN ('cancelled', 'pending_legal_signing', 'pending_risk_review', 'pending_payment')) as paid,
+        count(*) FILTER (WHERE status IN ('active', 'return_in_transit', 'under_inspection', 'closed', 'closed_with_penalty')) as fulfilled,
+        count(*) FILTER (WHERE status IN ('closed', 'closed_with_penalty')) as completed,
+        count(*) FILTER (WHERE status = 'cancelled') as cancelled,
+        count(*) FILTER (WHERE status IN ('in_dispute', 'enforcement')) as disputed
+      FROM rentals
+      WHERE created_at >= now() - interval '30 days'
+    `);
+    res.json(rows.rows[0] ?? {});
+  })
+);
+
+// ── Platform financial summary ────────────────────────────────────────────
+router.get(
+  "/analytics/financial-summary",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const inventory = await db.execute(sql`
+      SELECT COALESCE(SUM(evaluated_value_halalas), 0) as total_inventory_value_halalas,
+             count(*) as total_assets
+      FROM assets
+      WHERE status NOT IN ('withdrawn', 'lost_or_destroyed', 'rejected')
+    `);
+
+    const revenue = await db.execute(sql`
+      SELECT
+        COALESCE(SUM(total_payable_halalas) FILTER (WHERE status IN ('closed', 'closed_with_penalty')), 0) as total_revenue_halalas,
+        COALESCE(SUM(platform_fee_halalas) FILTER (WHERE status IN ('closed', 'closed_with_penalty')), 0) as total_platform_fee_halalas,
+        COALESCE(SUM(vat_halalas) FILTER (WHERE status IN ('closed', 'closed_with_penalty')), 0) as total_vat_collected_halalas,
+        COALESCE(AVG(total_payable_halalas) FILTER (WHERE status NOT IN ('cancelled')), 0) as avg_rental_value_halalas,
+        COALESCE(AVG(duration_days) FILTER (WHERE status NOT IN ('cancelled')), 0) as avg_rental_duration_days
+      FROM rentals
+    `);
+
+    const payoutStats = await db.execute(sql`
+      SELECT
+        COALESCE(SUM(net_halalas), 0) as total_paid_out_halalas,
+        count(*) FILTER (WHERE status = 'pending') as pending_payouts,
+        COALESCE(SUM(net_halalas) FILTER (WHERE status = 'pending'), 0) as pending_payout_halalas
+      FROM payouts
+    `);
+
+    res.json({
+      inventory: inventory.rows[0],
+      revenue: revenue.rows[0],
+      payouts: payoutStats.rows[0],
+    });
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-log",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+    const entityType = req.query.entityType as string | undefined;
+    const action = req.query.action as string | undefined;
+
+    let query = sql`
+      SELECT al.*, u.email as actor_email, u.full_name as actor_name
+      FROM audit_logs al
+      LEFT JOIN users u ON al.actor_user_id = u.id
+      WHERE 1=1
+    `;
+
+    if (entityType) query = sql`${query} AND al.entity_type = ${entityType}`;
+    if (action) query = sql`${query} AND al.action LIKE ${`%${action}%`}`;
+
+    query = sql`${query} ORDER BY al.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+
+    const rows = await db.execute(query);
+    res.json({ items: rows.rows, limit, offset });
   })
 );
 

@@ -394,6 +394,7 @@ export const rentalsApi = {
       body: JSON.stringify(data),
     }),
   mine: () => request<Rental[]>("/rentals/mine"),
+  ownerRentals: () => request<Rental[]>("/rentals/owner"),
   list: () => request<Rental[]>("/rentals"),
   get: (id: number) =>
     request<{
@@ -578,6 +579,23 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  categoryBreakdown: () =>
+    request<Array<Record<string, unknown>>>("/admin/analytics/categories"),
+  userGrowth: () =>
+    request<Array<Record<string, unknown>>>("/admin/analytics/user-growth"),
+  funnel: () => request<Record<string, unknown>>("/admin/analytics/funnel"),
+  financialSummary: () =>
+    request<Record<string, unknown>>("/admin/analytics/financial-summary"),
+  auditLog: (params?: { limit?: number; offset?: number; entityType?: string; action?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    return request<{ items: Array<Record<string, unknown>>; limit: number; offset: number }>(
+      `/admin/audit-log?${qs}`
+    );
+  },
 };
 
 export const healthApi = {

@@ -56,6 +56,11 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import {
+  notifyRentalCreated,
+  notifyOwnerAssetRented,
+  notifyDelivery,
+} from "../services/notificationService.js";
 
 const router = Router();
 
@@ -84,10 +89,11 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      lateReturns: sql<number>`count(*) filter (where returned_at is not null and returned_at::date > end_date::date)`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, lateReturns: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +105,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.lateReturns ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +286,9 @@ router.post(
       after: { rental, decision },
     });
 
+    notifyRentalCreated(renterId, rental.reference, quote.totalPayableHalalas).catch(() => {});
+    notifyOwnerAssetRented(asset.ownerId, asset.title, rental.reference).catch(() => {});
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -306,6 +315,21 @@ router.get(
       .select()
       .from(rentals)
       .where(eq(rentals.renterId, req.user!.userId))
+      .orderBy(desc(rentals.createdAt));
+    res.json(rows);
+  })
+);
+
+// ── Owner: view rentals for their assets ──────────────────────────────────
+router.get(
+  "/owner",
+  authenticate,
+  requirePermission("asset.read.own"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const rows = await db
+      .select()
+      .from(rentals)
+      .where(eq(rentals.ownerId, req.user!.userId))
       .orderBy(desc(rentals.createdAt));
     res.json(rows);
   })
@@ -432,6 +456,8 @@ router.post(
       .update(assets)
       .set({ status: "rented_out", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
+
+    notifyDelivery(rental.renterId, rental.reference).catch(() => {});
 
     await recordAudit({
       req,

@@ -17,6 +17,7 @@ import OwnerDashboard from "./pages/owner/OwnerDashboard";
 import SubmitAsset from "./pages/owner/SubmitAsset";
 import AssetDetail from "./pages/owner/AssetDetail";
 import Payouts from "./pages/owner/Payouts";
+import OwnerRentals from "./pages/owner/OwnerRentals";
 
 // Inspector
 import InspectorDashboard from "./pages/inspector/InspectorDashboard";
@@ -35,6 +36,7 @@ import UsersPage from "./pages/admin/Users";
 import DisputesPage from "./pages/admin/Disputes";
 import FinancialOverview from "./pages/admin/FinancialOverview";
 import SanadTracking from "./pages/admin/SanadTracking";
+import AuditLog from "./pages/admin/AuditLog";
 
 export default function App() {
   return (
@@ -79,6 +81,9 @@ export default function App() {
             <AssetDetail id={Number(params.id)} />
           </ProtectedRoute>
         )}
+      </Route>
+      <Route path="/owner/rentals">
+        <ProtectedRoute roles={["owner"]}><OwnerRentals /></ProtectedRoute>
       </Route>
       <Route path="/owner/payouts">
         <ProtectedRoute roles={["owner"]}><Payouts /></ProtectedRoute>
@@ -128,6 +133,9 @@ export default function App() {
       </Route>
       <Route path="/admin/sanad">
         <ProtectedRoute roles={["admin", "super_admin"]}><SanadTracking /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/audit">
+        <ProtectedRoute roles={["admin", "super_admin"]}><AuditLog /></ProtectedRoute>
       </Route>
 
       <Route>

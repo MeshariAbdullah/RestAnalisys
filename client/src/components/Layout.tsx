@@ -38,6 +38,7 @@ const NAV: NavItem[] = [
   // Owner
   { href: "/owner", label: "Owner Dashboard", icon: LayoutDashboard, roles: ["owner"] },
   { href: "/owner/submit", label: "Submit Asset", icon: Diamond, roles: ["owner"] },
+  { href: "/owner/rentals", label: "My Asset Rentals", icon: FileText, roles: ["owner"] },
   { href: "/owner/payouts", label: "Payouts", icon: Wallet, roles: ["owner"] },
 
   // Inspector
@@ -56,6 +57,7 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit", label: "Audit Log", icon: Shield, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
