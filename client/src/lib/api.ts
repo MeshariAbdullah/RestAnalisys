@@ -585,6 +585,136 @@ export const healthApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  relatedEntityType?: string;
+  relatedEntityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (unreadOnly = false) =>
+    request<Notification[]>(`/notifications${unreadOnly ? "?unread=true" : ""}`),
+  count: () => request<{ unread: number }>("/notifications/count"),
+  markRead: (id: number) =>
+    request("/notifications/" + id + "/read", { method: "POST" }),
+  markAllRead: () =>
+    request("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ratings
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Rating {
+  id: number;
+  rentalId: number;
+  assetId: number;
+  reviewerUserId: number;
+  reviewerRole: string;
+  overallScore: number;
+  conditionScore?: number;
+  serviceScore?: number;
+  comment?: string;
+  createdAt: string;
+}
+
+export interface AssetRatings {
+  ratings: Rating[];
+  stats: {
+    avgOverall: number | null;
+    avgCondition: number | null;
+    avgService: number | null;
+    total: number;
+  };
+}
+
+export const ratingsApi = {
+  create: (data: {
+    rentalId: number;
+    overallScore: number;
+    conditionScore?: number;
+    serviceScore?: number;
+    comment?: string;
+  }) =>
+    request<Rating>("/ratings", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  forAsset: (assetId: number) => request<AssetRatings>(`/ratings/asset/${assetId}`),
+  mine: () => request<Rating[]>("/ratings/mine"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rental Extensions
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface RentalExtension {
+  id: number;
+  rentalId: number;
+  renterId: number;
+  requestedDays: number;
+  newEndDate: string;
+  additionalCostHalalas: number;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  reason?: string;
+  rejectionReason?: string;
+  reviewedAt?: string;
+  createdAt: string;
+}
+
+export const extensionsApi = {
+  request: (rentalId: number, requestedDays: number, reason?: string) =>
+    request<RentalExtension>("/extensions", {
+      method: "POST",
+      body: JSON.stringify({ rentalId, requestedDays, reason }),
+    }),
+  mine: () => request<RentalExtension[]>("/extensions/mine"),
+  pending: () => request<RentalExtension[]>("/extensions/pending"),
+  review: (extensionId: number, approved: boolean, rejectionReason?: string) =>
+    request<RentalExtension>("/extensions/review", {
+      method: "POST",
+      body: JSON.stringify({ extensionId, approved, rejectionReason }),
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const profileApi = {
+  update: (data: {
+    fullName?: string;
+    phone?: string;
+    nationalAddressJson?: {
+      city: string;
+      district: string;
+      street: string;
+      buildingNumber?: string;
+      postalCode?: string;
+    };
+  }) =>
+    request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Money helpers (frontend copies of the backend constants)
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -33,6 +33,7 @@ export type Permission =
   | "rental.cancel"
   | "rental.fulfill"
   | "rental.close"
+  | "rental.extend"
   | "legal.sign"
   | "legal.enforce"
   | "legal.read.any"
@@ -62,6 +63,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "rental.create",
     "rental.read.own",
     "rental.cancel",
+    "rental.extend",
     "legal.sign",
     "payment.read",
     "dispute.open",

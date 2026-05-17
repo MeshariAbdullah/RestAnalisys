@@ -2,15 +2,18 @@
  * Managed Luxury Rental Platform — API entrypoint.
  *
  * Module layout:
- *   /api/auth         — registration, login, Nafath hooks
- *   /api/assets       — owner submissions, admin approvals, public listings
- *   /api/inspections  — inspector intake + return reports
- *   /api/rentals      — rental lifecycle (runs risk engine, produces legal)
- *   /api/legal        — contract signing, Sanad lifecycle, enforcement
- *   /api/payments     — gateway + ZATCA invoicing + owner payouts
- *   /api/disputes     — dispute creation + resolution
- *   /api/operations   — shipments, inventory, alerts
- *   /api/admin        — KPIs, risk monitoring, user management
+ *   /api/auth          — registration, login, Nafath hooks, profile management
+ *   /api/assets        — owner submissions, admin approvals, public listings
+ *   /api/inspections   — inspector intake + return reports
+ *   /api/rentals       — rental lifecycle (runs risk engine, produces legal)
+ *   /api/legal         — contract signing, Sanad lifecycle, enforcement
+ *   /api/payments      — gateway + ZATCA invoicing + owner payouts
+ *   /api/disputes      — dispute creation + resolution
+ *   /api/operations    — shipments, inventory, alerts
+ *   /api/admin         — KPIs, risk monitoring, user management
+ *   /api/notifications — in-app notification system
+ *   /api/ratings       — post-rental reviews and asset ratings
+ *   /api/extensions    — rental duration extension requests
  */
 
 import express from "express";
@@ -26,6 +29,9 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import notificationsRouter from "./routes/notifications.js";
+import ratingsRouter from "./routes/ratings.js";
+import extensionsRouter from "./routes/extensions.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 dotenv.config();
@@ -67,6 +73,9 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/notifications", notificationsRouter);
+app.use("/api/ratings", ratingsRouter);
+app.use("/api/extensions", extensionsRouter);
 
 // 404
 app.use((req, res) => {

@@ -696,6 +696,117 @@ export const integrationEvents = pgTable("integration_events", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// ────────────────────────────────────────────���────────────────────────────────
+// Notifications (in-app)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "rental_created",
+  "rental_confirmed",
+  "rental_delivered",
+  "rental_returned",
+  "rental_closed",
+  "rental_cancelled",
+  "asset_approved",
+  "asset_rejected",
+  "asset_listed",
+  "inspection_complete",
+  "payment_captured",
+  "payout_released",
+  "dispute_opened",
+  "dispute_resolved",
+  "sanad_issued",
+  "extension_requested",
+  "extension_approved",
+  "extension_rejected",
+  "system",
+]);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    type: notificationTypeEnum("type").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    relatedEntityType: text("related_entity_type"),
+    relatedEntityId: integer("related_entity_id"),
+    read: boolean("read").notNull().default(false),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    userReadIdx: index("notifications_user_read_idx").on(t.userId, t.read),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ratings (post-rental reviews)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ratings = pgTable(
+  "ratings",
+  {
+    id: serial("id").primaryKey(),
+    rentalId: integer("rental_id").references(() => rentals.id).notNull(),
+    assetId: integer("asset_id").references(() => assets.id).notNull(),
+    reviewerUserId: integer("reviewer_user_id").references(() => users.id).notNull(),
+    reviewerRole: text("reviewer_role").notNull(),
+
+    overallScore: integer("overall_score").notNull(), // 1..5
+    conditionScore: integer("condition_score"), // 1..5 (renter rates condition)
+    serviceScore: integer("service_score"), // 1..5 (rates platform service)
+    comment: text("comment"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    rentalIdx: index("ratings_rental_idx").on(t.rentalId),
+    assetIdx: index("ratings_asset_idx").on(t.assetId),
+    reviewerIdx: index("ratings_reviewer_idx").on(t.reviewerUserId),
+  })
+);
+
+// ──────────────────────────────────────────────────────���──────────────────────
+// Rental extensions
+// ──────────────────────────────────────────────���──────────────────────────────
+
+export const rentalExtensionStatusEnum = pgEnum("rental_extension_status", [
+  "pending",
+  "approved",
+  "rejected",
+  "cancelled",
+]);
+
+export const rentalExtensions = pgTable(
+  "rental_extensions",
+  {
+    id: serial("id").primaryKey(),
+    rentalId: integer("rental_id").references(() => rentals.id).notNull(),
+    renterId: integer("renter_id").references(() => users.id).notNull(),
+
+    requestedDays: integer("requested_days").notNull(),
+    newEndDate: date("new_end_date").notNull(),
+    additionalCostHalalas: bigint("additional_cost_halalas", { mode: "number" }).notNull(),
+
+    status: rentalExtensionStatusEnum("status").notNull().default("pending"),
+    reason: text("reason"),
+    rejectionReason: text("rejection_reason"),
+
+    reviewedByUserId: integer("reviewed_by_user_id").references(() => users.id),
+    reviewedAt: timestamp("reviewed_at"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    rentalIdx: index("rental_extensions_rental_idx").on(t.rentalId),
+    statusIdx: index("rental_extensions_status_idx").on(t.status),
+  })
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Type exports
 // ─────────────────────────────────────────────────────────────────────────────
@@ -713,3 +824,6 @@ export type SanadRecord = typeof sanadRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
 export type Shipment = typeof shipments.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type Rating = typeof ratings.$inferSelect;
+export type RentalExtension = typeof rentalExtensions.$inferSelect;

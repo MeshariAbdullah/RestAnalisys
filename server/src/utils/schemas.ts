@@ -227,3 +227,54 @@ export const ShipmentUpdateSchema = z.object({
   ]),
   trackingNumber: z.string().optional(),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ProfileUpdateSchema = z.object({
+  fullName: z.string().min(2).optional(),
+  phone: SaudiPhone.optional(),
+  nationalAddressJson: z
+    .object({
+      city: z.string(),
+      district: z.string(),
+      street: z.string(),
+      buildingNumber: z.string().optional(),
+      postalCode: z.string().optional(),
+    })
+    .optional(),
+});
+
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ratings
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const RatingCreateSchema = z.object({
+  rentalId: z.number().int().positive(),
+  overallScore: z.number().int().min(1).max(5),
+  conditionScore: z.number().int().min(1).max(5).optional(),
+  serviceScore: z.number().int().min(1).max(5).optional(),
+  comment: z.string().max(1000).optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rental Extensions
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const RentalExtensionRequestSchema = z.object({
+  rentalId: z.number().int().positive(),
+  requestedDays: z.number().int().min(1).max(30),
+  reason: z.string().min(3).optional(),
+});
+
+export const RentalExtensionReviewSchema = z.object({
+  extensionId: z.number().int().positive(),
+  approved: z.boolean(),
+  rejectionReason: z.string().optional(),
+});

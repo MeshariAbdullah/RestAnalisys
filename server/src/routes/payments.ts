@@ -19,6 +19,7 @@ import {
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -110,6 +111,24 @@ router.post(
           updatedAt: new Date(),
         })
         .where(eq(rentals.id, rental.id));
+
+      await notify({
+        userId: rental.renterId,
+        type: "rental_confirmed",
+        title: "Payment Confirmed",
+        body: `Payment for rental ${rental.reference} is confirmed. We'll prepare your item for delivery.`,
+        relatedEntityType: "rental",
+        relatedEntityId: rental.id,
+      });
+
+      await notify({
+        userId: rental.ownerId,
+        type: "payment_captured",
+        title: "Rental Payment Received",
+        body: `Payment received for your asset rental ${rental.reference}.`,
+        relatedEntityType: "rental",
+        relatedEntityId: rental.id,
+      });
     }
 
     await recordAudit({

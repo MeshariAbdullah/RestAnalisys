@@ -19,9 +19,13 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  UserCircle,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import type { Role, User } from "@/lib/api";
-import { clearSession, getCurrentUser } from "@/lib/auth";
+import { notificationsApi } from "@/lib/api";
+import { clearSession, getCurrentUser, isAuthenticated } from "@/lib/auth";
 
 interface NavItem {
   href: string;
@@ -73,6 +77,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const user: User | null = getCurrentUser();
+  const authed = isAuthenticated();
+
+  const { data: notifCount } = useQuery({
+    queryKey: ["notifications-count"],
+    queryFn: () => notificationsApi.count(),
+    enabled: authed,
+    refetchInterval: 30000,
+  });
 
   const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
 
@@ -130,7 +142,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="p-3 border-t border-neutral-800">
+        <div className="p-3 border-t border-neutral-800 space-y-2">
+          {authed && (
+            <div className="flex items-center gap-1">
+              <Link href="/notifications">
+                <a className="relative p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white">
+                  <Bell className="w-4 h-4" />
+                  {(notifCount?.unread ?? 0) > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-[10px] font-bold text-white rounded-full flex items-center justify-center">
+                      {notifCount!.unread > 9 ? "9+" : notifCount!.unread}
+                    </span>
+                  )}
+                </a>
+              </Link>
+              <Link href="/profile">
+                <a className="p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white">
+                  <UserCircle className="w-4 h-4" />
+                </a>
+              </Link>
+            </div>
+          )}
           {sidebarOpen ? (
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">
