@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Diamond, Calendar, Shield, Info } from "lucide-react";
+import { Diamond, Calendar, Shield, Info, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { assetsApi, rentalsApi, formatSar } from "@/lib/api";
+import { assetsApi, rentalsApi, ratingsApi, formatSar } from "@/lib/api";
 
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -33,6 +33,11 @@ export default function ItemDetail({ id }: { id: number }) {
   const assetQuery = useQuery({
     queryKey: ["asset", id],
     queryFn: () => assetsApi.listingDetail(id),
+  });
+
+  const ratingsQuery = useQuery({
+    queryKey: ["asset-ratings", id],
+    queryFn: () => ratingsApi.forAsset(id),
   });
 
   const quoteQuery = useQuery({
@@ -210,6 +215,64 @@ export default function ItemDetail({ id }: { id: number }) {
           </Card>
         </div>
       </div>
+
+      {/* Ratings section */}
+      {ratingsQuery.data && ratingsQuery.data.stats.total > 0 && (
+        <div className="mt-10">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
+            Reviews ({ratingsQuery.data.stats.total})
+          </h2>
+          <div className="flex gap-6 mb-6">
+            {ratingsQuery.data.stats.avgOverall && (
+              <div className="text-center">
+                <p className="text-3xl font-bold">{ratingsQuery.data.stats.avgOverall.toFixed(1)}</p>
+                <div className="flex gap-0.5 justify-center mt-1">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <Star
+                      key={n}
+                      className={`w-4 h-4 ${
+                        n <= Math.round(ratingsQuery.data!.stats.avgOverall!)
+                          ? "text-amber-400 fill-amber-400"
+                          : "text-neutral-300"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <p className="text-xs text-neutral-500 mt-0.5">Overall</p>
+              </div>
+            )}
+          </div>
+          <div className="space-y-3">
+            {ratingsQuery.data.ratings.slice(0, 10).map((r) => (
+              <Card key={r.id}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="flex gap-0.5">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <Star
+                          key={n}
+                          className={`w-3.5 h-3.5 ${
+                            n <= r.overallScore
+                              ? "text-amber-400 fill-amber-400"
+                              : "text-neutral-300"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <Badge variant="secondary" className="text-[10px]">
+                      {r.reviewerRole}
+                    </Badge>
+                  </div>
+                  {r.comment && (
+                    <p className="text-sm text-neutral-600">{r.comment}</p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
