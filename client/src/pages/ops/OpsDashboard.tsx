@@ -1,15 +1,29 @@
 import React from "react";
 import { Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
-import { Truck, AlertTriangle, PackageSearch, Activity } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Truck, AlertTriangle, PackageSearch, Activity, CalendarPlus, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { operationsApi } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { operationsApi, extensionsApi } from "@/lib/api";
 
 export default function OpsDashboard() {
+  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["ops-summary"],
     queryFn: () => operationsApi.summary(),
+  });
+
+  const { data: pendingExtensions } = useQuery({
+    queryKey: ["pending-extensions"],
+    queryFn: () => extensionsApi.pending(),
+  });
+
+  const checkLate = useMutation({
+    mutationFn: () => operationsApi.checkLateReturns(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ops-summary"] });
+    },
   });
 
   return (
@@ -65,6 +79,72 @@ export default function OpsDashboard() {
           </Card>
         ))}
       </div>
+
+      {/* Actions */}
+      <div className="flex gap-3 mb-8">
+        <Button
+          variant="outline"
+          onClick={() => checkLate.mutate()}
+          disabled={checkLate.isPending}
+        >
+          <Clock className="w-4 h-4 mr-2" />
+          Check Late Returns
+        </Button>
+        {checkLate.data && (
+          <Badge variant="secondary">
+            Found {checkLate.data.overdueRentals} overdue, created {checkLate.data.alertsCreated} alerts
+          </Badge>
+        )}
+      </div>
+
+      {/* Pending extensions */}
+      {(pendingExtensions?.length ?? 0) > 0 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <CalendarPlus className="w-5 h-5" /> Pending Extension Requests
+          </h2>
+          <div className="space-y-2">
+            {pendingExtensions!.map((ext) => (
+              <Card key={ext.id}>
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">
+                      Rental #{ext.rentalId} — {ext.requestedDays} extra days
+                    </p>
+                    <p className="text-xs text-neutral-500">
+                      New end date: {ext.newEndDate}
+                      {ext.reason && ` — "${ext.reason}"`}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        extensionsApi.review(ext.id, true).then(() =>
+                          queryClient.invalidateQueries({ queryKey: ["pending-extensions"] })
+                        )
+                      }
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        extensionsApi.review(ext.id, false, "Denied by ops").then(() =>
+                          queryClient.invalidateQueries({ queryKey: ["pending-extensions"] })
+                        )
+                      }
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <QuickLink

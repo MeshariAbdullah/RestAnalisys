@@ -21,6 +21,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -214,6 +215,74 @@ router.post(
       after: updated,
     });
     res.json(updated);
+  })
+);
+
+// ── Late-return check (creates alerts for overdue rentals) ────────────────
+router.post(
+  "/check-late-returns",
+  authenticate,
+  requirePermission("operations.update"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const overdueRentals = await db
+      .select()
+      .from(rentals)
+      .where(
+        and(
+          eq(rentals.status, "active"),
+          lte(rentals.endDate, today)
+        )
+      );
+
+    let alertsCreated = 0;
+    for (const rental of overdueRentals) {
+      const existing = await db
+        .select({ id: operationalAlerts.id })
+        .from(operationalAlerts)
+        .where(
+          and(
+            eq(operationalAlerts.type, "late_return"),
+            eq(operationalAlerts.subjectId, rental.id),
+            eq(operationalAlerts.status, "open")
+          )
+        )
+        .limit(1);
+
+      if (existing.length === 0) {
+        await db.insert(operationalAlerts).values({
+          type: "late_return",
+          severity: "high",
+          subjectType: "rental",
+          subjectId: rental.id,
+          message: `Rental ${rental.reference} is past due date (${rental.endDate}). Renter has not returned the asset.`,
+          payloadJson: { rentalId: rental.id, endDate: rental.endDate },
+        });
+
+        await notify({
+          userId: rental.renterId,
+          type: "system",
+          title: "Rental Overdue",
+          body: `Your rental ${rental.reference} was due on ${rental.endDate}. Please return the item immediately.`,
+          relatedEntityType: "rental",
+          relatedEntityId: rental.id,
+        });
+
+        alertsCreated++;
+      }
+    }
+
+    await recordAudit({
+      req,
+      action: "ops.late_return_check",
+      entityType: "system",
+      after: { overdueCount: overdueRentals.length, alertsCreated },
+    });
+
+    res.json({
+      overdueRentals: overdueRentals.length,
+      alertsCreated,
+    });
   })
 );
 

@@ -554,6 +554,11 @@ export const operationsApi = {
     ),
   resolveAlert: (id: number) =>
     request(`/operations/alerts/${id}/resolve`, { method: "POST" }),
+  checkLateReturns: () =>
+    request<{ overdueRentals: number; alertsCreated: number }>(
+      "/operations/check-late-returns",
+      { method: "POST" }
+    ),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
