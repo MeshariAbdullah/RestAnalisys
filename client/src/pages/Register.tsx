@@ -6,9 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api";
 import { saveSession, homeForRole } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 
 export default function Register() {
   const [, navigate] = useLocation();
+  const { t, lang } = useI18n();
   const [role, setRole] = useState<"renter" | "owner">("renter");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -41,16 +43,16 @@ export default function Register() {
             </div>
             <div>
               <p className="font-bold">MLR</p>
-              <p className="text-xs text-neutral-400">Luxury Rental Platform</p>
+              <p className="text-xs text-neutral-400">
+                {lang === "ar" ? "منصة تأجير الفخامة" : "Luxury Rental Platform"}
+              </p>
             </div>
           </a>
         </Link>
 
         <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8">
-          <h1 className="text-2xl font-bold mb-1">Create your account</h1>
-          <p className="text-sm text-neutral-400 mb-6">
-            Join as a renter or an asset owner
-          </p>
+          <h1 className="text-2xl font-bold mb-1">{t("register.title")}</h1>
+          <p className="text-sm text-neutral-400 mb-6">{t("register.subtitle")}</p>
 
           <div className="grid grid-cols-2 gap-2 mb-5">
             {(["renter", "owner"] as const).map((r) => (
@@ -64,14 +66,14 @@ export default function Register() {
                     : "border-neutral-800 bg-neutral-950 text-neutral-400 hover:text-white"
                 }`}
               >
-                {r === "renter" ? "Rent items" : "List my assets"}
+                {r === "renter" ? t("register.renter") : t("register.owner")}
               </button>
             ))}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <Label className="text-neutral-300">Full name</Label>
+              <Label className="text-neutral-300">{t("register.fullName")}</Label>
               <Input
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
@@ -80,7 +82,7 @@ export default function Register() {
               />
             </div>
             <div>
-              <Label className="text-neutral-300">Email</Label>
+              <Label className="text-neutral-300">{t("register.email")}</Label>
               <Input
                 type="email"
                 value={email}
@@ -90,13 +92,13 @@ export default function Register() {
               />
             </div>
             <div>
-              <Label className="text-neutral-300">Password</Label>
+              <Label className="text-neutral-300">{t("register.password")}</Label>
               <Input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 bg-neutral-950 border-neutral-800 text-white"
-                placeholder="Min 8 chars, upper + lower + digit"
+                placeholder={t("register.passwordHint")}
                 required
               />
             </div>
@@ -112,19 +114,18 @@ export default function Register() {
               className="w-full bg-amber-500 text-neutral-950 hover:bg-amber-400"
               disabled={loading}
             >
-              {loading ? "Creating account…" : "Create account"}
+              {loading ? t("register.loading") : t("register.submit")}
             </Button>
 
             <p className="text-xs text-neutral-500 text-center">
-              By registering you agree to the MLR terms. Nafath identity
-              verification is required before your first transaction.
+              {t("register.terms")}
             </p>
           </form>
 
           <p className="text-center text-sm text-neutral-400 mt-6">
-            Already registered?{" "}
+            {t("register.hasAccount")}{" "}
             <Link href="/login">
-              <a className="text-amber-400 hover:underline">Sign in</a>
+              <a className="text-amber-400 hover:underline">{t("register.signInLink")}</a>
             </Link>
           </p>
         </div>

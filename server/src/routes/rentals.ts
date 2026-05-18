@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyUser } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -99,7 +100,19 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await (async () => {
+      const late = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(rentals)
+        .where(
+          and(
+            eq(rentals.renterId, userId),
+            sql`${rentals.returnedAt} IS NOT NULL`,
+            sql`${rentals.returnedAt}::date > ${rentals.endDate}::date`
+          )
+        );
+      return Number(late[0]?.count ?? 0);
+    })(),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +293,17 @@ router.post(
       after: { rental, decision },
     });
 
+    await notifyUser(
+      asset.ownerId,
+      "rental_created",
+      { en: "New rental request", ar: "طلب إيجار جديد" },
+      {
+        en: `Your asset "${asset.title}" has been reserved. Reference: ${reference}`,
+        ar: `تم حجز أصلك "${asset.title}". المرجع: ${reference}`,
+      },
+      { type: "rental", id: rental.id }
+    );
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -433,6 +457,17 @@ router.post(
       .set({ status: "rented_out", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
 
+    await notifyUser(
+      rental.renterId,
+      "rental_delivered",
+      { en: "Your rental has been delivered", ar: "تم تسليم إيجارك" },
+      {
+        en: `Your rented item is now with you. Enjoy!`,
+        ar: `القطعة المستأجرة أصبحت بحوزتك الآن. استمتع!`,
+      },
+      { type: "rental", id }
+    );
+
     await recordAudit({
       req,
       action: "rental.delivered",
@@ -509,6 +544,24 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      await Promise.all([
+        notifyUser(
+          rental.renterId,
+          "rental_closed",
+          { en: "Rental completed", ar: "اكتمل الإيجار" },
+          { en: `Your rental ${rental.reference} has been closed successfully.`, ar: `تم إغلاق إيجارك ${rental.reference} بنجاح.` },
+          { type: "rental", id }
+        ),
+        notifyUser(
+          rental.ownerId,
+          "rental_closed",
+          { en: "Rental completed — payout coming", ar: "اكتمل الإيجار — المدفوعات قادمة" },
+          { en: `Rental ${rental.reference} closed clean. Your payout will be processed.`, ar: `الإيجار ${rental.reference} أُغلق بنجاح. سيتم معالجة مدفوعاتك.` },
+          { type: "rental", id }
+        ),
+      ]);
+
       await recordAudit({
         req,
         action: "rental.close_clean",

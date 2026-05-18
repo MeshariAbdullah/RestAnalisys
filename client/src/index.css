@@ -61,13 +61,13 @@
   body {
     @apply bg-background text-foreground;
     font-family: "Cairo", "Tajawal", Arial, sans-serif;
+  }
+  [dir="rtl"] body {
     direction: rtl;
   }
-}
-
-/* RTL fixes */
-.ltr {
-  direction: ltr;
+  [dir="ltr"] body {
+    direction: ltr;
+  }
 }
 
 /* Custom scrollbar */
