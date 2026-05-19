@@ -19,6 +19,7 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
@@ -56,6 +57,9 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+
+  // All roles
+  { href: "/notifications", label: "Notifications", icon: Bell, roles: ["renter", "owner", "inspector", "operations", "admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {

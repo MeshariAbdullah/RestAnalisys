@@ -13,6 +13,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  operationalAlerts,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -218,6 +219,90 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Overdue rentals — active rentals past their end date ──────────────────
+router.get(
+  "/overdue-rentals",
+  authenticate,
+  requirePermission("rental.read.any"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select({
+        id: rentals.id,
+        reference: rentals.reference,
+        renterId: rentals.renterId,
+        ownerId: rentals.ownerId,
+        assetId: rentals.assetId,
+        startDate: rentals.startDate,
+        endDate: rentals.endDate,
+        status: rentals.status,
+        deliveredAt: rentals.deliveredAt,
+        renterName: users.fullName,
+        renterEmail: users.email,
+        daysPastDue: sql<number>`(current_date - end_date::date)`,
+      })
+      .from(rentals)
+      .leftJoin(users, eq(rentals.renterId, users.id))
+      .where(
+        and(
+          eq(rentals.status, "active"),
+          sql`end_date::date < current_date`
+        )
+      )
+      .orderBy(sql`end_date asc`);
+    res.json(rows);
+  })
+);
+
+// ── Generate overdue alerts (admin action) ────────────────────────────────
+router.post(
+  "/generate-overdue-alerts",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const overdueRentals = await db
+      .select({
+        id: rentals.id,
+        reference: rentals.reference,
+        renterId: rentals.renterId,
+        endDate: rentals.endDate,
+      })
+      .from(rentals)
+      .where(
+        and(
+          eq(rentals.status, "active"),
+          sql`end_date::date < current_date`
+        )
+      );
+
+    let created = 0;
+    for (const rental of overdueRentals) {
+      const daysPast = Math.floor(
+        (Date.now() - new Date(rental.endDate + "T00:00:00Z").getTime()) /
+          (1000 * 60 * 60 * 24)
+      );
+
+      await db.insert(operationalAlerts).values({
+        type: "late_return",
+        severity: daysPast >= 7 ? "critical" : daysPast >= 3 ? "high" : "medium",
+        subjectType: "rental",
+        subjectId: rental.id,
+        message: `Rental ${rental.reference} is ${daysPast} day(s) overdue. Renter ID: ${rental.renterId}.`,
+        payloadJson: { rentalId: rental.id, daysPastDue: daysPast, rentalReference: rental.reference },
+      });
+      created++;
+    }
+
+    await recordAudit({
+      req,
+      action: "admin.generate_overdue_alerts",
+      entityType: "system",
+      after: { overdueCount: created },
+    });
+
+    res.json({ alertsCreated: created, overdueRentals: overdueRentals.length });
   })
 );
 

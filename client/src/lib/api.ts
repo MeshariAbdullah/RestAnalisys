@@ -211,6 +211,18 @@ export interface Shipment {
   deliveredAt?: string;
 }
 
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  metadata?: Record<string, unknown>;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
 export interface RentalQuote {
   assetId: number;
   assetTitle: string;
@@ -394,6 +406,7 @@ export const rentalsApi = {
       body: JSON.stringify(data),
     }),
   mine: () => request<Rental[]>("/rentals/mine"),
+  ownerRentals: () => request<Rental[]>("/rentals/owner"),
   list: () => request<Rental[]>("/rentals"),
   get: (id: number) =>
     request<{
@@ -578,6 +591,30 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  overdueRentals: () =>
+    request<Array<{
+      id: number;
+      reference: string;
+      renterId: number;
+      renterName: string;
+      renterEmail: string;
+      endDate: string;
+      daysPastDue: number;
+      status: string;
+    }>>("/admin/overdue-rentals"),
+  generateOverdueAlerts: () =>
+    request<{ alertsCreated: number; overdueRentals: number }>("/admin/generate-overdue-alerts", {
+      method: "POST",
+    }),
+};
+
+export const notificationsApi = {
+  list: () => request<Notification[]>("/notifications"),
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<Notification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
 };
 
 export const healthApi = {
