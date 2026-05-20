@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { operationsApi, type Shipment } from "@/lib/api";
+import { toast } from "@/hooks/useToast";
 
 const STATUSES = [
   "scheduled",
@@ -35,13 +36,18 @@ export default function Shipments() {
   });
 
   async function handleUpdate(id: number) {
-    await operationsApi.updateShipment(id, {
-      status: editStatus,
-      trackingNumber: editTracking || undefined,
-    });
-    setEditingId(null);
-    setEditTracking("");
-    await qc.invalidateQueries({ queryKey: ["shipments"] });
+    try {
+      await operationsApi.updateShipment(id, {
+        status: editStatus,
+        trackingNumber: editTracking || undefined,
+      });
+      toast({ title: `Shipment #${id} updated`, variant: "success" });
+      setEditingId(null);
+      setEditTracking("");
+      await qc.invalidateQueries({ queryKey: ["shipments"] });
+    } catch (err) {
+      toast({ title: "Update failed", description: (err as Error).message, variant: "destructive" });
+    }
   }
 
   return (

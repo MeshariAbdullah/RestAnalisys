@@ -5,6 +5,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, formatSar } from "@/lib/api";
+import { toast } from "@/hooks/useToast";
+
+function statusBadgeClass(s: string): string {
+  if (s === "listed") return "bg-emerald-100 text-emerald-700 border-0";
+  if (s === "rented_out") return "bg-blue-100 text-blue-700 border-0";
+  if (s === "awaiting_owner_approval") return "bg-amber-100 text-amber-800 border-0";
+  if (s.startsWith("pending")) return "bg-yellow-100 text-yellow-800 border-0";
+  if (s === "rejected") return "bg-red-100 text-red-700 border-0";
+  if (s === "withdrawn") return "bg-neutral-200 text-neutral-600 border-0";
+  return "bg-neutral-900 text-white border-0";
+}
 
 export default function AssetDetail({ id }: { id: number }) {
   const qc = useQueryClient();
@@ -24,8 +35,20 @@ export default function AssetDetail({ id }: { id: number }) {
         approved ? undefined : "Owner rejected the proposed valuation"
       );
       await qc.invalidateQueries({ queryKey: ["asset", id] });
+      toast({
+        title: approved ? "Valuation approved" : "Valuation rejected",
+        description: approved
+          ? "Your asset will now be listed for rental."
+          : "The proposed valuation has been declined.",
+        variant: approved ? "success" : "default",
+      });
     } catch (err) {
       setActionError((err as Error).message);
+      toast({
+        title: "Action failed",
+        description: (err as Error).message,
+        variant: "destructive",
+      });
     }
   }
 
@@ -35,8 +58,18 @@ export default function AssetDetail({ id }: { id: number }) {
     try {
       await assetsApi.withdraw(id);
       await qc.invalidateQueries({ queryKey: ["asset", id] });
+      toast({
+        title: "Asset withdrawn",
+        description: "This asset has been removed from active listings.",
+        variant: "default",
+      });
     } catch (err) {
       setActionError((err as Error).message);
+      toast({
+        title: "Withdrawal failed",
+        description: (err as Error).message,
+        variant: "destructive",
+      });
     }
   }
 
@@ -58,7 +91,7 @@ export default function AssetDetail({ id }: { id: number }) {
           <h1 className="text-3xl font-bold">{asset.title}</h1>
           {asset.model && <p className="text-neutral-500">{asset.model}</p>}
         </div>
-        <Badge className="bg-neutral-900 text-white">
+        <Badge className={statusBadgeClass(asset.status)}>
           {asset.status.replace(/_/g, " ")}
         </Badge>
       </div>

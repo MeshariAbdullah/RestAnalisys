@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Gavel } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,7 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { disputesApi, type Dispute } from "@/lib/api";
+import { toast } from "@/hooks/useToast";
 
 type Resolution =
   | "resolved_for_renter"
@@ -36,11 +38,30 @@ export default function DisputesPage() {
   );
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const { data, isLoading } = useQuery({
     queryKey: ["disputes"],
     queryFn: () => disputesApi.list(),
   });
+
+  const filteredData = useMemo(() => {
+    if (!data) return [];
+    if (statusFilter === "all") return data;
+    if (statusFilter === "resolved") {
+      return data.filter((d: Dispute) => d.status.startsWith("resolved"));
+    }
+    if (statusFilter === "closed") {
+      return data.filter(
+        (d: Dispute) =>
+          d.status.startsWith("resolved") || d.status === "escalated_to_legal"
+      );
+    }
+    if (statusFilter === "investigating") {
+      return data.filter((d: Dispute) => d.status === "under_review");
+    }
+    return data.filter((d: Dispute) => d.status === statusFilter);
+  }, [data, statusFilter]);
 
   async function resolve(id: number) {
     setError(null);
@@ -49,6 +70,11 @@ export default function DisputesPage() {
       setOpenId(null);
       setNotes("");
       await qc.invalidateQueries({ queryKey: ["disputes"] });
+      toast({
+        title: "Dispute resolved",
+        description: `Dispute #${id} has been ${resolution.replace(/_/g, " ")}`,
+        variant: "success",
+      });
     } catch (err) {
       setError((err as Error).message);
     }
@@ -61,18 +87,28 @@ export default function DisputesPage() {
         Cases between renters, owners and the platform.
       </p>
 
+      <Tabs value={statusFilter} onValueChange={setStatusFilter} className="mb-6">
+        <TabsList>
+          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="open">Open</TabsTrigger>
+          <TabsTrigger value="investigating">Investigating</TabsTrigger>
+          <TabsTrigger value="resolved">Resolved</TabsTrigger>
+          <TabsTrigger value="closed">Closed</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>
-      ) : !data || data.length === 0 ? (
+      ) : filteredData.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">
             <Gavel className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
-            No disputes.
+            No disputes{statusFilter !== "all" ? ` matching "${statusFilter}"` : ""}.
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {data.map((d: Dispute) => (
+          {filteredData.map((d: Dispute) => (
             <Card key={d.id}>
               <CardContent className="p-5">
                 <div className="flex items-start gap-4">

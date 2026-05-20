@@ -1,18 +1,51 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Diamond, Plus, TrendingUp, Package, Wallet } from "lucide-react";
+import {
+  Diamond,
+  Plus,
+  TrendingUp,
+  Package,
+  Wallet,
+  ArrowRight,
+  Clock,
+  CheckCircle2,
+  ShieldCheck,
+  XCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, paymentsApi, formatSar, type Asset } from "@/lib/api";
 
 function statusColor(s: string): string {
-  if (s === "listed" || s === "rented_out") return "bg-green-100 text-green-700";
-  if (s.startsWith("pending")) return "bg-amber-100 text-amber-800";
-  if (s === "rejected" || s === "withdrawn") return "bg-red-100 text-red-700";
+  if (s === "listed") return "bg-emerald-100 text-emerald-700";
+  if (s === "rented_out") return "bg-blue-100 text-blue-700";
+  if (s === "awaiting_owner_approval") return "bg-amber-100 text-amber-800";
+  if (s.startsWith("pending")) return "bg-yellow-100 text-yellow-800";
+  if (s === "rejected") return "bg-red-100 text-red-700";
+  if (s === "withdrawn") return "bg-neutral-200 text-neutral-600";
   return "bg-neutral-200 text-neutral-700";
 }
+
+function statusBorderColor(s: string): string {
+  if (s === "listed") return "border-l-emerald-400";
+  if (s === "rented_out") return "border-l-blue-400";
+  if (s === "awaiting_owner_approval") return "border-l-amber-400";
+  if (s.startsWith("pending")) return "border-l-yellow-400";
+  if (s === "rejected") return "border-l-red-400";
+  if (s === "withdrawn") return "border-l-neutral-400";
+  return "border-l-neutral-300";
+}
+
+const STATUS_META: Record<string, { label: string; icon: React.ReactNode; colorClass: string }> = {
+  pending_approval: { label: "Pending approval", icon: <Clock className="w-4 h-4" />, colorClass: "text-yellow-600 bg-yellow-50" },
+  awaiting_owner_approval: { label: "Awaiting your approval", icon: <Clock className="w-4 h-4" />, colorClass: "text-amber-600 bg-amber-50" },
+  listed: { label: "Listed", icon: <CheckCircle2 className="w-4 h-4" />, colorClass: "text-emerald-600 bg-emerald-50" },
+  rented_out: { label: "Rented out", icon: <ShieldCheck className="w-4 h-4" />, colorClass: "text-blue-600 bg-blue-50" },
+  rejected: { label: "Rejected", icon: <XCircle className="w-4 h-4" />, colorClass: "text-red-600 bg-red-50" },
+  withdrawn: { label: "Withdrawn", icon: <XCircle className="w-4 h-4" />, colorClass: "text-neutral-500 bg-neutral-100" },
+};
 
 export default function OwnerDashboard() {
   const assetsQuery = useQuery({
@@ -38,6 +71,14 @@ export default function OwnerDashboard() {
     0
   );
 
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const a of assets) {
+      counts[a.status] = (counts[a.status] ?? 0) + 1;
+    }
+    return counts;
+  }, [assets]);
+
   return (
     <div className="p-8 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-8">
@@ -55,7 +96,8 @@ export default function OwnerDashboard() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-2 text-neutral-500 text-sm">
@@ -94,6 +136,70 @@ export default function OwnerDashboard() {
         </Card>
       </div>
 
+      {/* Status breakdown */}
+      {assets.length > 0 && Object.keys(statusCounts).length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-6">
+          {Object.entries(statusCounts).map(([status, count]) => {
+            const meta = STATUS_META[status];
+            const colorClass = meta?.colorClass ?? "text-neutral-600 bg-neutral-100";
+            return (
+              <div
+                key={status}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${colorClass}`}
+              >
+                {meta?.icon}
+                <span>{meta?.label ?? status.replace(/_/g, " ")}</span>
+                <span className="ml-1 font-bold">{count}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Quick actions */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
+        <Link href="/owner/submit">
+          <a className="block">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer border-dashed border-amber-300 bg-amber-50/30">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                    <Plus className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">Submit new asset</p>
+                    <p className="text-xs text-neutral-500">
+                      Add a luxury item for rental
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-neutral-400" />
+              </CardContent>
+            </Card>
+          </a>
+        </Link>
+        <Link href="/owner/payouts">
+          <a className="block">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer border-dashed border-emerald-300 bg-emerald-50/30">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                    <Wallet className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">View payouts</p>
+                    <p className="text-xs text-neutral-500">
+                      Track earnings and payout history
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-neutral-400" />
+              </CardContent>
+            </Card>
+          </a>
+        </Link>
+      </div>
+
       <h2 className="text-xl font-bold mb-4">My assets</h2>
       {assetsQuery.isLoading ? (
         <p className="text-neutral-500">Loading…</p>
@@ -114,7 +220,11 @@ export default function OwnerDashboard() {
           {assets.map((asset: Asset) => (
             <Link key={asset.id} href={`/owner/assets/${asset.id}`}>
               <a>
-                <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+                <Card
+                  className={`hover:shadow-md transition-shadow cursor-pointer h-full border-l-4 ${statusBorderColor(
+                    asset.status
+                  )}`}
+                >
                   <div className="aspect-video bg-neutral-100 relative flex items-center justify-center">
                     {asset.studioImagesJson?.[0] || asset.submissionImagesJson?.[0] ? (
                       <img

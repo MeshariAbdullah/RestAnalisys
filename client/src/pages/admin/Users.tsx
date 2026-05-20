@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { adminApi, type User } from "@/lib/api";
+import { toast } from "@/hooks/useToast";
 
 function riskColor(c: string): string {
   if (c === "low") return "bg-green-100 text-green-700";
@@ -36,6 +37,10 @@ export default function UsersPage() {
       : undefined;
     if (block && !reason) return;
     await adminApi.blockUser(u.id, block, reason);
+    toast({
+      title: block ? `${u.fullName} blocked` : `${u.fullName} unblocked`,
+      variant: block ? "destructive" : "success",
+    });
     await qc.invalidateQueries({ queryKey: ["admin-users"] });
   }
 

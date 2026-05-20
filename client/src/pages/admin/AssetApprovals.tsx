@@ -1,14 +1,16 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, X as XIcon, Diamond } from "lucide-react";
+import { CheckCircle2, X as XIcon, Diamond, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, formatSar, type Asset } from "@/lib/api";
+import { toast } from "@/hooks/useToast";
 
 export default function AssetApprovals() {
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const [actingId, setActingId] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["assets-pending"],
@@ -22,10 +24,18 @@ export default function AssetApprovals() {
         ? undefined
         : prompt("Rejection reason?") ?? undefined;
       if (!approved && !reason) return;
+      setActingId(id);
       await assetsApi.review(id, approved, reason);
       await qc.invalidateQueries({ queryKey: ["assets-pending"] });
+      if (approved) {
+        toast({ title: "Asset approved", variant: "success" });
+      } else {
+        toast({ title: "Asset rejected", variant: "destructive" });
+      }
     } catch (err) {
       setError((err as Error).message);
+    } finally {
+      setActingId(null);
     }
   }
 
@@ -101,15 +111,25 @@ export default function AssetApprovals() {
                       <Button
                         className="bg-green-600 hover:bg-green-700"
                         onClick={() => act(asset.id, true)}
+                        disabled={actingId === asset.id}
                       >
-                        <CheckCircle2 className="w-4 h-4 mr-1" />
+                        {actingId === asset.id ? (
+                          <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4 mr-1" />
+                        )}
                         Approve
                       </Button>
                       <Button
                         variant="outline"
                         onClick={() => act(asset.id, false)}
+                        disabled={actingId === asset.id}
                       >
-                        <XIcon className="w-4 h-4 mr-1" />
+                        {actingId === asset.id ? (
+                          <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                        ) : (
+                          <XIcon className="w-4 h-4 mr-1" />
+                        )}
                         Reject
                       </Button>
                     </>
