@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api";
 import { saveSession, homeForRole } from "@/lib/auth";
+import { toast } from "@/hooks/useToast";
 
 export default function Login() {
   const [, navigate] = useLocation();
@@ -21,6 +22,7 @@ export default function Login() {
     try {
       const res = await authApi.login(email, password);
       saveSession(res.token, res.user);
+      toast({ title: `Welcome back, ${res.user.fullName}`, variant: "success" });
       navigate(homeForRole(res.user.role));
     } catch (err) {
       setError((err as Error).message ?? "Login failed");

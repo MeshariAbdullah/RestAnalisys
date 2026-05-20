@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { assetsApi } from "@/lib/api";
+import { toast } from "@/hooks/useToast";
 
 export default function SubmitAsset() {
   const [, navigate] = useLocation();
@@ -56,6 +57,7 @@ export default function SubmitAsset() {
         ownerDeclaredValueHalalas: value,
         submissionImages: imageUrls,
       });
+      toast({ title: "Asset submitted successfully", description: "Awaiting admin approval", variant: "success" });
       navigate("/owner");
     } catch (err) {
       setError((err as Error).message ?? "Submission failed");

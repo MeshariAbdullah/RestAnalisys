@@ -10,14 +10,36 @@ import {
   AlertOctagon,
   TrendingUp,
 } from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
-import { adminApi, formatSar } from "@/lib/api";
+import { adminApi, formatSar, halalasToSar } from "@/lib/api";
 
 export default function AdminDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["admin-kpis"],
     queryFn: () => adminApi.kpis(),
   });
+
+  const trendQuery = useQuery({
+    queryKey: ["revenue-trend"],
+    queryFn: () => adminApi.revenueTrend(),
+  });
+
+  const chartData = (trendQuery.data ?? []).map((t) => ({
+    date: new Date(t.day).toLocaleDateString("en-SA", {
+      month: "short",
+      day: "numeric",
+    }),
+    revenue: halalasToSar(Number(t.total_halalas)),
+  }));
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -79,6 +101,37 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {chartData.length > 0 && (
+        <Card className="mb-8">
+          <CardContent className="p-6">
+            <h2 className="text-sm font-semibold text-neutral-500 mb-4">
+              Revenue trend (30 days)
+            </h2>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="adminRevGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}`} />
+                <Tooltip formatter={(v: number) => [`${v.toLocaleString()} SAR`, "Revenue"]} />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#f59e0b"
+                  fill="url(#adminRevGrad)"
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Link href="/admin/disputes">
