@@ -2,8 +2,14 @@ import React from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Truck, AlertTriangle, PackageSearch, Activity } from "lucide-react";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { operationsApi } from "@/lib/api";
 
 export default function OpsDashboard() {
@@ -53,17 +59,49 @@ export default function OpsDashboard() {
       </div>
 
       <h2 className="text-lg font-semibold mb-3">Inventory by status</h2>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-        {(data?.inventoryCounts ?? []).map((c) => (
-          <Card key={c.status}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-2 gap-3">
+          {(data?.inventoryCounts ?? []).map((c) => (
+            <Card key={c.status}>
+              <CardContent className="p-4">
+                <p className="text-xs text-neutral-500">
+                  {c.status.replace(/_/g, " ")}
+                </p>
+                <p className="font-bold text-xl mt-1">{c.count}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        {(data?.inventoryCounts ?? []).length > 0 && (
+          <Card>
             <CardContent className="p-4">
-              <p className="text-xs text-neutral-500">
-                {c.status.replace(/_/g, " ")}
-              </p>
-              <p className="font-bold text-xl mt-1">{c.count}</p>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={(data?.inventoryCounts ?? []).map((c) => ({
+                      name: c.status.replace(/_/g, " "),
+                      value: c.count,
+                    }))}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    dataKey="value"
+                    paddingAngle={3}
+                  >
+                    {(data?.inventoryCounts ?? []).map((_, i) => (
+                      <Cell
+                        key={i}
+                        fill={["#f59e0b", "#6366f1", "#10b981", "#ef4444", "#8b5cf6", "#3b82f6"][i % 6]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
-        ))}
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

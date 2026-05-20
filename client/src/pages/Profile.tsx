@@ -13,6 +13,7 @@ import {
   Contact,
   ShieldCheck,
   Loader2,
+  Pencil,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { authApi, type User } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, saveSession } from "@/lib/auth";
+import { toast } from "@/hooks/useToast";
 
 function roleLabel(role: User["role"]): string {
   return {
@@ -115,6 +117,15 @@ export default function Profile() {
     message: string;
   } | null>(null);
 
+  // Edit profile form state
+  const [editFullName, setEditFullName] = useState(cachedUser?.fullName ?? "");
+  const [editPhone, setEditPhone] = useState(cachedUser?.phoneE164 ?? "");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [editSuccess, setEditSuccess] = useState("");
+
   async function handleNafathVerify(e: React.FormEvent) {
     e.preventDefault();
     if (!nationalId.trim()) return;
@@ -134,6 +145,52 @@ export default function Profile() {
       });
     } finally {
       setNafathLoading(false);
+    }
+  }
+
+  async function handleEditProfile(e: React.FormEvent) {
+    e.preventDefault();
+    setEditLoading(true);
+    setEditError("");
+    setEditSuccess("");
+    try {
+      const payload: {
+        fullName?: string;
+        phone?: string;
+        currentPassword?: string;
+        newPassword?: string;
+      } = {};
+      if (editFullName.trim()) payload.fullName = editFullName.trim();
+      if (editPhone.trim()) payload.phone = editPhone.trim();
+      if (newPassword) {
+        if (newPassword.length < 8) {
+          setEditError("New password must be at least 8 characters");
+          setEditLoading(false);
+          return;
+        }
+        payload.currentPassword = currentPassword;
+        payload.newPassword = newPassword;
+      }
+
+      const updatedUser = await authApi.updateProfile(payload);
+
+      // Update localStorage with the updated user
+      const token = localStorage.getItem("auth_token");
+      if (token) {
+        saveSession(token, updatedUser);
+      }
+
+      await qc.invalidateQueries({ queryKey: ["profile-me"] });
+      setEditSuccess("Profile updated successfully");
+      setCurrentPassword("");
+      setNewPassword("");
+      toast({ title: "Profile updated successfully", variant: "success" });
+    } catch (err) {
+      const message = (err as Error).message ?? "Failed to update profile";
+      setEditError(message);
+      toast({ title: message, variant: "destructive" });
+    } finally {
+      setEditLoading(false);
     }
   }
 
@@ -378,6 +435,95 @@ export default function Profile() {
             </CardContent>
           </Card>
         )}
+
+        {/* Edit Profile Card */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Pencil className="w-5 h-5 text-amber-500" />
+              Edit Profile
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleEditProfile} className="space-y-4">
+              <div>
+                <Label htmlFor="editFullName">Full Name</Label>
+                <Input
+                  id="editFullName"
+                  type="text"
+                  value={editFullName}
+                  onChange={(e) => setEditFullName(e.target.value)}
+                  className="mt-1 max-w-sm"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="editPhone">Phone</Label>
+                <Input
+                  id="editPhone"
+                  type="tel"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  placeholder="+966XXXXXXXXX"
+                  className="mt-1 max-w-sm"
+                />
+              </div>
+
+              <hr className="border-neutral-200 my-2" />
+
+              <div>
+                <Label htmlFor="currentPassword">Current Password</Label>
+                <Input
+                  id="currentPassword"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Required only when changing password"
+                  className="mt-1 max-w-sm"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="newPassword">New Password</Label>
+                <Input
+                  id="newPassword"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Min 8 characters"
+                  className="mt-1 max-w-sm"
+                />
+              </div>
+
+              {editError && (
+                <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
+                  {editError}
+                </div>
+              )}
+
+              {editSuccess && (
+                <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded p-3">
+                  {editSuccess}
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                disabled={editLoading}
+                className="bg-amber-500 text-neutral-950 hover:bg-amber-400"
+              >
+                {editLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
