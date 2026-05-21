@@ -1,8 +1,9 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Receipt, TrendingUp } from "lucide-react";
+import { Receipt, TrendingUp, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { adminApi, formatSar } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { adminApi, adminExtApi, formatSar } from "@/lib/api";
 
 export default function FinancialOverview() {
   const kpisQuery = useQuery({
@@ -24,7 +25,21 @@ export default function FinancialOverview() {
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
-      <h1 className="text-3xl font-bold mb-2">Financial overview</h1>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-3xl font-bold">Financial overview</h1>
+        <div className="flex gap-2">
+          <a href={adminExtApi.exportFinancial()} target="_blank" rel="noopener">
+            <Button variant="outline" size="sm">
+              <Download className="w-4 h-4 mr-1" /> Export Transactions
+            </Button>
+          </a>
+          <a href={adminExtApi.exportPayouts()} target="_blank" rel="noopener">
+            <Button variant="outline" size="sm">
+              <Download className="w-4 h-4 mr-1" /> Export Payouts
+            </Button>
+          </a>
+        </div>
+      </div>
       <p className="text-neutral-500 mb-8">
         Revenue, fees and VAT across all confirmed rentals.
       </p>

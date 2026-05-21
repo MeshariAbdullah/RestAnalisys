@@ -11,7 +11,7 @@
  */
 
 import { Router } from "express";
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, gt, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -256,6 +257,16 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: asset.ownerId,
+      type: approved ? "asset_approved" : "asset_rejected",
+      title: approved ? "Asset approved" : "Asset rejected",
+      message: approved
+        ? `Your asset "${asset.title}" has been approved. Please ship it to us.`
+        : `Your asset "${asset.title}" was rejected: ${rejectionReason ?? "No reason provided"}.`,
+      linkUrl: `/owner/assets/${asset.id}`,
+    });
+
     res.json(updated);
   })
 );
@@ -318,6 +329,27 @@ router.get(
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.search) {
+      const term = `%${filter.search.toLowerCase()}%`;
+      conditions.push(
+        sql`(lower(title) like ${term} or lower(brand) like ${term} or lower(coalesce(model,'')) like ${term})`
+      );
+    }
+    if (filter.cursor) {
+      conditions.push(gt(assets.id, filter.cursor));
+    }
+
+    const orderClause =
+      filter.sortBy === "price_asc"
+        ? asc(assets.dailyRentalPriceHalalas)
+        : filter.sortBy === "price_desc"
+          ? desc(assets.dailyRentalPriceHalalas)
+          : desc(assets.createdAt);
+
+    const [totalResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(assets)
+      .where(and(...conditions));
 
     const rows = await db
       .select({
@@ -334,10 +366,17 @@ router.get(
       })
       .from(assets)
       .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
+      .orderBy(orderClause)
       .limit(filter.limit);
 
-    res.json({ items: rows, count: rows.length });
+    const nextCursor = rows.length === filter.limit ? rows[rows.length - 1]?.id : null;
+
+    res.json({
+      items: rows,
+      count: rows.length,
+      total: Number(totalResult?.count ?? 0),
+      nextCursor,
+    });
   })
 );
 

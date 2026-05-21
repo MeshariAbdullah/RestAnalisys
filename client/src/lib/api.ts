@@ -266,12 +266,22 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: {
+    category?: string;
+    brand?: string;
+    search?: string;
+    sortBy?: "price_asc" | "price_desc" | "newest";
+    limit?: number;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.sortBy) qs.set("sortBy", params.sortBy);
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    return request<{ items: Asset[]; count: number; total: number; nextCursor: number | null }>(
+      `/assets/listings?${qs}`
+    );
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
@@ -578,6 +588,78 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UserNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  linkUrl?: string;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: () => request<UserNotification[]>("/notifications"),
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request("/notifications/" + id + "/read", { method: "POST" }),
+  markAllRead: () =>
+    request("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin (extended)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AuditLogEntry {
+  id: number;
+  actorUserId: number | null;
+  actorRole: string | null;
+  action: string;
+  entityType: string;
+  entityId: number | null;
+  ip: string | null;
+  createdAt: string;
+}
+
+export interface PaginatedAuditLogs {
+  items: AuditLogEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export const adminExtApi = {
+  auditLogs: (params?: {
+    page?: number;
+    limit?: number;
+    entityType?: string;
+    action?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    return request<PaginatedAuditLogs>(`/admin/audit-logs?${qs}`);
+  },
+  exportFinancial: (from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
+    return `${import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL + "/api" : "/api"}/admin/export/financial?${qs}`;
+  },
+  exportPayouts: () =>
+    `${import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL + "/api" : "/api"}/admin/export/payouts`,
 };
 
 export const healthApi = {

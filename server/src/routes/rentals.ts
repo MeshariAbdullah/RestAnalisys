@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -78,7 +79,6 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) throw new NotFoundError("User");
 
-  // Aggregate rental history.
   const stats = await db
     .select({
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
@@ -88,6 +88,17 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     .from(rentals)
     .where(eq(rentals.renterId, userId));
   const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+
+  const lateReturnStats = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`returned_at is not null`,
+        sql`returned_at::date > end_date::date`
+      )
+    );
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +110,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateReturnStats[0]?.count ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +291,14 @@ router.post(
       after: { rental, decision },
     });
 
+    await notify({
+      userId: asset.ownerId,
+      type: "rental_created",
+      title: "New rental for your asset",
+      message: `Your asset "${asset.title}" has been rented (${reference}).`,
+      linkUrl: `/owner/assets/${asset.id}`,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -441,6 +460,14 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: rental.renterId,
+      type: "rental_delivered",
+      title: "Your rental has been delivered",
+      message: `Rental ${rental.reference} is now active. Enjoy!`,
+      linkUrl: `/my-rentals`,
+    });
+
     res.json(updated);
   })
 );
@@ -515,6 +542,20 @@ router.post(
         entityType: "rental",
         entityId: id,
         after: updated,
+      });
+      await notify({
+        userId: rental.renterId,
+        type: "rental_closed",
+        title: "Rental closed",
+        message: `Rental ${rental.reference} has been closed successfully.`,
+        linkUrl: `/my-rentals`,
+      });
+      await notify({
+        userId: rental.ownerId,
+        type: "rental_closed",
+        title: "Rental completed",
+        message: `Rental ${rental.reference} for your asset was completed. Payout incoming.`,
+        linkUrl: `/owner/payouts`,
       });
       return res.json(updated);
     }

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
+import NotificationBell from "./NotificationBell";
 
 interface NavItem {
   href: string;
@@ -56,6 +57,7 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit", label: "Audit Log", icon: Shield, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
@@ -142,6 +144,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   {user ? roleLabel(user.role) : ""}
                 </p>
               </div>
+              <NotificationBell />
               <button
                 onClick={handleLogout}
                 className="p-1.5 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white"
@@ -151,13 +154,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           ) : (
-            <button
-              onClick={handleLogout}
-              className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400"
-              title="Logout"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            <div className="flex flex-col items-center gap-2">
+              <NotificationBell />
+              <button
+                onClick={handleLogout}
+                className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           )}
         </div>
       </aside>
