@@ -38,6 +38,7 @@ import SanadTracking from "./pages/admin/SanadTracking";
 
 // Shared
 import Profile from "./pages/Profile";
+import Notifications from "./pages/Notifications";
 
 export default function App() {
   return (
@@ -133,9 +134,12 @@ export default function App() {
         <ProtectedRoute roles={["admin", "super_admin"]}><SanadTracking /></ProtectedRoute>
       </Route>
 
-      {/* Profile (all roles) */}
+      {/* Shared (all roles) */}
       <Route path="/profile">
         <ProtectedRoute><Profile /></ProtectedRoute>
+      </Route>
+      <Route path="/notifications">
+        <ProtectedRoute><Notifications /></ProtectedRoute>
       </Route>
 
       <Route>

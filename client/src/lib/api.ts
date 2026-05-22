@@ -266,13 +266,26 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: {
+    category?: string;
+    brand?: string;
+    search?: string;
+    sort?: "newest" | "price_asc" | "price_desc" | "value_asc" | "value_desc";
+    page?: number;
+    limit?: number;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.sort) qs.set("sort", params.sort);
+    if (params?.page) qs.set("page", String(params.page));
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    return request<{ items: Asset[]; total: number; page: number; pages: number; limit: number }>(
+      `/assets/listings?${qs}`
+    );
   },
+  brands: () => request<Array<{ brand: string; count: number }>>("/assets/brands"),
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
   submit: (data: {

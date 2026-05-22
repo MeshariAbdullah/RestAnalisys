@@ -20,6 +20,7 @@ import {
   Wallet,
   FileSignature,
   User as UserIcon,
+  Bell,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
