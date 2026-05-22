@@ -19,9 +19,11 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  User as UserIcon,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
+import NotificationBell from "./NotificationBell";
 
 interface NavItem {
   href: string;
@@ -162,7 +164,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Navigation Bar */}
+        <header className="h-14 bg-neutral-950 border-b border-neutral-800 flex items-center justify-end px-4 gap-3 shrink-0">
+          <NotificationBell />
+          <Link href="/profile">
+            <a className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-neutral-800 transition-colors text-neutral-300 hover:text-white">
+              <div className="w-7 h-7 bg-amber-500 rounded-full flex items-center justify-center">
+                <UserIcon className="w-4 h-4 text-neutral-950" />
+              </div>
+              <span className="text-sm font-medium hidden sm:inline">
+                {user?.fullName ?? "Profile"}
+              </span>
+            </a>
+          </Link>
+        </header>
+
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
     </div>
   );
 }

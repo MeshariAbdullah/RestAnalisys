@@ -9,7 +9,13 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
-import { LoginSchema, RegisterSchema, NafathVerifySchema } from "../utils/schemas.js";
+import {
+  LoginSchema,
+  RegisterSchema,
+  NafathVerifySchema,
+  ProfileUpdateSchema,
+  ChangePasswordSchema,
+} from "../utils/schemas.js";
 import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
@@ -186,6 +192,107 @@ router.get(
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
     });
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile Management
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get(
+  "/profile",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, req.user!.userId))
+      .limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const { passwordHash, ...profile } = user;
+    return res.json(profile);
+  })
+);
+
+router.put(
+  "/profile",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const input = ProfileUpdateSchema.parse(req.body);
+    const userId = req.user!.userId;
+
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!existing) throw new NotFoundError("User");
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (input.fullName !== undefined) updates.fullName = input.fullName;
+    if (input.phoneE164 !== undefined) updates.phoneE164 = input.phoneE164;
+    if (input.nationalAddressJson !== undefined) updates.nationalAddressJson = input.nationalAddressJson;
+
+    const [updated] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning();
+
+    await recordAudit({
+      req,
+      action: "profile.update",
+      entityType: "user",
+      entityId: userId,
+      before: {
+        fullName: existing.fullName,
+        phoneE164: existing.phoneE164,
+        nationalAddressJson: existing.nationalAddressJson,
+      },
+      after: {
+        fullName: updated.fullName,
+        phoneE164: updated.phoneE164,
+        nationalAddressJson: updated.nationalAddressJson,
+      },
+    });
+
+    const { passwordHash, ...profile } = updated;
+    return res.json(profile);
+  })
+);
+
+router.post(
+  "/profile/change-password",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const { currentPassword, newPassword } = ChangePasswordSchema.parse(req.body);
+    const userId = req.user!.userId;
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) throw new UnauthorizedError("Current password is incorrect");
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await db
+      .update(users)
+      .set({ passwordHash: newHash, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+
+    await recordAudit({
+      req,
+      action: "profile.change_password",
+      entityType: "user",
+      entityId: userId,
+    });
+
+    return res.json({ message: "Password changed successfully" });
   })
 );
 

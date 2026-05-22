@@ -19,6 +19,7 @@ import {
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyPaymentCaptured, notifyRentalStatusChanged } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -110,6 +111,9 @@ router.post(
           updatedAt: new Date(),
         })
         .where(eq(rentals.id, rental.id));
+
+      notifyPaymentCaptured(req.user!.userId, rental.reference, rental.totalPayableHalalas);
+      notifyRentalStatusChanged(rental.ownerId, rental.reference, "pending_payment", "confirmed");
     }
 
     await recordAudit({

@@ -11,7 +11,7 @@
  */
 
 import { Router } from "express";
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyAssetApproved, notifyAssetRejected } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -256,6 +257,12 @@ router.post(
       after: updated,
     });
 
+    if (approved) {
+      notifyAssetApproved(asset.ownerId, asset.title);
+    } else {
+      notifyAssetRejected(asset.ownerId, asset.title, rejectionReason ?? "Does not meet platform standards");
+    }
+
     res.json(updated);
   })
 );
@@ -318,7 +325,40 @@ router.get(
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.minValue)
+      conditions.push(gte(assets.evaluatedValueHalalas, filter.minValue));
+    if (filter.maxValue)
+      conditions.push(lte(assets.evaluatedValueHalalas, filter.maxValue));
 
+    if (filter.search) {
+      const term = `%${filter.search}%`;
+      conditions.push(
+        or(
+          ilike(assets.title, term),
+          ilike(assets.brand, term),
+          ilike(assets.model, term),
+          ilike(assets.description, term)
+        )!
+      );
+    }
+
+    const sortMap = {
+      newest: desc(assets.createdAt),
+      price_asc: asc(assets.dailyRentalPriceHalalas),
+      price_desc: desc(assets.dailyRentalPriceHalalas),
+      value_asc: asc(assets.evaluatedValueHalalas),
+      value_desc: desc(assets.evaluatedValueHalalas),
+    };
+    const orderBy = sortMap[filter.sort ?? "newest"];
+
+    const whereClause = and(...conditions);
+
+    const [{ total }] = await db
+      .select({ total: sql<number>`count(*)` })
+      .from(assets)
+      .where(whereClause);
+
+    const offset = (filter.page - 1) * filter.limit;
     const rows = await db
       .select({
         id: assets.id,
@@ -326,18 +366,28 @@ router.get(
         brand: assets.brand,
         model: assets.model,
         category: assets.category,
+        description: assets.description,
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
+        submissionImagesJson: assets.submissionImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
+        createdAt: assets.createdAt,
       })
       .from(assets)
-      .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
-      .limit(filter.limit);
+      .where(whereClause)
+      .orderBy(orderBy)
+      .limit(filter.limit)
+      .offset(offset);
 
-    res.json({ items: rows, count: rows.length });
+    res.json({
+      items: rows,
+      total: Number(total),
+      page: filter.page,
+      pages: Math.ceil(Number(total) / filter.limit),
+      limit: filter.limit,
+    });
   })
 );
 
@@ -357,16 +407,47 @@ router.get(
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
+        submissionImagesJson: assets.submissionImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
         status: assets.status,
+        createdAt: assets.createdAt,
       })
       .from(assets)
       .where(eq(assets.id, id))
       .limit(1);
     if (!row) throw new NotFoundError("Asset");
     if (row.status !== "listed") throw new NotFoundError("Asset");
-    res.json(row);
+
+    const [latestInspection] = await db
+      .select({
+        conditionGrade: inspections.conditionGrade,
+        conditionScore: inspections.conditionScore,
+        authenticityVerified: inspections.authenticityVerified,
+      })
+      .from(inspections)
+      .where(and(eq(inspections.assetId, id), eq(inspections.type, "intake")))
+      .orderBy(desc(inspections.createdAt))
+      .limit(1);
+
+    res.json({
+      ...row,
+      inspection: latestInspection ?? null,
+    });
+  })
+);
+
+// ── Public: list available brands (for filter UI) ─────────────────────────
+router.get(
+  "/brands",
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select({ brand: assets.brand, count: sql<number>`count(*)` })
+      .from(assets)
+      .where(eq(assets.status, "listed"))
+      .groupBy(assets.brand)
+      .orderBy(desc(sql`count(*)`));
+    res.json(rows.map((r) => ({ brand: r.brand, count: Number(r.count) })));
   })
 );
 

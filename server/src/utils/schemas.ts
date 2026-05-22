@@ -79,10 +79,15 @@ export const AssetApprovalSchema = z.object({
 export const AssetListingFilter = z.object({
   category: AssetCategory.optional(),
   brand: z.string().optional(),
+  search: z.string().max(100).optional(),
   minDaily: HalalasAmount.optional(),
   maxDaily: HalalasAmount.optional(),
+  minValue: HalalasAmount.optional(),
+  maxValue: HalalasAmount.optional(),
   from: IsoDate.optional(),
   to: IsoDate.optional(),
+  sort: z.enum(["newest", "price_asc", "price_desc", "value_asc", "value_desc"]).default("newest"),
+  page: z.coerce.number().int().min(1).default(1),
   cursor: z.coerce.number().int().nonnegative().optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
@@ -226,4 +231,22 @@ export const ShipmentUpdateSchema = z.object({
     "returned",
   ]),
   trackingNumber: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile Management
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ProfileUpdateSchema = z.object({
+  fullName: z.string().min(2, "Full name must be at least 2 characters").optional(),
+  phoneE164: z
+    .string()
+    .regex(/^\+[1-9]\d{1,14}$/, "Phone must be in E.164 format (e.g. +966501234567)")
+    .optional(),
+  nationalAddressJson: z.object({}).passthrough().optional(),
+});
+
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(8, "New password must be at least 8 characters"),
 });

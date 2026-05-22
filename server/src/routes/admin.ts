@@ -221,4 +221,85 @@ router.get(
   })
 );
 
+// ── Asset category breakdown ──────────────────────────────────────────────
+router.get(
+  "/stats/assets-by-category",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select category, status, count(*) as count
+      from assets
+      group by category, status
+      order by category, count desc
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Rental status distribution ─────────────────────────────────────────────
+router.get(
+  "/stats/rental-statuses",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select status, count(*) as count
+      from rentals
+      group by status
+      order by count desc
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Monthly growth (users + rentals) ───────────────────────────────────────
+router.get(
+  "/stats/monthly-growth",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const userGrowth = await db.execute(sql`
+      select to_char(date_trunc('month', created_at), 'YYYY-MM') as month,
+             count(*) as new_users
+      from users
+      where created_at >= now() - interval '12 months'
+      group by 1
+      order by 1
+    `);
+    const rentalGrowth = await db.execute(sql`
+      select to_char(date_trunc('month', created_at), 'YYYY-MM') as month,
+             count(*) as new_rentals,
+             coalesce(sum(total_payable_halalas), 0) as gmv_halalas
+      from rentals
+      where created_at >= now() - interval '12 months'
+      group by 1
+      order by 1
+    `);
+    res.json({ userGrowth: userGrowth.rows, rentalGrowth: rentalGrowth.rows });
+  })
+);
+
+// ── Top performing assets ──────────────────────────────────────────────────
+router.get(
+  "/stats/top-assets",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select a.id, a.title, a.brand, a.category,
+             count(r.id) as total_rentals,
+             coalesce(sum(r.rental_subtotal_halalas), 0) as total_revenue_halalas
+      from assets a
+      left join rentals r on r.asset_id = a.id
+        and r.status in ('closed', 'closed_with_penalty', 'active')
+      group by a.id, a.title, a.brand, a.category
+      having count(r.id) > 0
+      order by total_revenue_halalas desc
+      limit 20
+    `);
+    res.json(rows.rows);
+  })
+);
+
 export default router;

@@ -655,6 +655,34 @@ export const operationalAlerts = pgTable("operational_alerts", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications (user-facing)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    type: text("type").notNull(), // rental_created | rental_status_changed | asset_approved | asset_rejected | payment_captured | inspection_complete | dispute_update | sanad_update | system
+    title: text("title").notNull(),
+    titleAr: text("title_ar"),
+    body: text("body").notNull(),
+    bodyAr: text("body_ar"),
+    entityType: text("entity_type"), // rental | asset | payment | dispute | sanad
+    entityId: integer("entity_id"),
+    read: boolean("read").notNull().default(false),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    readIdx: index("notifications_read_idx").on(t.userId, t.read),
+  })
+);
+
+export type Notification = typeof notifications.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Immutable audit logs
 // ─────────────────────────────────────────────────────────────────────────────
 
