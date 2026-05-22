@@ -28,6 +28,7 @@ import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
 import notificationsRouter from "./routes/notifications.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { rateLimit } from "./middleware/rateLimit.js";
 
 dotenv.config();
 
@@ -42,6 +43,7 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(rateLimit({ windowMs: 60_000, max: 100, keyPrefix: "global" }));
 
 // Health
 app.get("/api/health", (_req, res) => {

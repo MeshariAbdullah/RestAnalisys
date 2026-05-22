@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
+import { rateLimit } from "../middleware/rateLimit.js";
 import {
   LoginSchema,
   RegisterSchema,
@@ -21,10 +22,13 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
 
+const authRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyPrefix: "auth" });
+
 const router = Router();
 
 router.post(
   "/register",
+  authRateLimit,
   asyncHandler(async (req, res) => {
     const input = RegisterSchema.parse(req.body);
 
@@ -83,6 +87,7 @@ router.post(
 
 router.post(
   "/login",
+  authRateLimit,
   asyncHandler(async (req, res) => {
     const { email, password } = LoginSchema.parse(req.body);
     const [user] = await db
