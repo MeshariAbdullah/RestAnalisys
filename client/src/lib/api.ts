@@ -647,6 +647,42 @@ export const profileApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Uploads
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UploadResult {
+  id: string;
+  url: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+}
+
+export const uploadsApi = {
+  uploadImage: (data: string, mimeType: string, filename?: string) =>
+    request<UploadResult>("/uploads/image", {
+      method: "POST",
+      body: JSON.stringify({ data, mimeType, filename }),
+    }),
+  uploadImages: (images: Array<{ data: string; mimeType: string; filename?: string }>) =>
+    request<{ uploads: Array<UploadResult | { error: string }> }>("/uploads/images", {
+      method: "POST",
+      body: JSON.stringify({ images }),
+    }),
+  fileToBase64: (file: File): Promise<{ data: string; mimeType: string; filename: string }> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.split(",")[1];
+        resolve({ data: base64, mimeType: file.type, filename: file.name });
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Money helpers (frontend copies of the backend constants)
 // ─────────────────────────────────────────────────────────────────────────────
 
