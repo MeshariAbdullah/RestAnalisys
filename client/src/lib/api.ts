@@ -266,12 +266,24 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: {
+    category?: string;
+    brand?: string;
+    limit?: number;
+    search?: string;
+    sortBy?: string;
+    minDaily?: number;
+    maxDaily?: number;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.sortBy) qs.set("sortBy", params.sortBy);
+    if (params?.minDaily) qs.set("minDaily", String(params.minDaily));
+    if (params?.maxDaily) qs.set("maxDaily", String(params.maxDaily));
+    return request<{ items: Asset[]; count: number; total: number }>(`/assets/listings?${qs}`);
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
@@ -578,6 +590,39 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: { page?: number; limit?: number; action?: string; entityType?: string; actorId?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.action) qs.set("action", params.action);
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.actorId) qs.set("actorId", String(params.actorId));
+    return request<{
+      items: Array<{
+        id: number;
+        actorUserId: number | null;
+        actorRole: string | null;
+        action: string;
+        entityType: string;
+        entityId: number | null;
+        beforeJson: unknown;
+        afterJson: unknown;
+        ip: string | null;
+        createdAt: string;
+      }>;
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>(`/admin/audit-logs?${qs}`);
+  },
+  systemStats: () =>
+    request<{
+      users: { total: number; byRole: Array<{ role: string; count: number }> };
+      assets: { total: number; byStatus: Array<{ status: string; count: number }> };
+      rentals: { total: number; byStatus: Array<{ status: string; count: number }> };
+      disputes: { total: number };
+    }>("/admin/system/stats"),
 };
 
 export const healthApi = {

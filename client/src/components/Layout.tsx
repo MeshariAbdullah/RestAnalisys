@@ -19,6 +19,8 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  ScrollText,
+  BarChart3,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
@@ -56,6 +58,8 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit", label: "Audit Logs", icon: ScrollText, roles: ["admin", "super_admin"] },
+  { href: "/admin/system", label: "System Stats", icon: BarChart3, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {

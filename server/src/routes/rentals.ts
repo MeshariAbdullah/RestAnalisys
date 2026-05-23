@@ -56,6 +56,8 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
+import { halalasToSar } from "../utils/money.js";
 
 const router = Router();
 
@@ -94,12 +96,25 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
   );
 
+  const lateReturnRows = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .innerJoin(inspections, and(
+      eq(inspections.rentalId, rentals.id),
+      eq(inspections.type, "return")
+    ))
+    .where(and(
+      eq(rentals.renterId, userId),
+      sql`${inspections.createdAt} > (${rentals.endDate}::date + interval '1 day')`
+    ));
+  const lateReturns = Number(lateReturnRows[0]?.count ?? 0);
+
   return {
     accountAgeDays,
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns,
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +295,12 @@ router.post(
       after: { rental, decision },
     });
 
+    notify(renter!.email, "rental.created", {
+      reference: rental.reference,
+      assetTitle: asset.title,
+      total: halalasToSar(quote.totalPayableHalalas),
+    }, renter!.phoneE164 ?? undefined).catch(() => {});
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -440,6 +461,13 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    const [deliveryRenter] = await db.select().from(users).where(eq(users.id, rental.renterId)).limit(1);
+    if (deliveryRenter) {
+      notify(deliveryRenter.email, "rental.delivered", {
+        reference: rental.reference,
+      }, deliveryRenter.phoneE164 ?? undefined).catch(() => {});
+    }
 
     res.json(updated);
   })

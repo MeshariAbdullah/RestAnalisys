@@ -11,7 +11,7 @@
  */
 
 import { Router } from "express";
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -256,6 +257,15 @@ router.post(
       after: updated,
     });
 
+    const [owner] = await db.select().from(users).where(eq(users.id, asset.ownerId)).limit(1);
+    if (owner) {
+      const templateKey = approved ? "asset.approved" : "asset.rejected";
+      notify(owner.email, templateKey, {
+        title: asset.title,
+        reason: rejectionReason ?? "",
+      }, owner.phoneE164 ?? undefined).catch(() => {});
+    }
+
     res.json(updated);
   })
 );
@@ -310,6 +320,8 @@ router.get(
   "/listings",
   asyncHandler(async (req, res) => {
     const filter = AssetListingFilter.parse(req.query);
+    const search = (req.query.search as string) || undefined;
+    const sortBy = (req.query.sortBy as string) || "newest";
     const conditions = [eq(assets.status, "listed")];
 
     if (filter.category) conditions.push(eq(assets.category, filter.category));
@@ -318,6 +330,28 @@ router.get(
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (search) {
+      const term = `%${search}%`;
+      conditions.push(
+        or(
+          ilike(assets.title, term),
+          ilike(assets.brand, term),
+          ilike(assets.model, term),
+          ilike(assets.description, term)
+        )!
+      );
+    }
+
+    const orderBy =
+      sortBy === "price_asc" ? asc(assets.dailyRentalPriceHalalas) :
+      sortBy === "price_desc" ? desc(assets.dailyRentalPriceHalalas) :
+      sortBy === "value_desc" ? desc(assets.evaluatedValueHalalas) :
+      desc(assets.updatedAt);
+
+    const [totalRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(assets)
+      .where(and(...conditions));
 
     const rows = await db
       .select({
@@ -326,18 +360,20 @@ router.get(
         brand: assets.brand,
         model: assets.model,
         category: assets.category,
+        description: assets.description,
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
+        submissionImagesJson: assets.submissionImagesJson,
         studioImagesJson: assets.studioImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
       })
       .from(assets)
       .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
+      .orderBy(orderBy)
       .limit(filter.limit);
 
-    res.json({ items: rows, count: rows.length });
+    res.json({ items: rows, count: rows.length, total: Number(totalRow?.count ?? 0) });
   })
 );
 

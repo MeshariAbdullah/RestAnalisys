@@ -13,6 +13,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -218,6 +219,104 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Audit logs ────────────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+    const offset = (page - 1) * limit;
+    const entityType = (req.query.entityType as string) || undefined;
+    const action = (req.query.action as string) || undefined;
+    const actorId = req.query.actorId ? Number(req.query.actorId) : undefined;
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (action) conditions.push(sql`${auditLogs.action} ilike ${"%" + action + "%"}`);
+    if (actorId) conditions.push(eq(auditLogs.actorUserId, actorId));
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [totalRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(auditLogs)
+      .where(where);
+
+    const rows = await db
+      .select({
+        id: auditLogs.id,
+        actorUserId: auditLogs.actorUserId,
+        actorRole: auditLogs.actorRole,
+        action: auditLogs.action,
+        entityType: auditLogs.entityType,
+        entityId: auditLogs.entityId,
+        beforeJson: auditLogs.beforeJson,
+        afterJson: auditLogs.afterJson,
+        ip: auditLogs.ip,
+        createdAt: auditLogs.createdAt,
+      })
+      .from(auditLogs)
+      .where(where)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    res.json({
+      items: rows,
+      total: Number(totalRow?.count ?? 0),
+      page,
+      limit,
+      totalPages: Math.ceil(Number(totalRow?.count ?? 0) / limit),
+    });
+  })
+);
+
+// ── System stats ──────────────────────────────────────────────────────────
+router.get(
+  "/system/stats",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (_req, res) => {
+    const [usersTotal] = await db.select({ count: sql<number>`count(*)` }).from(users);
+    const [assetsTotal] = await db.select({ count: sql<number>`count(*)` }).from(assets);
+    const [rentalsTotal] = await db.select({ count: sql<number>`count(*)` }).from(rentals);
+    const [disputesTotal] = await db.select({ count: sql<number>`count(*)` }).from(disputes);
+
+    const usersByRole = await db
+      .select({
+        role: users.role,
+        count: sql<number>`count(*)`,
+      })
+      .from(users)
+      .groupBy(users.role);
+
+    const assetsByStatus = await db
+      .select({
+        status: assets.status,
+        count: sql<number>`count(*)`,
+      })
+      .from(assets)
+      .groupBy(assets.status);
+
+    const rentalsByStatus = await db
+      .select({
+        status: rentals.status,
+        count: sql<number>`count(*)`,
+      })
+      .from(rentals)
+      .groupBy(rentals.status);
+
+    res.json({
+      users: { total: Number(usersTotal?.count ?? 0), byRole: usersByRole },
+      assets: { total: Number(assetsTotal?.count ?? 0), byStatus: assetsByStatus },
+      rentals: { total: Number(rentalsTotal?.count ?? 0), byStatus: rentalsByStatus },
+      disputes: { total: Number(disputesTotal?.count ?? 0) },
+    });
   })
 );
 
