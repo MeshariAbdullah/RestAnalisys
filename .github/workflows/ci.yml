@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: mlr_test
+          POSTGRES_USER: mlr
+          POSTGRES_PASSWORD: mlr_test_pass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Type check server
+        run: cd server && npx tsc --noEmit
+
+      - name: Type check client
+        run: cd client && npx tsc --noEmit
+
+      - name: Run tests
+        run: cd server && npm test
+        env:
+          DATABASE_URL: postgresql://mlr:mlr_test_pass@localhost:5432/mlr_test
+          JWT_SECRET: test-secret-ci
+          NODE_ENV: test
+
+      - name: Build client
+        run: cd client && npm run build
+
+      - name: Build server
+        run: cd server && npm run build

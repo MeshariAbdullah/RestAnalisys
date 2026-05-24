@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
+import LanguageToggle from "./LanguageToggle";
+import { useI18n } from "@/lib/i18n";
 
 interface NavItem {
   href: string;
@@ -73,6 +75,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const user: User | null = getCurrentUser();
+  const { dir } = useI18n();
 
   const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
 
@@ -82,7 +85,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen bg-neutral-50 text-neutral-900 overflow-hidden">
+    <div dir={dir} className="flex h-screen bg-neutral-50 text-neutral-900 overflow-hidden">
       <aside
         className={cn(
           "flex flex-col bg-neutral-950 text-white transition-all duration-300 shrink-0",
@@ -99,6 +102,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <p className="text-[11px] text-neutral-400">Luxury Rental Platform</p>
             </div>
           )}
+          {sidebarOpen && <LanguageToggle />}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="ml-auto p-1 rounded hover:bg-neutral-800 transition-colors"
