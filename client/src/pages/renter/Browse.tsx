@@ -34,33 +34,26 @@ type SortOption = "newest" | "price_asc" | "price_desc" | "value_desc";
 export default function Browse() {
   const [category, setCategory] = useState<string | undefined>(undefined);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sort, setSort] = useState<SortOption>("newest");
 
+  React.useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const { data, isLoading } = useQuery({
-    queryKey: ["listings", category],
-    queryFn: () => assetsApi.listings({ category, limit: 50 }),
+    queryKey: ["listings", category, sort, debouncedSearch],
+    queryFn: () =>
+      assetsApi.listings({
+        category,
+        search: debouncedSearch || undefined,
+        sort,
+        limit: 50,
+      }),
   });
 
-  let filtered = (data?.items ?? []).filter((a: Asset) =>
-    search
-      ? `${a.brand} ${a.title} ${a.model ?? ""}`
-          .toLowerCase()
-          .includes(search.toLowerCase())
-      : true
-  );
-
-  filtered = [...filtered].sort((a, b) => {
-    switch (sort) {
-      case "price_asc":
-        return (a.dailyRentalPriceHalalas ?? 0) - (b.dailyRentalPriceHalalas ?? 0);
-      case "price_desc":
-        return (b.dailyRentalPriceHalalas ?? 0) - (a.dailyRentalPriceHalalas ?? 0);
-      case "value_desc":
-        return (b.evaluatedValueHalalas ?? 0) - (a.evaluatedValueHalalas ?? 0);
-      default:
-        return 0;
-    }
-  });
+  const filtered = data?.items ?? [];
 
   return (
       <div className="p-8 max-w-7xl mx-auto">

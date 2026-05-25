@@ -330,6 +330,25 @@ router.get(
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.search) {
+      const term = `%${filter.search.toLowerCase()}%`;
+      conditions.push(
+        sql`(lower(title) like ${term} or lower(brand) like ${term} or lower(coalesce(model, '')) like ${term})`
+      );
+    }
+
+    const orderBy = (() => {
+      switch (filter.sort) {
+        case "price_asc":
+          return asc(assets.dailyRentalPriceHalalas);
+        case "price_desc":
+          return desc(assets.dailyRentalPriceHalalas);
+        case "value_desc":
+          return desc(assets.evaluatedValueHalalas);
+        default:
+          return desc(assets.updatedAt);
+      }
+    })();
 
     const rows = await db
       .select({
@@ -338,15 +357,17 @@ router.get(
         brand: assets.brand,
         model: assets.model,
         category: assets.category,
+        description: assets.description,
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
+        submissionImagesJson: assets.submissionImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
       })
       .from(assets)
       .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
+      .orderBy(orderBy)
       .limit(filter.limit);
 
     res.json({ items: rows, count: rows.length });
