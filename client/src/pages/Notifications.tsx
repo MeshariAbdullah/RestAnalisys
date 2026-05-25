@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { notificationsApi, type Notification } from "@/lib/api";
-import Layout from "@/components/Layout";
 
 function typeColor(type: string): string {
   if (type.startsWith("rental_")) return "bg-blue-100 text-blue-700";
@@ -43,7 +42,6 @@ export default function NotificationsPage() {
   const unreadCount = items.filter((n) => !n.read).length;
 
   return (
-    <Layout>
       <div className="p-8 max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -118,6 +116,5 @@ export default function NotificationsPage() {
           </div>
         )}
       </div>
-    </Layout>
   );
 }

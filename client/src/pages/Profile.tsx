@@ -17,7 +17,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { authApi, type User } from "@/lib/api";
 import { getCurrentUser, saveSession } from "@/lib/auth";
-import Layout from "@/components/Layout";
 
 function riskBadge(category: string) {
   const colors: Record<string, string> = {
@@ -104,18 +103,18 @@ export default function Profile() {
 
   if (isLoading) {
     return (
-      <Layout>
+      <>
         <div className="p-8 max-w-3xl mx-auto space-y-6">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="h-40 rounded-xl bg-neutral-100 animate-pulse" />
           ))}
         </div>
-      </Layout>
+      </>
     );
   }
 
   return (
-    <Layout>
+    <>
       <div className="p-8 max-w-3xl mx-auto space-y-6">
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-3">
           <UserIcon className="w-6 h-6" />
@@ -263,6 +262,6 @@ export default function Profile() {
           </CardContent>
         </Card>
       </div>
-    </Layout>
+    </>
   );
 }

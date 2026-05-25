@@ -7,7 +7,6 @@ import {
   Watch,
   Shirt,
   Gem,
-  SlidersHorizontal,
   ArrowUpDown,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -22,8 +21,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { assetsApi, formatSar, type Asset } from "@/lib/api";
-import Layout from "@/components/Layout";
-
 const CATEGORIES = [
   { id: undefined, label: "All", icon: Diamond },
   { id: "handbag", label: "Bags", icon: Diamond },
@@ -66,7 +63,6 @@ export default function Browse() {
   });
 
   return (
-    <Layout>
       <div className="p-8 max-w-7xl mx-auto">
         <header className="mb-8">
           <h1 className="text-3xl font-bold tracking-tight">The Collection</h1>
@@ -181,6 +177,5 @@ export default function Browse() {
           </div>
         )}
       </div>
-    </Layout>
   );
 }
