@@ -13,6 +13,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -218,6 +219,97 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+    const entityType = (req.query.entityType as string) ?? undefined;
+    const action = (req.query.action as string) ?? undefined;
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (action) conditions.push(sql`action like ${`%${action}%`}`);
+
+    const query = conditions.length > 0
+      ? db.select().from(auditLogs).where(and(...conditions))
+      : db.select().from(auditLogs);
+
+    const rows = await query
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [countResult] = conditions.length > 0
+      ? await db.select({ count: sql<number>`count(*)` }).from(auditLogs).where(and(...conditions))
+      : await db.select({ count: sql<number>`count(*)` }).from(auditLogs);
+
+    res.json({ items: rows, total: Number(countResult?.count ?? 0), limit, offset });
+  })
+);
+
+// ── Platform analytics ────────────────────────────────────────────────────
+router.get(
+  "/analytics",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const assetsByCategory = await db.execute(sql`
+      select category, count(*) as count
+      from assets
+      where status not in ('rejected', 'withdrawn')
+      group by category
+      order by count desc
+    `);
+
+    const rentalsByStatus = await db.execute(sql`
+      select status, count(*) as count
+      from rentals
+      group by status
+      order by count desc
+    `);
+
+    const topBrands = await db.execute(sql`
+      select brand, count(*) as count,
+             coalesce(sum(evaluated_value_halalas), 0) as total_value_halalas
+      from assets
+      where status not in ('rejected', 'withdrawn')
+      group by brand
+      order by count desc
+      limit 10
+    `);
+
+    const usersByRole = await db.execute(sql`
+      select role, count(*) as count
+      from users
+      group by role
+      order by count desc
+    `);
+
+    const monthlyRevenue = await db.execute(sql`
+      select to_char(date_trunc('month', created_at), 'YYYY-MM') as month,
+             sum(total_payable_halalas) as total_halalas,
+             sum(platform_fee_halalas) as fee_halalas,
+             count(*) as rentals
+      from rentals
+      where created_at >= now() - interval '12 months'
+      group by 1
+      order by 1 asc
+    `);
+
+    res.json({
+      assetsByCategory: assetsByCategory.rows,
+      rentalsByStatus: rentalsByStatus.rows,
+      topBrands: topBrands.rows,
+      usersByRole: usersByRole.rows,
+      monthlyRevenue: monthlyRevenue.rows,
+    });
   })
 );
 

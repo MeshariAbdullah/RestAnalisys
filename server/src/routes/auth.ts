@@ -14,11 +14,13 @@ import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
+import { authLimiter } from "../middleware/rateLimiter.js";
 
 const router = Router();
 
 router.post(
   "/register",
+  authLimiter,
   asyncHandler(async (req, res) => {
     const input = RegisterSchema.parse(req.body);
 
@@ -77,6 +79,7 @@ router.post(
 
 router.post(
   "/login",
+  authLimiter,
   asyncHandler(async (req, res) => {
     const { email, password } = LoginSchema.parse(req.body);
     const [user] = await db
@@ -185,7 +188,86 @@ router.get(
       trustScore: user.trustScore,
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
+      createdAt: user.createdAt,
     });
+  })
+);
+
+router.patch(
+  "/profile",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const { fullName, phoneE164 } = req.body as {
+      fullName?: string;
+      phoneE164?: string;
+    };
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (fullName && fullName.length >= 2) updates.fullName = fullName;
+    if (phoneE164) updates.phoneE164 = phoneE164;
+
+    const [updated] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning();
+
+    await recordAudit({
+      req,
+      action: "auth.profile_update",
+      entityType: "user",
+      entityId: userId,
+      after: { fullName: updated.fullName, phoneE164: updated.phoneE164 },
+    });
+
+    return res.json({
+      id: updated.id,
+      email: updated.email,
+      fullName: updated.fullName,
+      role: updated.role,
+      phoneE164: updated.phoneE164,
+      nationalId: updated.nationalId,
+      nafathVerified: updated.nafathVerified,
+      kycStatus: updated.kycStatus,
+      trustScore: updated.trustScore,
+      riskCategory: updated.riskCategory,
+    });
+  })
+);
+
+router.post(
+  "/change-password",
+  authenticate,
+  authLimiter,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const { currentPassword, newPassword } = req.body as {
+      currentPassword: string;
+      newPassword: string;
+    };
+
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: "New password must be at least 8 characters" });
+    }
+
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) return res.status(400).json({ error: "Current password is incorrect" });
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, userId));
+
+    await recordAudit({
+      req,
+      action: "auth.password_change",
+      entityType: "user",
+      entityId: userId,
+    });
+
+    return res.json({ ok: true });
   })
 );
 

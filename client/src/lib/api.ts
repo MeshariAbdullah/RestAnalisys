@@ -238,6 +238,20 @@ export interface AdminKPIs {
   sanadsUnderExecution: number;
 }
 
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Auth
 // ─────────────────────────────────────────────────────────────────────────────
@@ -253,11 +267,21 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email, password, fullName, role }),
     }),
-  me: () => request<User>("/auth/me"),
+  me: () => request<User & { createdAt?: string }>("/auth/me"),
   nafathVerify: (nationalId: string) =>
     request<{ transactionId: string; status: string }>("/auth/nafath/initiate", {
       method: "POST",
       body: JSON.stringify({ nationalId }),
+    }),
+  updateProfile: (data: { fullName?: string; phoneE164?: string }) =>
+    request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
     }),
 };
 
@@ -578,6 +602,39 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: { limit?: number; offset?: number; entityType?: string; action?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    return request<{ items: Array<Record<string, unknown>>; total: number }>(`/admin/audit-logs?${qs}`);
+  },
+  analytics: () =>
+    request<{
+      assetsByCategory: Array<{ category: string; count: string }>;
+      rentalsByStatus: Array<{ status: string; count: string }>;
+      topBrands: Array<{ brand: string; count: string; total_value_halalas: string }>;
+      usersByRole: Array<{ role: string; count: string }>;
+      monthlyRevenue: Array<{ month: string; total_halalas: string; fee_halalas: string; rentals: string }>;
+    }>("/admin/analytics"),
+};
+
+export const notificationsApi = {
+  list: (params?: { limit?: number; offset?: number; unread?: boolean }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    if (params?.unread) qs.set("unread", "true");
+    return request<{ items: Notification[]; total: number; limit: number; offset: number }>(
+      `/notifications?${qs}`
+    );
+  },
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<Notification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
 };
 
 export const healthApi = {
