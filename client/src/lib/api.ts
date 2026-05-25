@@ -322,6 +322,7 @@ export const assetsApi = {
       body: JSON.stringify(data),
     }),
   pending: () => request<Asset[]>("/assets/pending"),
+  readyToPublish: () => request<Asset[]>("/assets/ready-to-publish"),
   review: (assetId: number, approved: boolean, rejectionReason?: string) =>
     request<Asset>("/assets/review", {
       method: "POST",
@@ -342,6 +343,25 @@ export const assetsApi = {
   get: (id: number) => request<Asset>(`/assets/${id}`),
   withdraw: (id: number) =>
     request<Asset>(`/assets/${id}/withdraw`, { method: "POST" }),
+  rentals: (id: number) =>
+    request<
+      Array<{
+        id: number;
+        reference: string;
+        status: string;
+        startDate: string;
+        endDate: string;
+        durationDays: number;
+        dailyPriceHalalas: number;
+        rentalSubtotalHalalas: number;
+        totalPayableHalalas: number;
+        deliveredAt?: string;
+        returnedAt?: string;
+        closedAt?: string;
+        createdAt: string;
+        renterName?: string;
+      }>
+    >(`/assets/${id}/rentals`),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -599,14 +619,22 @@ export const adminApi = {
       "/admin/revenue-trend"
     ),
   lowTrustUsers: () => request<User[]>("/admin/risk/low-trust"),
-  users: (role?: string) => {
-    const qs = role ? `?role=${role}` : "";
-    return request<User[]>(`/admin/users${qs}`);
+  users: (params?: { role?: string; search?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.role) qs.set("role", params.role);
+    if (params?.search) qs.set("search", params.search);
+    const q = qs.toString();
+    return request<User[]>(`/admin/users${q ? `?${q}` : ""}`);
   },
   blockUser: (id: number, block: boolean, reason?: string) =>
     request<User>(`/admin/users/${id}/block`, {
       method: "POST",
       body: JSON.stringify({ block, reason }),
+    }),
+  changeRole: (id: number, role: string) =>
+    request<User>(`/admin/users/${id}/role`, {
+      method: "POST",
+      body: JSON.stringify({ role }),
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),

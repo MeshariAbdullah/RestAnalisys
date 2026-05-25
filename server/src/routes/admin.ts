@@ -134,10 +134,18 @@ router.get(
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
-    const rows = role
-      ? await query.where(eq(users.role, role as any)).limit(200)
-      : await query.limit(200);
+    const search = (req.query.search as string | undefined) ?? undefined;
+    const conditions = [];
+    if (role) conditions.push(eq(users.role, role as any));
+    if (search) {
+      const term = `%${search.toLowerCase()}%`;
+      conditions.push(
+        sql`(lower(full_name) like ${term} or lower(email) like ${term})`
+      );
+    }
+    const rows = conditions.length > 0
+      ? await db.select().from(users).where(and(...conditions)).orderBy(desc(users.createdAt)).limit(200)
+      : await db.select().from(users).orderBy(desc(users.createdAt)).limit(200);
     res.json(rows);
   })
 );
@@ -168,6 +176,43 @@ router.post(
       entityId: id,
       before: user,
       after: updated,
+    });
+    res.json(updated);
+  })
+);
+
+// ── Update a user's role ──────────────────────────────────────────────────
+router.post(
+  "/users/:id/role",
+  authenticate,
+  requirePermission("user.create_staff"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const id = Number(req.params.id);
+    const { role } = req.body as { role: string };
+    const validRoles = ["renter", "owner", "inspector", "operations", "admin"];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ error: `Invalid role. Must be one of: ${validRoles.join(", ")}` });
+    }
+    if (id === req.user!.userId) {
+      return res.status(400).json({ error: "Cannot change your own role" });
+    }
+    const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    if (!user) throw new NotFoundError("User");
+    if (user.role === "super_admin") {
+      return res.status(403).json({ error: "Cannot change super_admin role" });
+    }
+    const [updated] = await db
+      .update(users)
+      .set({ role: role as any, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    await recordAudit({
+      req,
+      action: "user.role_change",
+      entityType: "user",
+      entityId: id,
+      before: { role: user.role },
+      after: { role: updated.role },
     });
     res.json(updated);
   })

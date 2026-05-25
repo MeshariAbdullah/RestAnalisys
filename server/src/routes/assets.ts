@@ -13,7 +13,7 @@
 import { Router } from "express";
 import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
+import { assets, inspections, users, inventoryMovements, rentals } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import {
@@ -403,6 +403,37 @@ router.get(
   })
 );
 
+// ── Admin: assets ready to publish ──────────────────────────────────────────
+router.get(
+  "/ready-to-publish",
+  authenticate,
+  requirePermission("asset.approve"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select({
+        id: assets.id,
+        title: assets.title,
+        brand: assets.brand,
+        model: assets.model,
+        category: assets.category,
+        evaluatedValueHalalas: assets.evaluatedValueHalalas,
+        dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
+        studioImagesJson: assets.studioImagesJson,
+        submissionImagesJson: assets.submissionImagesJson,
+        riskCategory: assets.riskCategory,
+        status: assets.status,
+        ownerId: assets.ownerId,
+        ownerName: users.fullName,
+        updatedAt: assets.updatedAt,
+      })
+      .from(assets)
+      .leftJoin(users, eq(assets.ownerId, users.id))
+      .where(eq(assets.status, "ready_for_listing"))
+      .orderBy(asc(assets.updatedAt));
+    res.json(rows);
+  })
+);
+
 // ── Admin: publish a ready asset ────────────────────────────────────────────
 router.post(
   "/:id/publish",
@@ -431,6 +462,46 @@ router.post(
     });
 
     res.json(updated);
+  })
+);
+
+// ── Owner: rental history for an asset ─────────────────────────────────────
+router.get(
+  "/:id/rentals",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const id = Number(req.params.id);
+    const [asset] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
+    if (!asset) throw new NotFoundError("Asset");
+
+    const isAdmin = ["admin", "super_admin", "operations"].includes(req.user!.role);
+    if (!isAdmin && asset.ownerId !== req.user!.userId) {
+      throw new ForbiddenError("Not your asset");
+    }
+
+    const rows = await db
+      .select({
+        id: rentals.id,
+        reference: rentals.reference,
+        status: rentals.status,
+        startDate: rentals.startDate,
+        endDate: rentals.endDate,
+        durationDays: rentals.durationDays,
+        dailyPriceHalalas: rentals.dailyPriceHalalas,
+        rentalSubtotalHalalas: rentals.rentalSubtotalHalalas,
+        totalPayableHalalas: rentals.totalPayableHalalas,
+        deliveredAt: rentals.deliveredAt,
+        returnedAt: rentals.returnedAt,
+        closedAt: rentals.closedAt,
+        createdAt: rentals.createdAt,
+        renterName: users.fullName,
+      })
+      .from(rentals)
+      .leftJoin(users, eq(rentals.renterId, users.id))
+      .where(eq(rentals.assetId, id))
+      .orderBy(desc(rentals.createdAt));
+
+    res.json(rows);
   })
 );
 
