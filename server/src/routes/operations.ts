@@ -153,6 +153,7 @@ router.get(
         title: assets.title,
         brand: assets.brand,
         status: assets.status,
+        category: assets.category,
         warehouseLocationCode: assets.warehouseLocationCode,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         updatedAt: assets.updatedAt,

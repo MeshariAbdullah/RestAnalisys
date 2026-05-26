@@ -13,6 +13,7 @@ import {
   Receipt,
   AlertTriangle,
   Users as UsersIcon,
+  User as UserIcon,
   LogOut,
   Menu,
   X,
@@ -53,6 +54,7 @@ const NAV: NavItem[] = [
   { href: "/admin", label: "Admin Dashboard", icon: LayoutDashboard, roles: ["admin", "super_admin"] },
   { href: "/admin/approvals", label: "Asset Approvals", icon: ClipboardCheck, roles: ["admin", "super_admin"] },
   { href: "/admin/users", label: "Users", icon: UsersIcon, roles: ["admin", "super_admin"] },
+  { href: "/admin/rentals", label: "Rentals", icon: FileText, roles: ["admin", "super_admin"] },
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
@@ -130,7 +132,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="p-3 border-t border-neutral-800">
+        <div className="p-3 border-t border-neutral-800 space-y-2">
+          <Link href="/profile">
+            <a
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+                location === "/profile"
+                  ? "bg-amber-500 text-neutral-950 font-medium"
+                  : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+              )}
+            >
+              <UserIcon className="w-5 h-5 shrink-0" />
+              {sidebarOpen && <span>My Profile</span>}
+            </a>
+          </Link>
           {sidebarOpen ? (
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">

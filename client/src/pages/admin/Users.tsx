@@ -1,9 +1,17 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users as UsersIcon, ShieldAlert, ShieldCheck } from "lucide-react";
+import {
+  Users as UsersIcon,
+  ShieldAlert,
+  ShieldCheck,
+  Search,
+  BadgeCheck,
+  AlertOctagon,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -23,11 +31,35 @@ function riskColor(c: string): string {
 export default function UsersPage() {
   const qc = useQueryClient();
   const [role, setRole] = useState<string>("all");
+  const [search, setSearch] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users", role],
     queryFn: () => adminApi.users(role === "all" ? undefined : role),
   });
+
+  const filtered = useMemo(() => {
+    if (!data) return [];
+    if (!search) return data;
+    const q = search.toLowerCase();
+    return data.filter(
+      (u) =>
+        u.fullName.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q)
+    );
+  }, [data, search]);
+
+  const stats = useMemo(() => {
+    const users = data ?? [];
+    return {
+      total: users.length,
+      verified: users.filter((u) => u.nafathVerified).length,
+      blocked: users.filter((u) => u.isBlocked).length,
+      highRisk: users.filter(
+        (u) => u.riskCategory === "high" || u.riskCategory === "ultra_high"
+      ).length,
+    };
+  }, [data]);
 
   async function toggleBlock(u: User) {
     const block = !u.isBlocked;
@@ -46,7 +78,55 @@ export default function UsersPage() {
         All accounts across the platform.
       </p>
 
-      <div className="flex items-center gap-3 mb-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-sm text-neutral-500 mb-1">
+              <UsersIcon className="w-4 h-4" />
+              Total
+            </div>
+            <p className="text-2xl font-bold">{stats.total}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-sm text-green-600 mb-1">
+              <BadgeCheck className="w-4 h-4" />
+              Nafath verified
+            </div>
+            <p className="text-2xl font-bold">{stats.verified}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-sm text-red-600 mb-1">
+              <ShieldAlert className="w-4 h-4" />
+              Blocked
+            </div>
+            <p className="text-2xl font-bold">{stats.blocked}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-sm text-orange-600 mb-1">
+              <AlertOctagon className="w-4 h-4" />
+              High risk
+            </div>
+            <p className="text-2xl font-bold">{stats.highRisk}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex flex-col md:flex-row items-center gap-3 mb-5">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+          <Input
+            placeholder="Search by name or email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
         <Select value={role} onValueChange={setRole}>
           <SelectTrigger className="w-48">
             <SelectValue />
@@ -63,17 +143,24 @@ export default function UsersPage() {
       </div>
 
       {isLoading ? (
-        <p className="text-neutral-500">Loading…</p>
-      ) : !data || data.length === 0 ? (
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-14 rounded-lg bg-neutral-100 animate-pulse"
+            />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">
             <UsersIcon className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
-            No users found.
+            {search ? "No users match your search." : "No users found."}
           </CardContent>
         </Card>
       ) : (
         <Card>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b bg-neutral-50 text-left">
                 <tr>
@@ -87,8 +174,11 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.map((u) => (
-                  <tr key={u.id} className="border-b last:border-0">
+                {filtered.map((u) => (
+                  <tr
+                    key={u.id}
+                    className="border-b last:border-0 hover:bg-neutral-50/50"
+                  >
                     <td className="p-4 font-medium">{u.fullName}</td>
                     <td className="p-4 text-neutral-600">{u.email}</td>
                     <td className="p-4">

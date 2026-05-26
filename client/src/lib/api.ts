@@ -545,7 +545,7 @@ export const operationsApi = {
       body: JSON.stringify(data),
     }),
   inventory: () =>
-    request<Array<{ id: number; title: string; brand: string; status: string }>>(
+    request<Array<{ id: number; title: string; brand: string; status: string; category: string; warehouseLocationCode: string | null; evaluatedValueHalalas: number | null; updatedAt: string }>>(
       "/operations/inventory"
     ),
   alerts: () =>
