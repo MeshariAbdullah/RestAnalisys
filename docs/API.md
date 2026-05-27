@@ -119,6 +119,31 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | POST   | `/users/:id/block`    | admin / super_admin   | Block or unblock a user                |
 | POST   | `/users`              | super_admin           | Create staff users                     |
 
+## Uploads — `/api/uploads`
+
+| Method | Path               | Roles                      | Purpose                                |
+| ------ | ------------------ | -------------------------- | -------------------------------------- |
+| POST   | `/presigned-url`   | authenticated (role-based) | Get a presigned upload URL for S3      |
+| POST   | `/presigned-urls`  | authenticated (role-based) | Batch presigned URLs (up to 20 files)  |
+
+Upload folders are role-restricted:
+- `submissions` → owner
+- `studio` → inspector, operations, admin, super_admin
+- `inspections` → inspector, admin, super_admin
+- `contracts` → admin, super_admin
+- `disputes` → renter, owner, admin, super_admin
+
+## Analytics — `/api/analytics`
+
+| Method | Path                | Roles               | Purpose                                |
+| ------ | ------------------- | -------------------- | -------------------------------------- |
+| GET    | `/overview`         | finance.read         | Platform overview (users, assets, etc) |
+| GET    | `/asset-breakdown`  | finance.read         | Assets by category and status          |
+| GET    | `/rental-breakdown` | finance.read         | Rentals by status and monthly trend    |
+| GET    | `/top-assets`       | finance.read         | Top 10 assets by rental count          |
+| GET    | `/user-breakdown`   | user.read            | Users by role, KYC, risk category      |
+| GET    | `/shipment-stats`   | operations.read      | Shipments by status and direction      |
+
 ## Health
 
 | Method | Path          | Roles  | Purpose                                |

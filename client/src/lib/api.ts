@@ -266,12 +266,32 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: {
+    category?: string;
+    brand?: string;
+    search?: string;
+    minDaily?: number;
+    maxDaily?: number;
+    minValue?: number;
+    maxValue?: number;
+    riskCategory?: string;
+    sortBy?: "price_asc" | "price_desc" | "newest" | "value_asc" | "value_desc";
+    cursor?: number;
+    limit?: number;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.minDaily) qs.set("minDaily", String(params.minDaily));
+    if (params?.maxDaily) qs.set("maxDaily", String(params.maxDaily));
+    if (params?.minValue) qs.set("minValue", String(params.minValue));
+    if (params?.maxValue) qs.set("maxValue", String(params.maxValue));
+    if (params?.riskCategory) qs.set("riskCategory", params.riskCategory);
+    if (params?.sortBy) qs.set("sortBy", params.sortBy);
+    if (params?.cursor) qs.set("cursor", String(params.cursor));
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    return request<{ items: Asset[]; count: number; nextCursor: number | null; hasMore: boolean }>(`/assets/listings?${qs}`);
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
@@ -582,6 +602,71 @@ export const adminApi = {
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Uploads
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const uploadsApi = {
+  getPresignedUrl: (folder: string, filename: string, mimeType: string) =>
+    request<{ uploadUrl: string; publicUrl: string; key: string; expiresIn: number }>(
+      "/uploads/presigned-url",
+      {
+        method: "POST",
+        body: JSON.stringify({ folder, filename, mimeType }),
+      }
+    ),
+  getBatchPresignedUrls: (
+    files: Array<{ folder: string; filename: string; mimeType: string }>
+  ) =>
+    request<{ uploads: Array<{ filename: string; uploadUrl: string; publicUrl: string; key: string }> }>(
+      "/uploads/presigned-urls",
+      {
+        method: "POST",
+        body: JSON.stringify({ files }),
+      }
+    ),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Analytics
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const analyticsApi = {
+  overview: () =>
+    request<{
+      users: { total: number; newThisMonth: number };
+      assets: { total: number };
+      rentals: { total: number; active: number; newThisMonth: number };
+      disputes: { open: number };
+      revenue: { totalPlatformFeeHalalas: number; thisMonthPlatformFeeHalalas: number };
+    }>("/analytics/overview"),
+  assetBreakdown: () =>
+    request<{
+      byCategory: Array<{ category: string; count: number }>;
+      byStatus: Array<{ status: string; count: number }>;
+    }>("/analytics/asset-breakdown"),
+  rentalBreakdown: () =>
+    request<{
+      byStatus: Array<{ status: string; count: number }>;
+      byMonth: Array<{ month: string; count: number; totalRevenue: string }>;
+    }>("/analytics/rental-breakdown"),
+  topAssets: () =>
+    request<{
+      topByRentals: Array<{ assetId: number; assetTitle: string; brand: string; rentalCount: number; totalRevenue: string }>;
+    }>("/analytics/top-assets"),
+  userBreakdown: () =>
+    request<{
+      byRole: Array<{ role: string; count: number }>;
+      byKyc: Array<{ kycStatus: string; count: number }>;
+      byRiskCategory: Array<{ riskCategory: string; count: number }>;
+    }>("/analytics/user-breakdown"),
+  shipmentStats: () =>
+    request<{
+      byStatus: Array<{ status: string; count: number }>;
+      byDirection: Array<{ direction: string; count: number }>;
+    }>("/analytics/shipment-stats"),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
