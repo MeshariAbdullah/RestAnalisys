@@ -11,10 +11,13 @@
  *   /api/disputes     — dispute creation + resolution
  *   /api/operations   — shipments, inventory, alerts
  *   /api/admin        — KPIs, risk monitoring, user management
+ *   /api/uploads      — file uploads (images)
  */
 
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import path from "path";
 import dotenv from "dotenv";
 
 import authRouter from "./routes/auth.js";
@@ -26,12 +29,21 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import uploadsRouter from "./routes/uploads.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { globalLimiter, authLimiter, paymentLimiter } from "./middleware/rateLimiter.js";
+import { requestLogger } from "./middleware/requestLogger.js";
+import { startScheduler } from "./services/scheduler.js";
+import { db } from "./db/index.js";
+import { sql } from "drizzle-orm";
 
 dotenv.config();
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "3001");
+
+// Security headers
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 
 app.use(
   cors({
@@ -42,17 +54,44 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
+// Request logging
+app.use(requestLogger);
+
+// Rate limiting
+app.use("/api/", globalLimiter);
+app.use("/api/auth", authLimiter);
+app.use("/api/payments", paymentLimiter);
+
+// Static file serving for uploads
+const uploadDir = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
+app.use("/uploads", express.static(uploadDir));
+
 // Health
-app.get("/api/health", (_req, res) => {
+app.get("/api/health", async (_req, res) => {
+  let dbOk = false;
+  try {
+    await db.execute(sql`SELECT 1`);
+    dbOk = true;
+  } catch {
+    /* db unreachable */
+  }
+
   res.json({
-    ok: true,
+    ok: dbOk,
     service: "mlr-platform",
-    version: "1.0.0",
+    version: "1.1.0",
+    uptime: Math.floor(process.uptime()),
+    memory: {
+      heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      rss: Math.round(process.memoryUsage().rss / 1024 / 1024),
+    },
+    database: dbOk ? "connected" : "unreachable",
     integrations: {
       nafath: !!process.env.NAFATH_API_KEY,
       nafith: !!process.env.NAFITH_API_KEY,
       paymentGateway: !!process.env.PAYMENT_GATEWAY_API_KEY,
       zatca: !!process.env.ZATCA_API_KEY,
+      smtp: !!process.env.SMTP_HOST,
     },
     timestamp: new Date().toISOString(),
   });
@@ -67,6 +106,7 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/uploads", uploadsRouter);
 
 // 404
 app.use((req, res) => {
@@ -77,10 +117,14 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 app.listen(PORT, () => {
-  console.log(`🇸🇦  Managed Luxury Rental Platform API running on :${PORT}`);
+  console.log(`  MLR Platform API running on :${PORT}`);
   console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   SMTP:     ${process.env.SMTP_HOST ? "configured" : "dev (console)"}`);
+
+  // Start background jobs
+  startScheduler();
 });
 
 export default app;

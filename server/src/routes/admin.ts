@@ -13,6 +13,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -218,6 +219,100 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Audit log ─────────────────────────────────────────────────────────────
+router.get(
+  "/audit-log",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Number(req.query.offset) || 0;
+    const entityType = req.query.entityType as string | undefined;
+
+    const conditions = entityType
+      ? eq(auditLogs.entityType, entityType)
+      : undefined;
+
+    const rows = await db
+      .select({
+        id: auditLogs.id,
+        actorUserId: auditLogs.actorUserId,
+        actorRole: auditLogs.actorRole,
+        action: auditLogs.action,
+        entityType: auditLogs.entityType,
+        entityId: auditLogs.entityId,
+        createdAt: auditLogs.createdAt,
+      })
+      .from(auditLogs)
+      .where(conditions)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [countResult] = await db
+      .select({ total: sql<number>`count(*)` })
+      .from(auditLogs)
+      .where(conditions);
+
+    res.json({
+      items: rows,
+      total: Number(countResult?.total ?? 0),
+      limit,
+      offset,
+    });
+  })
+);
+
+// ── Platform statistics (for dashboard charts) ────────────────────────────
+router.get(
+  "/stats/rental-status",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select status, count(*) as count
+      from rentals
+      group by status
+      order by count desc
+    `);
+    res.json(rows.rows);
+  })
+);
+
+router.get(
+  "/stats/asset-categories",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select category, count(*) as count,
+             coalesce(sum(evaluated_value_halalas), 0) as total_value_halalas
+      from assets
+      where status not in ('rejected', 'withdrawn')
+      group by category
+      order by count desc
+    `);
+    res.json(rows.rows);
+  })
+);
+
+router.get(
+  "/stats/user-growth",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as day,
+             count(*) as new_users
+      from users
+      where created_at >= now() - interval '30 days'
+      group by 1
+      order by 1 asc
+    `);
+    res.json(rows.rows);
   })
 );
 

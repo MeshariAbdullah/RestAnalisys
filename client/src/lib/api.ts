@@ -560,6 +560,16 @@ export const operationsApi = {
 // Admin
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface AuditLogEntry {
+  id: number;
+  actorUserId: number | null;
+  actorRole: string | null;
+  action: string;
+  entityType: string;
+  entityId: number | null;
+  createdAt: string;
+}
+
 export const adminApi = {
   kpis: () => request<AdminKPIs>("/admin/kpis"),
   revenueTrend: () =>
@@ -578,10 +588,49 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLog: (params?: { limit?: number; offset?: number; entityType?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    return request<{ items: AuditLogEntry[]; total: number; limit: number; offset: number }>(
+      `/admin/audit-log?${qs}`
+    );
+  },
+  rentalStatusStats: () =>
+    request<Array<{ status: string; count: string }>>("/admin/stats/rental-status"),
+  assetCategoryStats: () =>
+    request<Array<{ category: string; count: string; total_value_halalas: string }>>(
+      "/admin/stats/asset-categories"
+    ),
+  userGrowth: () =>
+    request<Array<{ day: string; new_users: string }>>("/admin/stats/user-growth"),
+};
+
+export const uploadsApi = {
+  uploadImages: async (files: File[]): Promise<{ urls: string[]; count: number }> => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append("images", file));
+    return request("/uploads/images", { method: "POST", body: formData });
+  },
+  uploadImage: async (file: File): Promise<{ url: string }> => {
+    const formData = new FormData();
+    formData.append("image", file);
+    return request("/uploads/image", { method: "POST", body: formData });
+  },
 };
 
 export const healthApi = {
-  check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+  check: () =>
+    request<{
+      ok: boolean;
+      service: string;
+      version: string;
+      database: string;
+      uptime: number;
+      memory: { heapUsed: number; rss: number };
+      integrations: Record<string, boolean>;
+    }>("/health"),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
