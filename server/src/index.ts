@@ -17,6 +17,8 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 
+dotenv.config();
+
 import authRouter from "./routes/auth.js";
 import assetsRouter from "./routes/assets.js";
 import inspectionsRouter from "./routes/inspections.js";
@@ -27,8 +29,15 @@ import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { rateLimiter } from "./middleware/rateLimiter.js";
+import { validateEnv, printEnvReport } from "./utils/envValidation.js";
 
-dotenv.config();
+const envReport = validateEnv();
+printEnvReport(envReport);
+if (!envReport.valid) {
+  console.error("  Aborting: fix the environment errors above.");
+  process.exit(1);
+}
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "3001");
@@ -58,7 +67,11 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRouter);
+app.use(
+  "/api/auth",
+  rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 30, keyPrefix: "auth" }),
+  authRouter
+);
 app.use("/api/assets", assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
 app.use("/api/rentals", rentalsRouter);

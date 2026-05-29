@@ -578,6 +578,17 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: { limit?: number; offset?: number; entityType?: string; action?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    return request<{ items: Array<Record<string, unknown>>; total: number; limit: number; offset: number }>(
+      `/admin/audit-logs?${qs}`
+    );
+  },
+  overdueRentals: () => request<Rental[]>("/admin/rentals/overdue"),
 };
 
 export const healthApi = {

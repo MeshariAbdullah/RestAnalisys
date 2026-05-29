@@ -13,6 +13,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -216,6 +217,68 @@ router.get(
       .select()
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
+      .limit(100);
+    res.json(rows);
+  })
+);
+
+// ── Audit logs ────────────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const entityType = req.query.entityType as string | undefined;
+    const entityId = req.query.entityId ? Number(req.query.entityId) : undefined;
+    const action = req.query.action as string | undefined;
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Number(req.query.offset) || 0;
+
+    let query = db.select().from(auditLogs).$dynamic();
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (entityId) conditions.push(eq(auditLogs.entityId, entityId));
+    if (action) conditions.push(eq(auditLogs.action, action));
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+
+    const rows = await query
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [total] = conditions.length > 0
+      ? await db.select({ count: sql<number>`count(*)` }).from(auditLogs).where(and(...conditions))
+      : await db.select({ count: sql<number>`count(*)` }).from(auditLogs);
+
+    res.json({
+      items: rows,
+      total: Number(total?.count ?? 0),
+      limit,
+      offset,
+    });
+  })
+);
+
+// ── Overdue rentals (active past end date) ────────────────────────────────
+router.get(
+  "/rentals/overdue",
+  authenticate,
+  requirePermission("rental.read.any"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select()
+      .from(rentals)
+      .where(
+        and(
+          eq(rentals.status, "active"),
+          sql`end_date < current_date`
+        )
+      )
+      .orderBy(rentals.endDate)
       .limit(100);
     res.json(rows);
   })

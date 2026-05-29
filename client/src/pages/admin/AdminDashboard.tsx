@@ -9,6 +9,8 @@ import {
   FileSignature,
   AlertOctagon,
   TrendingUp,
+  Shield,
+  Clock,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { adminApi, formatSar } from "@/lib/api";
@@ -118,6 +120,55 @@ export default function AdminDashboard() {
                 <p className="text-2xl font-bold">
                   {isLoading ? "…" : data?.sanadsUnderExecution ?? 0}
                 </p>
+              </CardContent>
+            </Card>
+          </a>
+        </Link>
+      </div>
+
+      <h2 className="text-lg font-semibold mt-8 mb-4">Tools</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Link href="/admin/audit">
+          <a>
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardContent className="p-6 flex items-center gap-4">
+                <Shield className="w-8 h-8 text-blue-600 shrink-0" />
+                <div>
+                  <p className="font-semibold">Audit logs</p>
+                  <p className="text-sm text-neutral-500">
+                    Immutable record of all platform actions
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </a>
+        </Link>
+        <Link href="/admin/overdue">
+          <a>
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardContent className="p-6 flex items-center gap-4">
+                <Clock className="w-8 h-8 text-red-500 shrink-0" />
+                <div>
+                  <p className="font-semibold">Overdue rentals</p>
+                  <p className="text-sm text-neutral-500">
+                    Active rentals past return date
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </a>
+        </Link>
+        <Link href="/admin/finance">
+          <a>
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardContent className="p-6 flex items-center gap-4">
+                <TrendingUp className="w-8 h-8 text-amber-600 shrink-0" />
+                <div>
+                  <p className="font-semibold">Financial overview</p>
+                  <p className="text-sm text-neutral-500">
+                    Revenue, fees and trend charts
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </a>

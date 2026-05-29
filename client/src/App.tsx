@@ -1,6 +1,7 @@
 import React from "react";
 import { Route, Switch, Redirect } from "wouter";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
@@ -35,9 +36,12 @@ import UsersPage from "./pages/admin/Users";
 import DisputesPage from "./pages/admin/Disputes";
 import FinancialOverview from "./pages/admin/FinancialOverview";
 import SanadTracking from "./pages/admin/SanadTracking";
+import AuditLogs from "./pages/admin/AuditLogs";
+import OverdueRentals from "./pages/admin/OverdueRentals";
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <Switch>
       {/* Public */}
       <Route path="/" component={Landing} />
@@ -129,10 +133,17 @@ export default function App() {
       <Route path="/admin/sanad">
         <ProtectedRoute roles={["admin", "super_admin"]}><SanadTracking /></ProtectedRoute>
       </Route>
+      <Route path="/admin/audit">
+        <ProtectedRoute roles={["admin", "super_admin"]}><AuditLogs /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/overdue">
+        <ProtectedRoute roles={["admin", "super_admin"]}><OverdueRentals /></ProtectedRoute>
+      </Route>
 
       <Route>
         <Redirect to="/" />
       </Route>
     </Switch>
+    </ErrorBoundary>
   );
 }
