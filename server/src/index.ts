@@ -31,6 +31,7 @@ import adminRouter from "./routes/admin.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { rateLimiter } from "./middleware/rateLimiter.js";
 import { validateEnv, printEnvReport } from "./utils/envValidation.js";
+import { startScheduler } from "./services/scheduler.js";
 
 const envReport = validateEnv();
 printEnvReport(envReport);
@@ -90,10 +91,11 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 app.listen(PORT, () => {
-  console.log(`🇸🇦  Managed Luxury Rental Platform API running on :${PORT}`);
+  console.log(`  Managed Luxury Rental Platform API running on :${PORT}`);
   console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
+  startScheduler();
 });
 
 export default app;
