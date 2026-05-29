@@ -164,6 +164,14 @@ router.post(
     const input = RentalCreateSchema.parse(req.body);
     const renterId = req.user!.userId;
 
+    const today = new Date().toISOString().slice(0, 10);
+    if (input.startDate < today) {
+      throw new LegalStateError("Start date cannot be in the past");
+    }
+    if (input.endDate <= input.startDate) {
+      throw new LegalStateError("End date must be after start date");
+    }
+
     const [asset] = await db.select().from(assets).where(eq(assets.id, input.assetId)).limit(1);
     if (!asset) throw new NotFoundError("Asset");
     if (asset.status !== "listed")
