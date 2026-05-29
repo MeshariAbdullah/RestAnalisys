@@ -160,6 +160,45 @@ router.post(
   })
 );
 
+router.post(
+  "/change-password",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const { currentPassword, newPassword } = req.body as {
+      currentPassword: string;
+      newPassword: string;
+    };
+    if (!newPassword || newPassword.length < 8) {
+      throw new ConflictError("New password must be at least 8 characters");
+    }
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, req.user!.userId))
+      .limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) throw new UnauthorizedError("Current password is incorrect");
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await db
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(users.id, user.id));
+
+    await recordAudit({
+      req,
+      action: "auth.password_changed",
+      entityType: "user",
+      entityId: user.id,
+    });
+
+    return res.json({ ok: true });
+  })
+);
+
 router.get(
   "/me",
   authenticate,
