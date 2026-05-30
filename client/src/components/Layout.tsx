@@ -19,9 +19,11 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  BarChart3,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
+import NotificationBell from "./NotificationBell";
 
 interface NavItem {
   href: string;
@@ -56,6 +58,7 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/analytics", label: "Analytics", icon: BarChart3, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
@@ -162,7 +165,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {user && (
+          <header className="flex items-center justify-end px-6 py-2 border-b border-neutral-200 bg-white shrink-0">
+            <NotificationBell />
+          </header>
+        )}
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
     </div>
   );
 }

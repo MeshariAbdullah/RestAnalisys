@@ -1,5 +1,6 @@
 /**
- * Admin dashboard routes — financial overview, risk monitoring, user management.
+ * Admin dashboard routes — financial overview, risk monitoring, user management,
+ * platform analytics, and overdue management.
  */
 
 import { Router } from "express";
@@ -13,12 +14,15 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  operationalAlerts,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { detectOverdueRentals } from "../services/overdueDetector.js";
 
 const router = Router();
 
@@ -218,6 +222,147 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Platform analytics — category breakdown ───────────────────────────────
+router.get(
+  "/analytics/categories",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select category,
+             count(*) as total,
+             count(*) filter (where status = 'listed') as listed,
+             count(*) filter (where status = 'rented_out') as rented,
+             coalesce(avg(evaluated_value_halalas), 0)::bigint as avg_value_halalas,
+             coalesce(sum(daily_rental_price_halalas), 0)::bigint as total_daily_revenue_halalas
+      from assets
+      group by category
+      order by total desc
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Platform analytics — rental status distribution ───────────────────────
+router.get(
+  "/analytics/rental-status",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select status, count(*) as count
+      from rentals
+      group by status
+      order by count desc
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Platform analytics — top renters ──────────────────────────────────────
+router.get(
+  "/analytics/top-renters",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select r.renter_id,
+             u.full_name,
+             u.email,
+             u.trust_score,
+             count(*) as total_rentals,
+             count(*) filter (where r.status in ('closed','closed_with_penalty')) as completed,
+             coalesce(sum(r.total_payable_halalas), 0)::bigint as total_spent_halalas
+      from rentals r
+      join users u on u.id = r.renter_id
+      group by r.renter_id, u.full_name, u.email, u.trust_score
+      order by total_rentals desc
+      limit 20
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Platform analytics — top owners by revenue ────────────────────────────
+router.get(
+  "/analytics/top-owners",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select a.owner_id,
+             u.full_name,
+             u.email,
+             count(distinct a.id) as total_assets,
+             count(distinct r.id) as total_rentals,
+             coalesce(sum(r.rental_subtotal_halalas), 0)::bigint as total_revenue_halalas
+      from assets a
+      join users u on u.id = a.owner_id
+      left join rentals r on r.asset_id = a.id and r.status in ('closed','closed_with_penalty','active')
+      group by a.owner_id, u.full_name, u.email
+      order by total_revenue_halalas desc
+      limit 20
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Manual overdue detection trigger ──────────────────────────────────────
+router.post(
+  "/overdue/detect",
+  authenticate,
+  requirePermission("operations.update"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const alertCount = await detectOverdueRentals();
+    await recordAudit({
+      req,
+      action: "admin.overdue_detection",
+      entityType: "system",
+      after: { alertCount },
+    });
+    res.json({ alertsCreated: alertCount });
+  })
+);
+
+// ── Audit log viewer ─────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const entityType = req.query.entityType as string | undefined;
+
+    const conditions = entityType
+      ? eq(auditLogs.entityType, entityType)
+      : undefined;
+
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(conditions)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit);
+    res.json(rows);
+  })
+);
+
+// ── System alerts summary ────────────────────────────────────────────────
+router.get(
+  "/alerts/summary",
+  authenticate,
+  requirePermission("operations.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select type, severity, status, count(*) as count
+      from operational_alerts
+      group by type, severity, status
+      order by count desc
+    `);
+    res.json(rows.rows);
   })
 );
 

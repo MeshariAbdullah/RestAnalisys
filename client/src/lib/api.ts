@@ -585,6 +585,84 @@ export const healthApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  channel: string;
+  title: string;
+  body: string;
+  metadataJson: Record<string, unknown> | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (limit = 50) =>
+    request<AppNotification[]>(`/notifications?limit=${limit}`),
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin Analytics (extended)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const analyticsApi = {
+  categories: () =>
+    request<Array<{
+      category: string;
+      total: string;
+      listed: string;
+      rented: string;
+      avg_value_halalas: string;
+    }>>("/admin/analytics/categories"),
+  rentalStatus: () =>
+    request<Array<{ status: string; count: string }>>("/admin/analytics/rental-status"),
+  topRenters: () =>
+    request<Array<{
+      renter_id: number;
+      full_name: string;
+      email: string;
+      trust_score: number;
+      total_rentals: string;
+      completed: string;
+      total_spent_halalas: string;
+    }>>("/admin/analytics/top-renters"),
+  topOwners: () =>
+    request<Array<{
+      owner_id: number;
+      full_name: string;
+      email: string;
+      total_assets: string;
+      total_rentals: string;
+      total_revenue_halalas: string;
+    }>>("/admin/analytics/top-owners"),
+  alertsSummary: () =>
+    request<Array<{
+      type: string;
+      severity: string;
+      status: string;
+      count: string;
+    }>>("/admin/alerts/summary"),
+  auditLogs: (limit = 50, entityType?: string) => {
+    const qs = new URLSearchParams({ limit: String(limit) });
+    if (entityType) qs.set("entityType", entityType);
+    return request<Array<Record<string, unknown>>>(`/admin/audit-logs?${qs}`);
+  },
+  triggerOverdueDetection: () =>
+    request<{ alertsCreated: number }>("/admin/overdue/detect", {
+      method: "POST",
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Money helpers (frontend copies of the backend constants)
 // ─────────────────────────────────────────────────────────────────────────────
 
