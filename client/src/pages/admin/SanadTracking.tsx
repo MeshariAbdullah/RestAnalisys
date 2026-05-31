@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { legalApi, formatSar, type SanadRecord } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 function statusColor(s: string): string {
   if (s === "issued" || s === "active") return "bg-blue-100 text-blue-700";
@@ -18,6 +19,7 @@ function statusColor(s: string): string {
 
 export default function SanadTracking() {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [error, setError] = useState<string | null>(null);
 
   const allQuery = useQuery({
@@ -38,8 +40,10 @@ export default function SanadTracking() {
       await legalApi.executeSanad(s.id, reason);
       await qc.invalidateQueries({ queryKey: ["sanads"] });
       await qc.invalidateQueries({ queryKey: ["sanads-enforcement"] });
+      toast({ title: "Execution filed", description: "Sanad sent to Najiz for enforcement.", variant: "destructive" });
     } catch (err) {
       setError((err as Error).message);
+      toast({ title: "Execution failed", description: (err as Error).message, variant: "destructive" });
     }
   }
 
@@ -49,8 +53,10 @@ export default function SanadTracking() {
     try {
       await legalApi.dischargeSanad(s.id);
       await qc.invalidateQueries({ queryKey: ["sanads"] });
+      toast({ title: "Sanad discharged", variant: "success" });
     } catch (err) {
       setError((err as Error).message);
+      toast({ title: "Discharge failed", description: (err as Error).message, variant: "destructive" });
     }
   }
 
