@@ -2,15 +2,39 @@ import React from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Truck, AlertTriangle, PackageSearch, Activity } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { operationsApi } from "@/lib/api";
+
+const STATUS_COLORS: Record<string, string> = {
+  listed: "#10b981",
+  rented_out: "#3b82f6",
+  pending_approval: "#f59e0b",
+  in_inspection: "#8b5cf6",
+  reserved: "#ec4899",
+  completed: "#6b7280",
+  withdrawn: "#9ca3af",
+};
 
 export default function OpsDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["ops-summary"],
     queryFn: () => operationsApi.summary(),
   });
+
+  const inventoryChart = (data?.inventoryCounts ?? []).map((c) => ({
+    name: c.status.replace(/_/g, " "),
+    count: Number(c.count),
+    fill: STATUS_COLORS[c.status] ?? "#d4d4d4",
+  }));
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -26,7 +50,7 @@ export default function OpsDashboard() {
               <Activity className="w-4 h-4" /> Active rentals
             </div>
             <p className="text-3xl font-bold">
-              {isLoading ? "…" : data?.activeRentals ?? 0}
+              {isLoading ? "..." : data?.activeRentals ?? 0}
             </p>
           </CardContent>
         </Card>
@@ -36,7 +60,7 @@ export default function OpsDashboard() {
               <AlertTriangle className="w-4 h-4" /> Late rentals
             </div>
             <p className="text-3xl font-bold text-amber-600">
-              {isLoading ? "…" : data?.lateRentals ?? 0}
+              {isLoading ? "..." : data?.lateRentals ?? 0}
             </p>
           </CardContent>
         </Card>
@@ -46,25 +70,39 @@ export default function OpsDashboard() {
               <AlertTriangle className="w-4 h-4" /> Open alerts
             </div>
             <p className="text-3xl font-bold text-red-600">
-              {isLoading ? "…" : data?.openAlerts ?? 0}
+              {isLoading ? "..." : data?.openAlerts ?? 0}
             </p>
           </CardContent>
         </Card>
       </div>
 
-      <h2 className="text-lg font-semibold mb-3">Inventory by status</h2>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-        {(data?.inventoryCounts ?? []).map((c) => (
-          <Card key={c.status}>
-            <CardContent className="p-4">
-              <p className="text-xs text-neutral-500">
-                {c.status.replace(/_/g, " ")}
-              </p>
-              <p className="font-bold text-xl mt-1">{c.count}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* Inventory chart */}
+      <h2 className="text-lg font-semibold mb-3">Inventory by Status</h2>
+      <Card className="mb-8">
+        <CardContent className="p-6">
+          {inventoryChart.length === 0 ? (
+            <p className="text-sm text-neutral-500">No inventory data.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={inventoryChart} layout="vertical">
+                <XAxis type="number" tick={{ fontSize: 11 }} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  tick={{ fontSize: 11 }}
+                  width={140}
+                />
+                <Tooltip />
+                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                  {inventoryChart.map((entry, i) => (
+                    <Cell key={i} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <QuickLink

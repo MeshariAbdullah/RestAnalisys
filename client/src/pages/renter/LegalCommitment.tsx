@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { legalApi, paymentsApi, formatSar } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 export default function LegalCommitmentPage({
   commitmentId,
@@ -14,6 +15,7 @@ export default function LegalCommitmentPage({
 }) {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [lang, setLang] = useState<"en" | "ar">("en");
   const [accepted, setAccepted] = useState(false);
   const [signing, setSigning] = useState(false);
@@ -31,8 +33,10 @@ export default function LegalCommitmentPage({
     try {
       await legalApi.sign(commitmentId);
       await qc.invalidateQueries({ queryKey: ["commitment", commitmentId] });
+      toast({ title: "Contract signed", description: "Sanad issued. Proceed to payment.", variant: "success" });
     } catch (err) {
       setError((err as Error).message ?? "Signing failed");
+      toast({ title: "Signing failed", description: (err as Error).message, variant: "destructive" });
     } finally {
       setSigning(false);
     }
@@ -44,9 +48,11 @@ export default function LegalCommitmentPage({
     setError(null);
     try {
       await paymentsApi.charge(data.rental.id);
+      toast({ title: "Payment confirmed", description: "Your rental is now confirmed!", variant: "success" });
       navigate("/my-rentals");
     } catch (err) {
       setError((err as Error).message ?? "Payment failed");
+      toast({ title: "Payment failed", description: (err as Error).message, variant: "destructive" });
     } finally {
       setPaying(false);
     }
