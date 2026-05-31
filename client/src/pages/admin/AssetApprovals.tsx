@@ -5,9 +5,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, formatSar, type Asset } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AssetApprovals() {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
@@ -24,8 +26,10 @@ export default function AssetApprovals() {
       if (!approved && !reason) return;
       await assetsApi.review(id, approved, reason);
       await qc.invalidateQueries({ queryKey: ["assets-pending"] });
+      toast({ title: approved ? "Asset approved" : "Asset rejected", variant: approved ? "success" : "default" });
     } catch (err) {
       setError((err as Error).message);
+      toast({ title: "Action failed", description: (err as Error).message, variant: "destructive" });
     }
   }
 
@@ -34,8 +38,10 @@ export default function AssetApprovals() {
     try {
       await assetsApi.publish(id);
       await qc.invalidateQueries({ queryKey: ["assets-pending"] });
+      toast({ title: "Listing published", description: "Asset is now visible to renters.", variant: "success" });
     } catch (err) {
       setError((err as Error).message);
+      toast({ title: "Publish failed", description: (err as Error).message, variant: "destructive" });
     }
   }
 

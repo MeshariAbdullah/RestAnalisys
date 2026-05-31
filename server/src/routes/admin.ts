@@ -13,6 +13,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -218,6 +219,53 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Audit logs ────────────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(500);
+    res.json(rows);
+  })
+);
+
+// ── Asset category distribution ───────────────────────────────────────────
+router.get(
+  "/assets/distribution",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select category, status, count(*) as count
+      from assets
+      group by category, status
+      order by category, status
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Rental status distribution ────────────────────────────────────────────
+router.get(
+  "/rentals/distribution",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select status, count(*) as count
+      from rentals
+      group by status
+      order by count desc
+    `);
+    res.json(rows.rows);
   })
 );
 

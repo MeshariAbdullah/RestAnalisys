@@ -560,6 +560,17 @@ export const operationsApi = {
 // Admin
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface AuditLogEntry {
+  id: number;
+  actorUserId: number | null;
+  actorRole: string | null;
+  action: string;
+  entityType: string;
+  entityId: number | null;
+  ip: string | null;
+  createdAt: string;
+}
+
 export const adminApi = {
   kpis: () => request<AdminKPIs>("/admin/kpis"),
   revenueTrend: () =>
@@ -578,6 +589,15 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: () => request<AuditLogEntry[]>("/admin/audit-logs"),
+  assetDistribution: () =>
+    request<Array<{ category: string; status: string; count: string }>>(
+      "/admin/assets/distribution"
+    ),
+  rentalDistribution: () =>
+    request<Array<{ status: string; count: string }>>(
+      "/admin/rentals/distribution"
+    ),
 };
 
 export const healthApi = {

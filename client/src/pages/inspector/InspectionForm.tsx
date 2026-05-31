@@ -15,12 +15,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { assetsApi, inspectionsApi } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 type Grade = "A" | "B" | "C" | "D";
 type Risk = "low" | "medium" | "high" | "ultra_high";
 
 export default function InspectionForm({ assetId }: { assetId: number }) {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const [authenticityVerified, setAuthenticityVerified] = useState(true);
   const [authenticityNotes, setAuthenticityNotes] = useState("");
   const [conditionScore, setConditionScore] = useState(92);
@@ -60,9 +62,11 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
         recommendedDailyPriceHalalas,
         riskCategory,
       });
+      toast({ title: "Inspection submitted", description: "Report saved. Asset moved to next stage.", variant: "success" });
       navigate("/inspector");
     } catch (err) {
       setError((err as Error).message ?? "Submission failed");
+      toast({ title: "Inspection failed", description: (err as Error).message, variant: "destructive" });
     } finally {
       setSubmitting(false);
     }

@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { adminApi, type User } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 function riskColor(c: string): string {
   if (c === "low") return "bg-green-100 text-green-700";
@@ -22,6 +23,7 @@ function riskColor(c: string): string {
 
 export default function UsersPage() {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [role, setRole] = useState<string>("all");
 
   const { data, isLoading } = useQuery({
@@ -35,8 +37,13 @@ export default function UsersPage() {
       ? prompt("Reason for blocking?") ?? undefined
       : undefined;
     if (block && !reason) return;
-    await adminApi.blockUser(u.id, block, reason);
-    await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    try {
+      await adminApi.blockUser(u.id, block, reason);
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+      toast({ title: block ? "User blocked" : "User unblocked", variant: block ? "destructive" : "success" });
+    } catch (err) {
+      toast({ title: "Action failed", description: (err as Error).message, variant: "destructive" });
+    }
   }
 
   return (

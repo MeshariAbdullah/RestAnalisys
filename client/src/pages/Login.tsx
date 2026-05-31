@@ -6,9 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api";
 import { saveSession, homeForRole } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const [email, setEmail] = useState("renter@demo.sa");
   const [password, setPassword] = useState("Mlr@2024!");
   const [loading, setLoading] = useState(false);
@@ -21,9 +23,11 @@ export default function Login() {
     try {
       const res = await authApi.login(email, password);
       saveSession(res.token, res.user);
+      toast({ title: `Welcome back, ${res.user.fullName}`, variant: "success" });
       navigate(homeForRole(res.user.role));
     } catch (err) {
       setError((err as Error).message ?? "Login failed");
+      toast({ title: "Login failed", description: (err as Error).message, variant: "destructive" });
     } finally {
       setLoading(false);
     }

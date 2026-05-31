@@ -14,9 +14,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { assetsApi } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 export default function SubmitAsset() {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const [category, setCategory] = useState("bag");
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
@@ -56,9 +58,11 @@ export default function SubmitAsset() {
         ownerDeclaredValueHalalas: value,
         submissionImages: imageUrls,
       });
+      toast({ title: "Asset submitted", description: "Your asset is now pending admin review.", variant: "success" });
       navigate("/owner");
     } catch (err) {
       setError((err as Error).message ?? "Submission failed");
+      toast({ title: "Submission failed", description: (err as Error).message, variant: "destructive" });
     } finally {
       setLoading(false);
     }

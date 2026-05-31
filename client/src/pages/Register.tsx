@@ -6,9 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api";
 import { saveSession, homeForRole } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Register() {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const [role, setRole] = useState<"renter" | "owner">("renter");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -23,9 +25,11 @@ export default function Register() {
     try {
       const res = await authApi.register(email, password, fullName, role);
       saveSession(res.token, res.user);
+      toast({ title: "Welcome to MLR!", description: "Your account has been created.", variant: "success" });
       navigate(homeForRole(res.user.role));
     } catch (err) {
       setError((err as Error).message ?? "Registration failed");
+      toast({ title: "Registration failed", description: (err as Error).message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
