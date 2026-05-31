@@ -16,6 +16,8 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import rateLimit from "express-rate-limit";
+import morgan from "morgan";
 
 import authRouter from "./routes/auth.js";
 import assetsRouter from "./routes/assets.js";
@@ -33,6 +35,26 @@ dotenv.config();
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "3001");
 
+// Request logging
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+
+// Rate limiting
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later." },
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many authentication attempts. Please wait 15 minutes." },
+});
+
 app.use(
   cors({
     origin: process.env.CLIENT_URL ?? "http://localhost:5173",
@@ -41,6 +63,7 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use("/api", apiLimiter);
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -58,7 +81,7 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRouter);
+app.use("/api/auth", authLimiter, authRouter);
 app.use("/api/assets", assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
 app.use("/api/rentals", rentalsRouter);

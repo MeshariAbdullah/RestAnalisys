@@ -254,6 +254,11 @@ export const authApi = {
       body: JSON.stringify({ email, password, fullName, role }),
     }),
   me: () => request<User>("/auth/me"),
+  updateProfile: (data: { fullName?: string; phoneE164?: string }) =>
+    request<User>("/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
   nafathVerify: (nationalId: string) =>
     request<{ transactionId: string; status: string }>("/auth/nafath/initiate", {
       method: "POST",

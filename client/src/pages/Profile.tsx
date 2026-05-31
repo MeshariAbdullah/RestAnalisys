@@ -46,6 +46,10 @@ export default function Profile() {
 
   const [nationalId, setNationalId] = useState("");
   const [verifying, setVerifying] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [saving, setSaving] = useState(false);
 
   async function handleNafathVerify() {
     if (!nationalId.trim()) return;
@@ -60,6 +64,30 @@ export default function Profile() {
       toast({ title: "Verification failed", description: e.message, variant: "destructive" });
     } finally {
       setVerifying(false);
+    }
+  }
+
+  function startEdit() {
+    setEditName(user?.fullName ?? "");
+    setEditPhone(user?.phoneE164 ?? "");
+    setEditing(true);
+  }
+
+  async function handleSaveProfile() {
+    setSaving(true);
+    try {
+      const updated = await authApi.updateProfile({
+        fullName: editName || undefined,
+        phoneE164: editPhone || undefined,
+      });
+      saveSession(localStorage.getItem("auth_token")!, updated);
+      qc.setQueryData(["me"], updated);
+      setEditing(false);
+      toast({ title: "Profile updated", variant: "success" });
+    } catch (e: any) {
+      toast({ title: "Update failed", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -90,29 +118,57 @@ export default function Profile() {
                 <User className="w-8 h-8 text-neutral-950" />
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="text-2xl font-bold">{user.fullName}</h2>
-                <Badge className="mt-1 bg-amber-100 text-amber-800 border-0">
-                  {roleLabel[user.role] ?? user.role}
-                </Badge>
-
-                <div className="mt-4 space-y-2 text-sm">
-                  <div className="flex items-center gap-2 text-neutral-600">
-                    <Mail className="w-4 h-4" />
-                    {user.email}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold">{user.fullName}</h2>
+                    <Badge className="mt-1 bg-amber-100 text-amber-800 border-0">
+                      {roleLabel[user.role] ?? user.role}
+                    </Badge>
                   </div>
-                  {user.phoneE164 && (
-                    <div className="flex items-center gap-2 text-neutral-600">
-                      <Phone className="w-4 h-4" />
-                      {user.phoneE164}
-                    </div>
-                  )}
-                  {user.nationalId && (
-                    <div className="flex items-center gap-2 text-neutral-600">
-                      <CreditCard className="w-4 h-4" />
-                      {user.nationalId}
-                    </div>
+                  {!editing && (
+                    <Button variant="outline" size="sm" onClick={startEdit}>
+                      Edit
+                    </Button>
                   )}
                 </div>
+
+                {editing ? (
+                  <div className="mt-4 space-y-3">
+                    <div>
+                      <Label className="text-xs">Full Name</Label>
+                      <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-8 text-sm" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Phone (E.164)</Label>
+                      <Input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="+966..." className="h-8 text-sm" />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" className="bg-amber-500 text-neutral-950 hover:bg-amber-400" onClick={handleSaveProfile} disabled={saving}>
+                        {saving ? "Saving..." : "Save"}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 space-y-2 text-sm">
+                    <div className="flex items-center gap-2 text-neutral-600">
+                      <Mail className="w-4 h-4" />
+                      {user.email}
+                    </div>
+                    {user.phoneE164 && (
+                      <div className="flex items-center gap-2 text-neutral-600">
+                        <Phone className="w-4 h-4" />
+                        {user.phoneE164}
+                      </div>
+                    )}
+                    {user.nationalId && (
+                      <div className="flex items-center gap-2 text-neutral-600">
+                        <CreditCard className="w-4 h-4" />
+                        {user.nationalId}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
