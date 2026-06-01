@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
+import { LanguageSwitcher } from "@/lib/i18n";
+import NotificationBell from "@/components/NotificationBell";
 
 interface NavItem {
   href: string;
@@ -107,6 +109,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
+        <div className="px-3 py-2">
+          <NotificationBell />
+        </div>
+
         <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
           {items.map((item) => {
             const Icon = item.icon;
@@ -142,6 +148,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   {user ? roleLabel(user.role) : ""}
                 </p>
               </div>
+              <LanguageSwitcher />
               <button
                 onClick={handleLogout}
                 className="p-1.5 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white"

@@ -11,7 +11,7 @@
  */
 
 import { Router } from "express";
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, lte, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { createNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -256,6 +257,21 @@ router.post(
       after: updated,
     });
 
+    await createNotification({
+      userId: asset.ownerId,
+      type: approved ? "asset_approved" : "asset_rejected",
+      title: approved ? "Asset Approved" : "Asset Rejected",
+      titleAr: approved ? "تمت الموافقة على الأصل" : "تم رفض الأصل",
+      message: approved
+        ? `Your asset "${asset.title}" has been approved and is awaiting shipment.`
+        : `Your asset "${asset.title}" was rejected. Reason: ${rejectionReason ?? "Not specified"}`,
+      messageAr: approved
+        ? `تمت الموافقة على أصلك "${asset.title}" وهو بانتظار الشحن.`
+        : `تم رفض أصلك "${asset.title}". السبب: ${rejectionReason ?? "غير محدد"}`,
+      entityType: "asset",
+      entityId: assetId,
+    });
+
     res.json(updated);
   })
 );
@@ -318,6 +334,31 @@ router.get(
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.q) {
+      const pattern = `%${filter.q}%`;
+      conditions.push(
+        or(
+          ilike(assets.title, pattern),
+          ilike(assets.brand, pattern),
+          ilike(assets.model, pattern)
+        )!
+      );
+    }
+
+    let orderBy;
+    switch (filter.sort) {
+      case "price_low":
+        orderBy = asc(assets.dailyRentalPriceHalalas);
+        break;
+      case "price_high":
+        orderBy = desc(assets.dailyRentalPriceHalalas);
+        break;
+      case "brand_az":
+        orderBy = asc(assets.brand);
+        break;
+      default:
+        orderBy = desc(assets.updatedAt);
+    }
 
     const rows = await db
       .select({
@@ -326,15 +367,18 @@ router.get(
         brand: assets.brand,
         model: assets.model,
         category: assets.category,
+        description: assets.description,
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
+        submissionImagesJson: assets.submissionImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
+        createdAt: assets.createdAt,
       })
       .from(assets)
       .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
+      .orderBy(orderBy)
       .limit(filter.limit);
 
     res.json({ items: rows, count: rows.length });
@@ -395,6 +439,17 @@ router.post(
       entityType: "asset",
       entityId: id,
       after: updated,
+    });
+
+    await createNotification({
+      userId: asset.ownerId,
+      type: "asset_listed",
+      title: "Asset Listed",
+      titleAr: "تم إدراج الأصل",
+      message: `Your asset "${asset.title}" is now live and available for rental.`,
+      messageAr: `أصلك "${asset.title}" متاح الآن للإيجار.`,
+      entityType: "asset",
+      entityId: id,
     });
 
     res.json(updated);

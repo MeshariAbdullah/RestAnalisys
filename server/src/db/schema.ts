@@ -638,6 +638,58 @@ export const shipments = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "rental_created",
+  "rental_approved",
+  "rental_signed",
+  "rental_paid",
+  "rental_delivered",
+  "rental_returned",
+  "rental_closed",
+  "rental_cancelled",
+  "asset_approved",
+  "asset_rejected",
+  "asset_inspection_complete",
+  "asset_valuation_approved",
+  "asset_listed",
+  "dispute_opened",
+  "dispute_resolved",
+  "payout_released",
+  "sanad_issued",
+  "sanad_executed",
+  "alert_created",
+  "system",
+]);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    type: notificationTypeEnum("type").notNull(),
+    title: text("title").notNull(),
+    titleAr: text("title_ar"),
+    message: text("message").notNull(),
+    messageAr: text("message_ar"),
+    entityType: text("entity_type"),  // rental | asset | dispute | payment
+    entityId: integer("entity_id"),
+    isRead: boolean("is_read").notNull().default(false),
+    readAt: timestamp("read_at"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    unreadIdx: index("notifications_unread_idx").on(t.userId, t.isRead),
+  })
+);
+
+export type Notification = typeof notifications.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Alerts (operational + compliance)
 // ─────────────────────────────────────────────────────────────────────────────
 

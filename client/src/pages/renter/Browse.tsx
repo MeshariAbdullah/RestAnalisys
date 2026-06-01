@@ -1,11 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Diamond, Watch, Shirt, Gem } from "lucide-react";
+import { Search, Diamond, Watch, Shirt, Gem, ArrowUpDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { assetsApi, formatSar, type Asset } from "@/lib/api";
 
 const CATEGORIES = [
@@ -16,22 +23,68 @@ const CATEGORIES = [
   { id: "jewelry", label: "Jewelry", icon: Gem },
 ];
 
+type SortOption = "newest" | "price_low" | "price_high" | "brand_az";
+
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "newest", label: "Newest First" },
+  { value: "price_low", label: "Price: Low to High" },
+  { value: "price_high", label: "Price: High to Low" },
+  { value: "brand_az", label: "Brand A-Z" },
+];
+
+function sortAssets(assets: Asset[], sort: SortOption): Asset[] {
+  const sorted = [...assets];
+  switch (sort) {
+    case "newest":
+      return sorted.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    case "price_low":
+      return sorted.sort(
+        (a, b) =>
+          (a.dailyRentalPriceHalalas ?? 0) - (b.dailyRentalPriceHalalas ?? 0)
+      );
+    case "price_high":
+      return sorted.sort(
+        (a, b) =>
+          (b.dailyRentalPriceHalalas ?? 0) - (a.dailyRentalPriceHalalas ?? 0)
+      );
+    case "brand_az":
+      return sorted.sort((a, b) => a.brand.localeCompare(b.brand));
+    default:
+      return sorted;
+  }
+}
+
 export default function Browse() {
   const [category, setCategory] = useState<string | undefined>(undefined);
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortOption>("newest");
 
   const { data, isLoading } = useQuery({
     queryKey: ["listings", category],
     queryFn: () => assetsApi.listings({ category }),
   });
 
-  const filtered = (data?.items ?? []).filter((a: Asset) =>
-    search
-      ? `${a.brand} ${a.title} ${a.model ?? ""}`
+  const filtered = useMemo(() => {
+    let items = data?.items ?? [];
+
+    // Text search filter
+    if (search) {
+      const q = search.toLowerCase();
+      items = items.filter((a: Asset) =>
+        `${a.brand} ${a.title} ${a.model ?? ""}`
           .toLowerCase()
-          .includes(search.toLowerCase())
-      : true
-  );
+          .includes(q)
+      );
+    }
+
+    // Sort
+    items = sortAssets(items, sort);
+
+    return items;
+  }, [data?.items, search, sort]);
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -42,16 +95,40 @@ export default function Browse() {
         </p>
       </header>
 
-      <div className="flex flex-col md:flex-row gap-4 mb-8">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-          <Input
-            placeholder="Search brand, model, title…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+      {/* Search & Filter Toolbar */}
+      <div className="flex flex-col gap-4 mb-8">
+        {/* Search bar and sort */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+            <Input
+              placeholder="Search brand, model, title..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <div className="w-full sm:w-56">
+            <Select
+              value={sort}
+              onValueChange={(v) => setSort(v as SortOption)}
+            >
+              <SelectTrigger>
+                <ArrowUpDown className="w-4 h-4 mr-2 text-neutral-400" />
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+
+        {/* Category filter buttons */}
         <div className="flex gap-2 flex-wrap">
           {CATEGORIES.map((c) => (
             <Button
@@ -68,6 +145,33 @@ export default function Browse() {
             </Button>
           ))}
         </div>
+
+        {/* Active filter summary */}
+        {(search || category) && (
+          <div className="flex items-center gap-2 text-sm text-neutral-500">
+            <span>
+              {filtered.length} result{filtered.length !== 1 ? "s" : ""}
+            </span>
+            {search && (
+              <Badge
+                variant="secondary"
+                className="cursor-pointer"
+                onClick={() => setSearch("")}
+              >
+                &quot;{search}&quot; &times;
+              </Badge>
+            )}
+            {category && (
+              <Badge
+                variant="secondary"
+                className="cursor-pointer"
+                onClick={() => setCategory(undefined)}
+              >
+                {CATEGORIES.find((c) => c.id === category)?.label} &times;
+              </Badge>
+            )}
+          </div>
+        )}
       </div>
 
       {isLoading ? (

@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { createNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -84,10 +85,11 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      lateReturns: sql<number>`count(*) filter (where returned_at is not null and returned_at::date > end_date::date)`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, lateReturns: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +101,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.lateReturns ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +282,17 @@ router.post(
       after: { rental, decision },
     });
 
+    await createNotification({
+      userId: asset.ownerId,
+      type: "rental_created",
+      title: "New Rental Request",
+      titleAr: "طلب إيجار جديد",
+      message: `Your asset "${asset.title}" has a new rental booking (${rental.reference}).`,
+      messageAr: `أصلك "${asset.title}" لديه حجز إيجار جديد (${rental.reference}).`,
+      entityType: "rental",
+      entityId: rental.id,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -439,6 +452,17 @@ router.post(
       entityType: "rental",
       entityId: id,
       after: updated,
+    });
+
+    await createNotification({
+      userId: rental.renterId,
+      type: "rental_delivered",
+      title: "Rental Delivered",
+      titleAr: "تم تسليم الإيجار",
+      message: `Your rental ${rental.reference} has been delivered. Enjoy!`,
+      messageAr: `تم تسليم إيجارك ${rental.reference}. استمتع!`,
+      entityType: "rental",
+      entityId: id,
     });
 
     res.json(updated);
@@ -626,6 +650,17 @@ router.post(
       entityType: "rental",
       entityId: id,
       after: updated,
+    });
+
+    await createNotification({
+      userId: rental.ownerId,
+      type: "rental_cancelled",
+      title: "Rental Cancelled",
+      titleAr: "تم إلغاء الإيجار",
+      message: `Rental ${rental.reference} has been cancelled. Reason: ${reason}`,
+      messageAr: `تم إلغاء الإيجار ${rental.reference}. السبب: ${reason}`,
+      entityType: "rental",
+      entityId: id,
     });
 
     res.json(updated);

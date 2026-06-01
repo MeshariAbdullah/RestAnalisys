@@ -223,6 +223,22 @@ export interface RentalQuote {
   totalPayableHalalas: number;
 }
 
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  titleAr?: string;
+  message: string;
+  messageAr?: string;
+  entityType?: string;
+  entityId?: number;
+  isRead: boolean;
+  readAt?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface AdminKPIs {
   users: number;
   listedAssets: number;
@@ -578,6 +594,18 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+};
+
+export const notificationsApi = {
+  list: (params?: { limit?: number; unread?: boolean }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.unread) qs.set("unread", "true");
+    return request<AppNotification[]>(`/notifications?${qs}`);
+  },
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) => request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () => request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
 };
 
 export const healthApi = {
