@@ -11,19 +11,21 @@
  */
 
 import { Router } from "express";
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, sql, ilike, or, count, avg } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
+import { assets, inspections, users, inventoryMovements, reviews } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import {
   AssetSubmissionSchema,
   AssetApprovalSchema,
   AssetListingFilter,
+  EnhancedListingFilter,
 } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyAssetApproved, notifyAssetRejected, notifyAssetListed } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -256,6 +258,12 @@ router.post(
       after: updated,
     });
 
+    if (approved) {
+      await notifyAssetApproved(asset.ownerId, asset.title, assetId);
+    } else {
+      await notifyAssetRejected(asset.ownerId, asset.title, rejectionReason ?? "Does not meet platform standards");
+    }
+
     res.json(updated);
   })
 );
@@ -309,8 +317,8 @@ router.post(
 router.get(
   "/listings",
   asyncHandler(async (req, res) => {
-    const filter = AssetListingFilter.parse(req.query);
-    const conditions = [eq(assets.status, "listed")];
+    const filter = EnhancedListingFilter.parse(req.query);
+    const conditions: ReturnType<typeof eq>[] = [eq(assets.status, "listed")];
 
     if (filter.category) conditions.push(eq(assets.category, filter.category));
     if (filter.brand) conditions.push(eq(assets.brand, filter.brand));
@@ -318,26 +326,87 @@ router.get(
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.search) {
+      const term = `%${filter.search}%`;
+      conditions.push(
+        or(
+          ilike(assets.title, term),
+          ilike(assets.brand, term),
+          ilike(assets.model, term),
+          ilike(assets.description, term)
+        )!
+      );
+    }
 
-    const rows = await db
-      .select({
-        id: assets.id,
-        title: assets.title,
-        brand: assets.brand,
-        model: assets.model,
-        category: assets.category,
-        dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
-        evaluatedValueHalalas: assets.evaluatedValueHalalas,
-        studioImagesJson: assets.studioImagesJson,
-        attributesJson: assets.attributesJson,
-        riskCategory: assets.riskCategory,
-      })
-      .from(assets)
-      .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
-      .limit(filter.limit);
+    const orderBy =
+      filter.sort === "price_asc"
+        ? asc(assets.dailyRentalPriceHalalas)
+        : filter.sort === "price_desc"
+        ? desc(assets.dailyRentalPriceHalalas)
+        : desc(assets.updatedAt);
 
-    res.json({ items: rows, count: rows.length });
+    const offset = (filter.page - 1) * filter.limit;
+
+    const [totalResult, rows] = await Promise.all([
+      db
+        .select({ total: count() })
+        .from(assets)
+        .where(and(...conditions)),
+      db
+        .select({
+          id: assets.id,
+          title: assets.title,
+          brand: assets.brand,
+          model: assets.model,
+          category: assets.category,
+          dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
+          evaluatedValueHalalas: assets.evaluatedValueHalalas,
+          studioImagesJson: assets.studioImagesJson,
+          attributesJson: assets.attributesJson,
+          riskCategory: assets.riskCategory,
+        })
+        .from(assets)
+        .where(and(...conditions))
+        .orderBy(orderBy)
+        .limit(filter.limit)
+        .offset(offset),
+    ]);
+
+    const total = Number(totalResult[0]?.total ?? 0);
+
+    const assetIds = rows.map((r) => r.id);
+    let ratingsMap: Record<number, { avg: number; count: number }> = {};
+    if (assetIds.length > 0) {
+      const ratings = await db
+        .select({
+          assetId: reviews.assetId,
+          avgRating: avg(reviews.rating),
+          totalReviews: count(),
+        })
+        .from(reviews)
+        .where(sql`${reviews.assetId} = ANY(${assetIds})`)
+        .groupBy(reviews.assetId);
+
+      for (const r of ratings) {
+        ratingsMap[r.assetId] = {
+          avg: Number(r.avgRating ?? 0),
+          count: Number(r.totalReviews ?? 0),
+        };
+      }
+    }
+
+    const items = rows.map((row) => ({
+      ...row,
+      rating: ratingsMap[row.id] ?? { avg: 0, count: 0 },
+    }));
+
+    res.json({
+      items,
+      count: rows.length,
+      total,
+      page: filter.page,
+      totalPages: Math.ceil(total / filter.limit),
+    });
   })
 );
 
@@ -396,6 +465,8 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    await notifyAssetListed(asset.ownerId, asset.title, id);
 
     res.json(updated);
   })

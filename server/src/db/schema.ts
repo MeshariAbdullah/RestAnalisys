@@ -697,6 +697,72 @@ export const integrationEvents = pgTable("integration_events", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Reviews & Ratings
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const reviews = pgTable(
+  "reviews",
+  {
+    id: serial("id").primaryKey(),
+    rentalId: integer("rental_id").references(() => rentals.id).notNull(),
+    assetId: integer("asset_id").references(() => assets.id).notNull(),
+    reviewerId: integer("reviewer_id").references(() => users.id).notNull(),
+    rating: integer("rating").notNull(), // 1..5
+    title: text("title"),
+    comment: text("comment"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    assetIdx: index("reviews_asset_idx").on(t.assetId),
+    reviewerIdx: index("reviews_reviewer_idx").on(t.reviewerId),
+    rentalIdx: uniqueIndex("reviews_rental_unique_idx").on(t.rentalId),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "rental_confirmed",
+  "rental_delivered",
+  "rental_return_reminder",
+  "rental_closed",
+  "asset_approved",
+  "asset_rejected",
+  "asset_listed",
+  "inspection_complete",
+  "payment_captured",
+  "payout_released",
+  "dispute_opened",
+  "dispute_resolved",
+  "sanad_issued",
+  "review_received",
+  "system",
+]);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    type: notificationTypeEnum("type").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    linkUrl: text("link_url"),
+    read: boolean("read").notNull().default(false),
+    readAt: timestamp("read_at"),
+    metadata: jsonb("metadata").notNull().default("{}"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    unreadIdx: index("notifications_unread_idx").on(t.userId, t.read),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Type exports
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -713,3 +779,7 @@ export type SanadRecord = typeof sanadRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
 export type Shipment = typeof shipments.$inferSelect;
+export type Review = typeof reviews.$inferSelect;
+export type NewReview = typeof reviews.$inferInsert;
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;

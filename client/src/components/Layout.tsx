@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -19,8 +20,10 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
+import { notificationsApi } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
 
 interface NavItem {
@@ -75,6 +78,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const user: User | null = getCurrentUser();
 
   const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
+
+  const { data: unreadData } = useQuery({
+    queryKey: ["unread-count"],
+    queryFn: () => notificationsApi.unreadCount(),
+    enabled: !!user,
+    refetchInterval: 30_000,
+  });
+  const unreadCount = unreadData?.unread ?? 0;
 
   function handleLogout() {
     clearSession();
@@ -131,6 +142,28 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="p-3 border-t border-neutral-800">
+          {user && (
+            <Link href="/notifications">
+              <a
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors mb-2",
+                  location === "/notifications"
+                    ? "bg-amber-500 text-neutral-950 font-medium"
+                    : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+                )}
+              >
+                <div className="relative">
+                  <Bell className="w-5 h-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </div>
+                {sidebarOpen && <span>Notifications</span>}
+              </a>
+            </Link>
+          )}
           {sidebarOpen ? (
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">

@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Diamond, Calendar, Shield, Info } from "lucide-react";
+import { Diamond, Calendar, Shield, Info, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { assetsApi, rentalsApi, formatSar } from "@/lib/api";
+import { assetsApi, rentalsApi, reviewsApi, formatSar } from "@/lib/api";
 
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -33,6 +33,11 @@ export default function ItemDetail({ id }: { id: number }) {
   const assetQuery = useQuery({
     queryKey: ["asset", id],
     queryFn: () => assetsApi.listingDetail(id),
+  });
+
+  const reviewsQuery = useQuery({
+    queryKey: ["reviews", id],
+    queryFn: () => reviewsApi.forAsset(id),
   });
 
   const quoteQuery = useQuery({
@@ -210,6 +215,68 @@ export default function ItemDetail({ id }: { id: number }) {
           </Card>
         </div>
       </div>
+
+      {/* Reviews Section */}
+      {reviewsQuery.data && (
+        <div className="mt-12 border-t pt-8">
+          <div className="flex items-center gap-4 mb-6">
+            <h2 className="text-2xl font-bold">Reviews</h2>
+            {reviewsQuery.data.stats.averageRating && (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
+                  <span className="text-xl font-bold">
+                    {reviewsQuery.data.stats.averageRating.toFixed(1)}
+                  </span>
+                </div>
+                <span className="text-neutral-500">
+                  ({reviewsQuery.data.stats.totalReviews}{" "}
+                  {reviewsQuery.data.stats.totalReviews === 1 ? "review" : "reviews"})
+                </span>
+              </div>
+            )}
+          </div>
+
+          {reviewsQuery.data.reviews.length === 0 ? (
+            <p className="text-neutral-500 text-sm">No reviews yet for this item.</p>
+          ) : (
+            <div className="space-y-4">
+              {reviewsQuery.data.reviews.map((review) => (
+                <div key={review.id} className="bg-neutral-50 rounded-lg p-4 border">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-4 h-4 ${
+                              i < review.rating
+                                ? "fill-amber-400 text-amber-400"
+                                : "text-neutral-300"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <span className="font-medium text-sm">
+                        {review.reviewerName ?? "Anonymous"}
+                      </span>
+                    </div>
+                    <span className="text-xs text-neutral-400">
+                      {new Date(review.createdAt).toLocaleDateString("en-SA")}
+                    </span>
+                  </div>
+                  {review.title && (
+                    <p className="font-semibold text-sm">{review.title}</p>
+                  )}
+                  {review.comment && (
+                    <p className="text-sm text-neutral-600 mt-1">{review.comment}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

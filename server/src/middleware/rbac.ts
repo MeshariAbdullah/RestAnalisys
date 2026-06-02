@@ -50,6 +50,9 @@ export type Permission =
   | "dispute.resolve"
   | "operations.read"
   | "operations.update"
+  | "review.create"
+  | "review.read"
+  | "notification.read"
   | "system.audit"
   | "system.impersonate";
 
@@ -65,6 +68,9 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "legal.sign",
     "payment.read",
     "dispute.open",
+    "review.create",
+    "review.read",
+    "notification.read",
   ],
   owner: [
     "asset.submit",
@@ -73,6 +79,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "rental.read.own",
     "payment.read",
     "dispute.open",
+    "review.read",
+    "notification.read",
   ],
   inspector: [
     "asset.read.any",

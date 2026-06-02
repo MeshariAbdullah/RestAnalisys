@@ -266,12 +266,32 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: {
+    category?: string;
+    brand?: string;
+    search?: string;
+    minDaily?: number;
+    maxDaily?: number;
+    sort?: "newest" | "price_asc" | "price_desc" | "popular";
+    page?: number;
+    limit?: number;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.minDaily) qs.set("minDaily", String(params.minDaily));
+    if (params?.maxDaily) qs.set("maxDaily", String(params.maxDaily));
+    if (params?.sort) qs.set("sort", params.sort);
+    if (params?.page) qs.set("page", String(params.page));
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    return request<{
+      items: (Asset & { rating: { avg: number; count: number } })[];
+      count: number;
+      total: number;
+      page: number;
+      totalPages: number;
+    }>(`/assets/listings?${qs}`);
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
@@ -582,6 +602,65 @@ export const adminApi = {
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reviews
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ReviewItem {
+  id: number;
+  rating: number;
+  title?: string;
+  comment?: string;
+  createdAt: string;
+  reviewerName?: string;
+}
+
+export interface ReviewStats {
+  averageRating: number | null;
+  totalReviews: number;
+}
+
+export const reviewsApi = {
+  forAsset: (assetId: number) =>
+    request<{ reviews: ReviewItem[]; stats: ReviewStats }>(`/reviews/asset/${assetId}`),
+  mine: () =>
+    request<Array<ReviewItem & { assetId: number; rentalId: number; assetTitle: string; assetBrand: string }>>(
+      "/reviews/mine"
+    ),
+  create: (data: { rentalId: number; rating: number; title?: string; comment?: string }) =>
+    request<ReviewItem>("/reviews", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface NotificationItem {
+  id: number;
+  type: string;
+  title: string;
+  body: string;
+  linkUrl?: string;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (limit?: number) => {
+    const qs = limit ? `?limit=${limit}` : "";
+    return request<NotificationItem[]>(`/notifications${qs}`);
+  },
+  unreadCount: () => request<{ unread: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<NotificationItem>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

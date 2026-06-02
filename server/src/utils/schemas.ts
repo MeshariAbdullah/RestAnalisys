@@ -227,3 +227,29 @@ export const ShipmentUpdateSchema = z.object({
   ]),
   trackingNumber: z.string().optional(),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reviews
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ReviewCreateSchema = z.object({
+  rentalId: z.number().int().positive(),
+  rating: z.number().int().min(1).max(5),
+  title: z.string().min(2).max(100).optional(),
+  comment: z.string().max(1000).optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enhanced Listings Filter (search + sort + pagination)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const EnhancedListingFilter = z.object({
+  category: AssetCategory.optional(),
+  brand: z.string().optional(),
+  search: z.string().optional(),
+  minDaily: z.coerce.number().int().nonnegative().optional(),
+  maxDaily: z.coerce.number().int().nonnegative().optional(),
+  sort: z.enum(["newest", "price_asc", "price_desc", "popular"]).default("newest"),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
