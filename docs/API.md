@@ -119,6 +119,44 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | POST   | `/users/:id/block`    | admin / super_admin   | Block or unblock a user                |
 | POST   | `/users`              | super_admin           | Create staff users                     |
 
+## Notifications — `/api/notifications`
+
+| Method | Path           | Roles          | Purpose                               |
+| ------ | -------------- | -------------- | ------------------------------------- |
+| GET    | `/`            | authenticated  | List notifications (query: limit, unread) |
+| POST   | `/read`        | authenticated  | Mark notifications as read (body: ids?) |
+| GET    | `/preferences` | authenticated  | Get notification preferences          |
+| PUT    | `/preferences` | authenticated  | Update notification preferences       |
+| GET    | `/dev-log`     | admin          | View dev-mode notification log        |
+
+## Upload — `/api/upload`
+
+| Method | Path       | Roles          | Purpose                               |
+| ------ | ---------- | -------------- | ------------------------------------- |
+| POST   | `/`        | authenticated  | Upload files (multipart, max 10 files)|
+| POST   | `/presign` | authenticated  | Get a presigned upload URL            |
+
+## Address — `/api/address`
+
+| Method | Path                    | Roles          | Purpose                            |
+| ------ | ----------------------- | -------------- | ---------------------------------- |
+| POST   | `/lookup`               | authenticated  | Lookup a Saudi national address    |
+| POST   | `/verify`               | authenticated  | Auto-verify user's national address|
+| GET    | `/mine`                 | authenticated  | Get current user's saved address   |
+| GET    | `/delivery-zones`       | public         | List available delivery zones      |
+| GET    | `/delivery-zone/:city`  | public         | Get delivery info for a city       |
+
+## Admin (extended) — `/api/admin`
+
+| Method | Path                        | Roles                 | Purpose                              |
+| ------ | --------------------------- | --------------------- | ------------------------------------ |
+| GET    | `/rentals/overdue`          | admin / operations    | List overdue active rentals          |
+| GET    | `/analytics/categories`     | admin / super_admin   | Asset category breakdown             |
+| GET    | `/analytics/monthly`        | admin / super_admin   | Monthly performance (12 months)      |
+| GET    | `/analytics/top-assets`     | admin / super_admin   | Top assets by revenue                |
+| GET    | `/audit-logs`               | admin / super_admin   | Browse audit log (filter by entity/action) |
+| GET    | `/notifications/stats`      | admin / super_admin   | Notification delivery statistics     |
+
 ## Health
 
 | Method | Path          | Roles  | Purpose                                |

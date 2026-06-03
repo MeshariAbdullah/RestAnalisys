@@ -17,6 +17,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 
+import path from "node:path";
 import authRouter from "./routes/auth.js";
 import assetsRouter from "./routes/assets.js";
 import inspectionsRouter from "./routes/inspections.js";
@@ -26,6 +27,9 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import notificationsRouter from "./routes/notifications.js";
+import uploadRouter from "./routes/upload.js";
+import addressRouter from "./routes/address.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 dotenv.config();
@@ -53,6 +57,10 @@ app.get("/api/health", (_req, res) => {
       nafith: !!process.env.NAFITH_API_KEY,
       paymentGateway: !!process.env.PAYMENT_GATEWAY_API_KEY,
       zatca: !!process.env.ZATCA_API_KEY,
+      sms: !!process.env.TWILIO_ACCOUNT_SID,
+      email: !!process.env.SENDGRID_API_KEY,
+      storage: process.env.S3_BUCKET ? "s3" : "local",
+      nationalAddress: !!process.env.SPL_API_KEY,
     },
     timestamp: new Date().toISOString(),
   });
@@ -67,6 +75,13 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/notifications", notificationsRouter);
+app.use("/api/upload", uploadRouter);
+app.use("/api/address", addressRouter);
+
+// Serve uploaded files in dev mode
+const uploadsDir = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
+app.use("/uploads", express.static(uploadsDir));
 
 // 404
 app.use((req, res) => {
@@ -78,9 +93,13 @@ app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`🇸🇦  Managed Luxury Rental Platform API running on :${PORT}`);
-  console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
-  console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
-  console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   Nafath:      ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   Nafith:      ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   Payment:     ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   SMS:         ${process.env.TWILIO_ACCOUNT_SID ? "live" : "placeholder"}`);
+  console.log(`   Email:       ${process.env.SENDGRID_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   Storage:     ${process.env.S3_BUCKET ? "s3" : "local"}`);
+  console.log(`   Address:     ${process.env.SPL_API_KEY ? "live" : "placeholder"}`);
 });
 
 export default app;

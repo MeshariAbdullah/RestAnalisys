@@ -16,10 +16,15 @@ MLR is a classical 3-tier application:
                                           │  (Drizzle)    │
                                           └───────────────┘
                                                  │
-                              ┌──────────────────┼──────────────────┐
-                              ▼                  ▼                  ▼
-                         Nafath API        Nafith API           Payment gateway
-                         (identity)        (Sanad)              + ZATCA
+                    ┌────────────┬───────────────┼──────────────────┐
+                    ▼            ▼               ▼                  ▼
+               Nafath API   Nafith API      Payment gateway    SMS / Email
+               (identity)   (Sanad)         + ZATCA            (Twilio/SendGrid)
+                    │
+              ┌─────┴─────┐
+              ▼           ▼
+         SPL Address   S3 Storage
+         (National)    (Images)
 ```
 
 ## Tech stack
@@ -78,6 +83,8 @@ See the repo root `README.md`. The two important conventions:
 | `operational_alerts`   | Anomalies flagged by the system for ops attention.        |
 | `audit_logs`           | Immutable record of material actions.                     |
 | `integration_events`   | Raw request/response of external API calls.               |
+| `notifications`        | All sent notifications (SMS, email, push) per user.       |
+| `notification_preferences` | Per-user channel and category preferences.            |
 
 ## Data flow for a rental
 

@@ -578,10 +578,189 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  overdueRentals: () =>
+    request<Array<{
+      id: number;
+      reference: string;
+      renterId: number;
+      assetId: number;
+      endDate: string;
+      lateDays: number;
+      dailyPriceHalalas: number;
+    }>>("/admin/rentals/overdue"),
+  categoryBreakdown: () =>
+    request<Array<{
+      category: string;
+      total_assets: string;
+      listed: string;
+      rented: string;
+      avg_value_halalas: string;
+      total_value_halalas: string;
+    }>>("/admin/analytics/categories"),
+  monthlyPerformance: () =>
+    request<Array<{
+      month: string;
+      total_rentals: string;
+      completed: string;
+      cancelled: string;
+      disputed: string;
+      revenue_halalas: string;
+      fees_halalas: string;
+      vat_halalas: string;
+    }>>("/admin/analytics/monthly"),
+  topAssets: () =>
+    request<Array<{
+      id: number;
+      title: string;
+      brand: string;
+      category: string;
+      rental_count: string;
+      total_revenue_halalas: string;
+      total_fees_halalas: string;
+    }>>("/admin/analytics/top-assets"),
+  auditLogs: (opts?: { limit?: number; entityType?: string; action?: string }) => {
+    const qs = new URLSearchParams();
+    if (opts?.limit) qs.set("limit", String(opts.limit));
+    if (opts?.entityType) qs.set("entityType", opts.entityType);
+    if (opts?.action) qs.set("action", opts.action);
+    return request<Array<Record<string, unknown>>>(`/admin/audit-logs?${qs}`);
+  },
+  notificationStats: () =>
+    request<Array<{
+      channel: string;
+      category: string;
+      total: string;
+      sent: string;
+      failed: string;
+      read: string;
+    }>>("/admin/notifications/stats"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface NotificationItem {
+  id: number;
+  channel: "sms" | "email" | "push";
+  category: string;
+  subject?: string;
+  body: string;
+  status: string;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (opts?: { limit?: number; unread?: boolean }) => {
+    const qs = new URLSearchParams();
+    if (opts?.limit) qs.set("limit", String(opts.limit));
+    if (opts?.unread) qs.set("unread", "true");
+    return request<{ items: NotificationItem[]; unreadCount: number }>(
+      `/notifications?${qs}`
+    );
+  },
+  markRead: (ids?: number[]) =>
+    request<{ ok: boolean }>("/notifications/read", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
+  preferences: () =>
+    request<{
+      smsEnabled: boolean;
+      emailEnabled: boolean;
+      pushEnabled: boolean;
+      quietHoursStart?: string;
+      quietHoursEnd?: string;
+      disabledCategories: string[];
+    }>("/notifications/preferences"),
+  updatePreferences: (data: {
+    smsEnabled?: boolean;
+    emailEnabled?: boolean;
+    pushEnabled?: boolean;
+    quietHoursStart?: string;
+    quietHoursEnd?: string;
+    disabledCategories?: string[];
+  }) =>
+    request("/notifications/preferences", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Upload
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UploadedFile {
+  url: string;
+  key: string;
+  size: number;
+  mimeType: string;
+  provider: string;
+}
+
+export const uploadApi = {
+  upload: (files: File[], folder: string) => {
+    const formData = new FormData();
+    formData.append("folder", folder);
+    files.forEach((f) => formData.append("files", f));
+    return request<{ files: UploadedFile[] }>("/upload", {
+      method: "POST",
+      body: formData,
+    });
+  },
+  presign: (folder: string, mimeType: string) =>
+    request<{ uploadUrl: string; key: string; expiresAt: string }>("/upload/presign", {
+      method: "POST",
+      body: JSON.stringify({ folder, mimeType }),
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Address
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface NationalAddress {
+  buildingNumber: string;
+  street: string;
+  district: string;
+  city: string;
+  region: string;
+  postalCode: string;
+  additionalCode: string;
+  latitude?: number;
+  longitude?: number;
+  formattedAddress: string;
+  formattedAddressAr: string;
+}
+
+export interface DeliveryZone {
+  zoneId: string;
+  name: string;
+  nameAr: string;
+  region: string;
+  deliveryAvailable: boolean;
+  estimatedDays: number;
+  surchargeHalalas: number;
+}
+
+export const addressApi = {
+  lookup: (buildingNumber: string, postalCode: string, additionalCode?: string) =>
+    request<NationalAddress>("/address/lookup", {
+      method: "POST",
+      body: JSON.stringify({ buildingNumber, postalCode, additionalCode }),
+    }),
+  verify: () =>
+    request<NationalAddress>("/address/verify", { method: "POST" }),
+  mine: () => request<NationalAddress | null>("/address/mine"),
+  deliveryZones: () => request<DeliveryZone[]>("/address/delivery-zones"),
+  deliveryZone: (city: string) =>
+    request<DeliveryZone>(`/address/delivery-zone/${encodeURIComponent(city)}`),
 };
 
 export const healthApi = {
-  check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+  check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean | string> }>("/health"),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

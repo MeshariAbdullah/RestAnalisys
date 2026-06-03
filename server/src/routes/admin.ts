@@ -3,7 +3,7 @@
  */
 
 import { Router } from "express";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   users,
@@ -13,6 +13,8 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  notifications,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -218,6 +220,157 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Late rentals (overdue active rentals) ─────────────────────────────────
+router.get(
+  "/rentals/overdue",
+  authenticate,
+  requirePermission("operations.read"),
+  asyncHandler(async (_req, res) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = await db
+      .select({
+        id: rentals.id,
+        reference: rentals.reference,
+        renterId: rentals.renterId,
+        assetId: rentals.assetId,
+        endDate: rentals.endDate,
+        status: rentals.status,
+        dailyPriceHalalas: rentals.dailyPriceHalalas,
+        deliveredAt: rentals.deliveredAt,
+      })
+      .from(rentals)
+      .where(
+        and(
+          eq(rentals.status, "active"),
+          lte(rentals.endDate, today)
+        )
+      )
+      .orderBy(rentals.endDate);
+
+    const enriched = rows.map((r) => {
+      const endMs = new Date(r.endDate + "T23:59:59Z").getTime();
+      const lateDays = Math.max(0, Math.ceil((Date.now() - endMs) / (1000 * 60 * 60 * 24)));
+      return { ...r, lateDays };
+    });
+
+    res.json(enriched);
+  })
+);
+
+// ── Category breakdown (asset distribution) ───────────────────────────────
+router.get(
+  "/analytics/categories",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select category,
+             count(*) as total_assets,
+             count(*) filter (where status = 'listed') as listed,
+             count(*) filter (where status = 'rented_out') as rented,
+             coalesce(avg(evaluated_value_halalas), 0)::bigint as avg_value_halalas,
+             coalesce(sum(evaluated_value_halalas), 0)::bigint as total_value_halalas
+      from assets
+      group by category
+      order by total_assets desc
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Monthly performance ───────────────────────────────────────────────────
+router.get(
+  "/analytics/monthly",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select to_char(date_trunc('month', created_at), 'YYYY-MM') as month,
+             count(*) as total_rentals,
+             count(*) filter (where status in ('closed', 'closed_with_penalty')) as completed,
+             count(*) filter (where status = 'cancelled') as cancelled,
+             count(*) filter (where status in ('in_dispute', 'enforcement')) as disputed,
+             coalesce(sum(total_payable_halalas), 0)::bigint as revenue_halalas,
+             coalesce(sum(platform_fee_halalas), 0)::bigint as fees_halalas,
+             coalesce(sum(vat_halalas), 0)::bigint as vat_halalas
+      from rentals
+      where created_at >= now() - interval '12 months'
+      group by 1
+      order by 1 asc
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Top assets by revenue ─────────────────────────────────────────────────
+router.get(
+  "/analytics/top-assets",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const limit = 20;
+    const rows = await db.execute(sql`
+      select a.id, a.title, a.brand, a.category,
+             count(r.id) as rental_count,
+             coalesce(sum(r.total_payable_halalas), 0)::bigint as total_revenue_halalas,
+             coalesce(sum(r.platform_fee_halalas), 0)::bigint as total_fees_halalas
+      from assets a
+      left join rentals r on r.asset_id = a.id and r.status in ('closed', 'closed_with_penalty', 'active')
+      group by a.id, a.title, a.brand, a.category
+      having count(r.id) > 0
+      order by total_revenue_halalas desc
+      limit ${limit}
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+    const entityType = req.query.entityType as string | undefined;
+    const action = req.query.action as string | undefined;
+
+    let query = db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(limit).$dynamic();
+
+    if (entityType) {
+      query = query.where(eq(auditLogs.entityType, entityType));
+    }
+    if (action) {
+      query = query.where(eq(auditLogs.action, action));
+    }
+
+    const rows = await query;
+    res.json(rows);
+  })
+);
+
+// ── Notification stats ───────────────────────────────────────────────────
+router.get(
+  "/notifications/stats",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select channel,
+             category,
+             count(*) as total,
+             count(*) filter (where status = 'sent') as sent,
+             count(*) filter (where status = 'failed') as failed,
+             count(*) filter (where read_at is not null) as read
+      from notifications
+      where created_at >= now() - interval '30 days'
+      group by channel, category
+      order by total desc
+    `);
+    res.json(rows.rows);
   })
 );
 

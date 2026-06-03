@@ -50,16 +50,33 @@ import {
 } from "../utils/errors.js";
 import {
   computeRentalQuote,
+  computeLatePenalty,
   DEFAULT_PLATFORM_FEE_PCT,
 } from "../utils/money.js";
 import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyUser } from "../services/notificationService.js";
+import { formatHalalas } from "../utils/money.js";
 
 const router = Router();
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+async function countLateReturns(userId: number): Promise<number> {
+  const result = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`returned_at IS NOT NULL`,
+        sql`returned_at > (end_date || 'T23:59:59Z')::timestamptz`
+      )
+    );
+  return Number(result[0]?.count ?? 0);
+}
 
 function daysBetween(startIso: string, endIso: string): number {
   const start = new Date(startIso + "T00:00:00Z").getTime();
@@ -99,7 +116,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await countLateReturns(userId),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +297,18 @@ router.post(
       after: { rental, decision },
     });
 
+    notifyUser({
+      userId: renterId,
+      phone: renter!.phoneE164,
+      email: renter!.email,
+      category: "rental_created",
+      vars: {
+        reference: rental.reference,
+        assetTitle: asset.title,
+        totalSar: formatHalalas(quote.totalPayableHalalas),
+      },
+    }).catch(() => {});
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -441,6 +470,17 @@ router.post(
       after: updated,
     });
 
+    const [renterUser] = await db.select().from(users).where(eq(users.id, rental.renterId)).limit(1);
+    if (renterUser) {
+      notifyUser({
+        userId: rental.renterId,
+        phone: renterUser.phoneE164,
+        email: renterUser.email,
+        category: "rental_delivered",
+        vars: { reference: rental.reference, endDate: rental.endDate },
+      }).catch(() => {});
+    }
+
     res.json(updated);
   })
 );
@@ -476,6 +516,17 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    const [renterUser] = await db.select().from(users).where(eq(users.id, rental.renterId)).limit(1);
+    if (renterUser) {
+      notifyUser({
+        userId: rental.renterId,
+        phone: renterUser.phoneE164,
+        email: renterUser.email,
+        category: "rental_returned",
+        vars: { reference: rental.reference },
+      }).catch(() => {});
+    }
 
     res.json(updated);
   })
@@ -516,6 +567,18 @@ router.post(
         entityId: id,
         after: updated,
       });
+
+      const [renterUser] = await db.select().from(users).where(eq(users.id, rental.renterId)).limit(1);
+      if (renterUser) {
+        notifyUser({
+          userId: rental.renterId,
+          phone: renterUser.phoneE164,
+          email: renterUser.email,
+          category: "rental_closed",
+          vars: { reference: rental.reference },
+        }).catch(() => {});
+      }
+
       return res.json(updated);
     }
 
