@@ -30,6 +30,7 @@ import adminRouter from "./routes/admin.js";
 import notificationsRouter from "./routes/notifications.js";
 import uploadRouter from "./routes/upload.js";
 import addressRouter from "./routes/address.js";
+import schedulerRouter from "./routes/scheduler.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 dotenv.config();
@@ -78,6 +79,7 @@ app.use("/api/admin", adminRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/upload", uploadRouter);
 app.use("/api/address", addressRouter);
+app.use("/api/scheduler", schedulerRouter);
 
 // Serve uploaded files in dev mode
 const uploadsDir = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");

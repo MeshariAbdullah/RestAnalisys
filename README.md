@@ -107,7 +107,26 @@ production mode.
 | Nafith Sanad    | `server/src/services/nafithService.ts` | `NAFITH_API_BASE`, `NAFITH_API_KEY` |
 | Payment gateway | `server/src/services/paymentService.ts`| `PAYMENT_GATEWAY_*`               |
 | ZATCA invoicing | `server/src/services/paymentService.ts`| `ZATCA_API_*`                     |
-| National Address| (planned)                              | `SPL_API_KEY`                     |
+| National Address| `server/src/services/addressService.ts`| `SPL_API_BASE`, `SPL_API_KEY`     |
+| SMS (Twilio)    | `server/src/services/notificationService.ts` | `TWILIO_*`                  |
+| Email (SendGrid)| `server/src/services/notificationService.ts` | `SENDGRID_*`                |
+| File Storage    | `server/src/services/storageService.ts`| `S3_*`, `CDN_BASE_URL`            |
+
+---
+
+## New features (v1.1)
+
+- **Notification system**: SMS (Twilio) and Email (SendGrid) with 18 Arabic
+  notification templates. Dev mode logs to console.
+- **File upload**: Multipart upload with S3-ready storage. Local fallback in
+  development. Presigned URL support.
+- **National Address**: SPL API integration for address lookup/verification.
+  8 delivery zones with estimated delivery times and surcharges.
+- **Late return penalties**: Automatic detection with 5%/day penalty rate.
+  Scheduled job (`/api/scheduler/check-overdue`) sends warnings and alerts.
+- **Admin analytics**: Category breakdown, monthly performance (12 months),
+  top assets by revenue, overdue rentals dashboard, audit log viewer.
+- **Notification preferences**: Per-user channel (SMS/email/push) controls.
 
 ---
 
