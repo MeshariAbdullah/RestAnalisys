@@ -369,4 +369,109 @@ router.get(
   })
 );
 
+// ── Financial export (CSV) ────────────────────────────────────────────────
+router.get(
+  "/export/rentals",
+  authenticate,
+  requirePermission("finance.export"),
+  asyncHandler(async (req, res) => {
+    const from = (req.query.from as string) || "";
+    const to = (req.query.to as string) || "";
+
+    let whereClause = sql`1=1`;
+    if (from) whereClause = sql`${whereClause} AND created_at >= ${from}::date`;
+    if (to) whereClause = sql`${whereClause} AND created_at <= ${to}::date + interval '1 day'`;
+
+    const rows = await db.execute(sql`
+      select r.reference, r.status, r.start_date, r.end_date, r.duration_days,
+             r.daily_price_halalas, r.rental_subtotal_halalas,
+             r.platform_fee_halalas, r.vat_halalas, r.total_payable_halalas,
+             r.trust_score_at_booking, r.legal_commitment_pct,
+             r.legal_commitment_halalas,
+             u_renter.full_name as renter_name, u_renter.email as renter_email,
+             u_owner.full_name as owner_name,
+             a.title as asset_title, a.brand as asset_brand, a.category as asset_category,
+             r.created_at
+      from rentals r
+      join users u_renter on u_renter.id = r.renter_id
+      join users u_owner on u_owner.id = r.owner_id
+      join assets a on a.id = r.asset_id
+      where ${whereClause}
+      order by r.created_at desc
+    `);
+
+    const header = [
+      "reference", "status", "start_date", "end_date", "duration_days",
+      "daily_price_sar", "subtotal_sar", "platform_fee_sar", "vat_sar", "total_sar",
+      "trust_score", "commitment_pct", "commitment_sar",
+      "renter_name", "renter_email", "owner_name",
+      "asset_title", "asset_brand", "asset_category", "created_at",
+    ].join(",");
+
+    const csvRows = (rows.rows as any[]).map((r) =>
+      [
+        r.reference, r.status, r.start_date, r.end_date, r.duration_days,
+        (Number(r.daily_price_halalas) / 100).toFixed(2),
+        (Number(r.rental_subtotal_halalas) / 100).toFixed(2),
+        (Number(r.platform_fee_halalas) / 100).toFixed(2),
+        (Number(r.vat_halalas) / 100).toFixed(2),
+        (Number(r.total_payable_halalas) / 100).toFixed(2),
+        r.trust_score_at_booking, r.legal_commitment_pct,
+        (Number(r.legal_commitment_halalas) / 100).toFixed(2),
+        `"${r.renter_name}"`, r.renter_email, `"${r.owner_name}"`,
+        `"${r.asset_title}"`, r.asset_brand, r.asset_category,
+        new Date(r.created_at).toISOString(),
+      ].join(",")
+    );
+
+    const csv = [header, ...csvRows].join("\n");
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="mlr-rentals-export.csv"`);
+    res.send(csv);
+  })
+);
+
+// ── Platform health report ───────────────────────────────────────────────
+router.get(
+  "/health-report",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const [usersCount] = await db.select({ count: sql<number>`count(*)` }).from(users);
+    const [assetsCount] = await db.select({ count: sql<number>`count(*)` }).from(assets);
+    const [rentalsCount] = await db.select({ count: sql<number>`count(*)` }).from(rentals);
+
+    const statusBreakdown = await db.execute(sql`
+      select 'assets' as entity,
+             json_object_agg(status, cnt) as breakdown
+      from (select status, count(*) as cnt from assets group by status) sub
+      union all
+      select 'rentals',
+             json_object_agg(status, cnt)
+      from (select status, count(*) as cnt from rentals group by status) sub
+    `);
+
+    const recentActivity = await db.execute(sql`
+      select action, count(*) as count
+      from audit_logs
+      where created_at >= now() - interval '24 hours'
+      group by action
+      order by count desc
+      limit 10
+    `);
+
+    res.json({
+      overview: {
+        totalUsers: Number(usersCount?.count ?? 0),
+        totalAssets: Number(assetsCount?.count ?? 0),
+        totalRentals: Number(rentalsCount?.count ?? 0),
+      },
+      statusBreakdown: statusBreakdown.rows,
+      recentActivity24h: recentActivity.rows,
+      generatedAt: new Date().toISOString(),
+    });
+  })
+);
+
 export default router;

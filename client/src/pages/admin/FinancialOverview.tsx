@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Receipt, TrendingUp } from "lucide-react";
+import { Receipt, TrendingUp, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { adminApi, formatSar } from "@/lib/api";
 
 export default function FinancialOverview() {
@@ -22,9 +23,32 @@ export default function FinancialOverview() {
     1
   );
 
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await adminApi.exportRentalsCsv();
+    } catch {
+      /* handled silently */
+    }
+    setExporting(false);
+  }
+
   return (
     <div className="p-8 max-w-5xl mx-auto">
-      <h1 className="text-3xl font-bold mb-2">Financial overview</h1>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-3xl font-bold">Financial overview</h1>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExport}
+          disabled={exporting}
+        >
+          <Download className="w-4 h-4 mr-1" />
+          {exporting ? "Exporting..." : "Export CSV"}
+        </Button>
+      </div>
       <p className="text-neutral-500 mb-8">
         Revenue, fees and VAT across all confirmed rentals.
       </p>

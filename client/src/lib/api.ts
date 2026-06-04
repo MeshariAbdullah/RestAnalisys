@@ -578,6 +578,30 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  healthReport: () =>
+    request<{
+      overview: { totalUsers: number; totalAssets: number; totalRentals: number };
+      statusBreakdown: Array<{ entity: string; breakdown: Record<string, number> }>;
+      recentActivity24h: Array<{ action: string; count: string }>;
+      generatedAt: string;
+    }>("/admin/health-report"),
+  exportRentalsCsv: async (from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/admin/export/rentals?${qs}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error("Export failed");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "mlr-rentals-export.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
