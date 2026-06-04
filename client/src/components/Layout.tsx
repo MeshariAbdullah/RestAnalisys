@@ -19,9 +19,14 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  BarChart3,
+  ScrollText,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
+import { notificationsApi } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
+import { useQuery } from "@tanstack/react-query";
 
 interface NavItem {
   href: string;
@@ -56,6 +61,8 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/analytics", label: "Analytics", icon: BarChart3, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit-logs", label: "Audit Logs", icon: ScrollText, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
@@ -75,6 +82,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const user: User | null = getCurrentUser();
 
   const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
+
+  const { data: unreadData } = useQuery({
+    queryKey: ["notifications-unread"],
+    queryFn: () => notificationsApi.unreadCount(),
+    enabled: !!user,
+    refetchInterval: 30000,
+  });
+  const unreadCount = unreadData?.count ?? 0;
 
   function handleLogout() {
     clearSession();
@@ -130,6 +145,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
+        {user && (
+          <div className="px-2 pb-1">
+            <Link href="/notifications">
+              <a className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-neutral-300 hover:bg-neutral-800 hover:text-white transition-colors relative">
+                <Bell className="w-5 h-5 shrink-0" />
+                {sidebarOpen && <span>Notifications</span>}
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 left-7 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </a>
+            </Link>
+          </div>
+        )}
         <div className="p-3 border-t border-neutral-800">
           {sidebarOpen ? (
             <div className="flex items-center gap-3">

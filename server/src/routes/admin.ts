@@ -13,6 +13,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -218,6 +219,153 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Analytics: user growth over time ──────────────────────────────────────
+router.get(
+  "/analytics/user-growth",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as day,
+             count(*) as new_users,
+             sum(count(*)) over (order by date_trunc('day', created_at)) as cumulative
+      from users
+      where created_at >= now() - interval '90 days'
+      group by 1
+      order by 1 asc
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Analytics: asset breakdown by category ────────────────────────────────
+router.get(
+  "/analytics/category-breakdown",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select category,
+             count(*) as total,
+             count(*) filter (where status = 'listed') as listed,
+             count(*) filter (where status = 'rented_out') as rented,
+             coalesce(avg(evaluated_value_halalas), 0)::bigint as avg_value_halalas
+      from assets
+      group by category
+      order by total desc
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Analytics: rental conversion funnel ──────────────────────────────────
+router.get(
+  "/analytics/rental-funnel",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select status, count(*) as count
+      from rentals
+      where created_at >= now() - interval '30 days'
+      group by status
+      order by count desc
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Analytics: top performing assets ─────────────────────────────────────
+router.get(
+  "/analytics/top-assets",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select a.id, a.title, a.brand, a.category,
+             count(r.id) as rental_count,
+             coalesce(sum(r.total_payable_halalas), 0)::bigint as total_revenue_halalas
+      from assets a
+      left join rentals r on r.asset_id = a.id
+        and r.status in ('closed', 'closed_with_penalty', 'active')
+      group by a.id, a.title, a.brand, a.category
+      having count(r.id) > 0
+      order by total_revenue_halalas desc
+      limit 20
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Analytics: monthly summary ───────────────────────────────────────────
+router.get(
+  "/analytics/monthly-summary",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select to_char(date_trunc('month', created_at), 'YYYY-MM') as month,
+             count(*) as rentals,
+             coalesce(sum(total_payable_halalas), 0)::bigint as revenue_halalas,
+             coalesce(sum(platform_fee_halalas), 0)::bigint as platform_fee_halalas,
+             coalesce(sum(vat_halalas), 0)::bigint as vat_halalas
+      from rentals
+      where created_at >= now() - interval '12 months'
+      group by 1
+      order by 1 asc
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Audit log viewer ─────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+    const entityType = req.query.entityType as string | undefined;
+    const action = req.query.action as string | undefined;
+
+    let query = db
+      .select()
+      .from(auditLogs)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    if (entityType) {
+      query = query.where(eq(auditLogs.entityType, entityType)) as typeof query;
+    }
+    if (action) {
+      query = query.where(sql`action like ${`%${action}%`}`) as typeof query;
+    }
+
+    const rows = await query;
+    res.json(rows);
+  })
+);
+
+// ── Audit log summary (action counts) ────────────────────────────────────
+router.get(
+  "/audit-logs/summary",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select action, entity_type, count(*) as count,
+             max(created_at) as last_occurrence
+      from audit_logs
+      where created_at >= now() - interval '30 days'
+      group by action, entity_type
+      order by count desc
+    `);
+    res.json(rows.rows);
   })
 );
 

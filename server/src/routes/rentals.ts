@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { createNotification, createBulkNotifications } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -72,6 +73,23 @@ function generateRentalReference(): string {
   const year = new Date().getFullYear();
   const rand = Math.floor(100000 + Math.random() * 900000);
   return `MLR-${year}-${rand}`;
+}
+
+async function countLateReturns(userId: number): Promise<number> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .innerJoin(inspections, and(
+      eq(inspections.rentalId, rentals.id),
+      eq(inspections.type, "return")
+    ))
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`${inspections.createdAt} > (${rentals.endDate}::date + interval '1 day')`
+      )
+    );
+  return Number(rows[0]?.count ?? 0);
 }
 
 async function buildRiskFeatures(userId: number, assetValueHalalas: number): Promise<RiskFeatures> {
@@ -99,7 +117,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await countLateReturns(userId),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +298,25 @@ router.post(
       after: { rental, decision },
     });
 
+    await createBulkNotifications([
+      {
+        userId: asset.ownerId,
+        type: "rental_created",
+        title: "New rental request",
+        message: `Your asset "${asset.title}" has a new rental request (${rental.reference}).`,
+        relatedEntityType: "rental",
+        relatedEntityId: rental.id,
+      },
+      {
+        userId: renterId,
+        type: "rental_created",
+        title: "Rental created",
+        message: `Your rental ${rental.reference} has been created. Please sign the legal commitment to proceed.`,
+        relatedEntityType: "rental",
+        relatedEntityId: rental.id,
+      },
+    ]);
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -441,6 +478,25 @@ router.post(
       after: updated,
     });
 
+    await createBulkNotifications([
+      {
+        userId: rental.renterId,
+        type: "rental_delivered",
+        title: "Asset delivered",
+        message: `Your rental ${rental.reference} has been delivered. Enjoy your luxury item!`,
+        relatedEntityType: "rental",
+        relatedEntityId: id,
+      },
+      {
+        userId: rental.ownerId,
+        type: "rental_delivered",
+        title: "Asset delivered to renter",
+        message: `Your asset for rental ${rental.reference} has been delivered to the renter.`,
+        relatedEntityType: "rental",
+        relatedEntityId: id,
+      },
+    ]);
+
     res.json(updated);
   })
 );
@@ -475,6 +531,15 @@ router.post(
       entityType: "rental",
       entityId: id,
       after: updated,
+    });
+
+    await createNotification({
+      userId: rental.ownerId,
+      type: "rental_returned",
+      title: "Asset returned",
+      message: `Your asset from rental ${rental.reference} has been returned and is under inspection.`,
+      relatedEntityType: "rental",
+      relatedEntityId: id,
     });
 
     res.json(updated);

@@ -12,6 +12,7 @@ import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { createBulkNotifications } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -59,6 +60,20 @@ router.post(
       entityId: dispute.id,
       after: dispute,
     });
+
+    const notifyUsers = [rental.renterId, rental.ownerId].filter(
+      (uid) => uid !== actorId
+    );
+    await createBulkNotifications(
+      notifyUsers.map((uid) => ({
+        userId: uid,
+        type: "dispute_opened" as const,
+        title: "Dispute opened",
+        message: `A dispute has been opened for rental #${rental.id}: ${input.summary.slice(0, 100)}.`,
+        relatedEntityType: "rental",
+        relatedEntityId: rental.id,
+      }))
+    );
 
     res.status(201).json(dispute);
   })

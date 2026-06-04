@@ -580,6 +580,108 @@ export const adminApi = {
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  relatedEntityType?: string;
+  relatedEntityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (limit = 50, offset = 0) =>
+    request<Notification[]>(`/notifications?limit=${limit}&offset=${offset}`),
+  unreadCount: () =>
+    request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<Notification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin Analytics (extended)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const analyticsApi = {
+  userGrowth: () =>
+    request<Array<{ day: string; new_users: string; cumulative: string }>>(
+      "/admin/analytics/user-growth"
+    ),
+  categoryBreakdown: () =>
+    request<
+      Array<{
+        category: string;
+        total: string;
+        listed: string;
+        rented: string;
+        avg_value_halalas: string;
+      }>
+    >("/admin/analytics/category-breakdown"),
+  rentalFunnel: () =>
+    request<Array<{ status: string; count: string }>>("/admin/analytics/rental-funnel"),
+  topAssets: () =>
+    request<
+      Array<{
+        id: number;
+        title: string;
+        brand: string;
+        category: string;
+        rental_count: string;
+        total_revenue_halalas: string;
+      }>
+    >("/admin/analytics/top-assets"),
+  monthlySummary: () =>
+    request<
+      Array<{
+        month: string;
+        rentals: string;
+        revenue_halalas: string;
+        platform_fee_halalas: string;
+        vat_halalas: string;
+      }>
+    >("/admin/analytics/monthly-summary"),
+  auditLogs: (params?: { limit?: number; offset?: number; entityType?: string; action?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    return request<
+      Array<{
+        id: number;
+        actorUserId?: number;
+        actorRole?: string;
+        action: string;
+        entityType: string;
+        entityId?: number;
+        beforeJson?: Record<string, unknown>;
+        afterJson?: Record<string, unknown>;
+        ip?: string;
+        createdAt: string;
+      }>
+    >(`/admin/audit-logs?${qs}`);
+  },
+  auditLogSummary: () =>
+    request<
+      Array<{
+        action: string;
+        entity_type: string;
+        count: string;
+        last_occurrence: string;
+      }>
+    >("/admin/audit-logs/summary"),
+};
+
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };
