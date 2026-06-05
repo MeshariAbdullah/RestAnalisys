@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -441,6 +442,15 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: rental.renterId,
+      type: "rental_delivered",
+      title: "Rental Delivered",
+      body: `Your rental ${rental.reference} has been delivered. Enjoy!`,
+      entityType: "rental",
+      entityId: id,
+    });
+
     res.json(updated);
   })
 );
@@ -515,6 +525,22 @@ router.post(
         entityType: "rental",
         entityId: id,
         after: updated,
+      });
+      await notify({
+        userId: rental.renterId,
+        type: "rental_closed",
+        title: "Rental Closed",
+        body: `Your rental ${rental.reference} has been closed successfully.`,
+        entityType: "rental",
+        entityId: id,
+      });
+      await notify({
+        userId: rental.ownerId,
+        type: "rental_closed",
+        title: "Rental Completed",
+        body: `Rental ${rental.reference} for your asset has been completed. Payout pending.`,
+        entityType: "rental",
+        entityId: id,
       });
       return res.json(updated);
     }

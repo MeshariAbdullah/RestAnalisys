@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Diamond, CheckCircle2, X as XIcon, AlertTriangle } from "lucide-react";
+import { Diamond, CheckCircle2, X as XIcon, AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +46,7 @@ export default function AssetDetail({ id }: { id: number }) {
     ...(asset.studioImagesJson ?? []),
     ...(asset.submissionImagesJson ?? []),
   ];
-  const awaitingOwner = asset.status === "awaiting_owner_approval";
+  const awaitingOwner = asset.status === "inspection_reported";
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -175,6 +175,24 @@ export default function AssetDetail({ id }: { id: number }) {
               onClick={withdraw}
             >
               Withdraw from listing
+            </Button>
+          )}
+
+          {["completed", "withdrawn", "owner_rejected_valuation"].includes(asset.status) && (
+            <Button
+              className="w-full bg-amber-600 hover:bg-amber-700"
+              onClick={async () => {
+                setActionError(null);
+                try {
+                  await assetsApi.relist(id);
+                  await qc.invalidateQueries({ queryKey: ["asset", id] });
+                } catch (err) {
+                  setActionError((err as Error).message);
+                }
+              }}
+            >
+              <RotateCcw className="w-4 h-4 mr-1" />
+              Relist Asset
             </Button>
           )}
 

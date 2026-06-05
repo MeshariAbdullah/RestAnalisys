@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -256,6 +257,17 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: asset.ownerId,
+      type: approved ? "asset_approved" : "asset_rejected",
+      title: approved ? "Asset Approved" : "Asset Rejected",
+      body: approved
+        ? `Your asset "${asset.title}" has been approved and is awaiting shipment.`
+        : `Your asset "${asset.title}" was rejected. ${rejectionReason ?? ""}`.trim(),
+      entityType: "asset",
+      entityId: assetId,
+    });
+
     res.json(updated);
   })
 );
@@ -395,6 +407,48 @@ router.post(
       entityType: "asset",
       entityId: id,
       after: updated,
+    });
+
+    res.json(updated);
+  })
+);
+
+// ── Owner: relist a completed/withdrawn asset ──────────────────────────────
+router.post(
+  "/:id/relist",
+  authenticate,
+  requirePermission("asset.read.own"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const id = Number(req.params.id);
+    const [asset] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
+    if (!asset) throw new NotFoundError("Asset");
+    if (asset.ownerId !== req.user!.userId) throw new ForbiddenError("Not your asset");
+
+    const relistable = ["completed", "withdrawn", "owner_rejected_valuation"];
+    if (!relistable.includes(asset.status)) {
+      throw new LegalStateError(
+        `Cannot relist from status ${asset.status}. Only completed, withdrawn, or owner_rejected_valuation assets can be relisted.`
+      );
+    }
+
+    const [updated] = await db
+      .update(assets)
+      .set({
+        status: "pending_approval",
+        rejectionReason: null,
+        withdrawnAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(assets.id, id))
+      .returning();
+
+    await recordAudit({
+      req,
+      action: "asset.relist",
+      entityType: "asset",
+      entityId: id,
+      before: { status: asset.status },
+      after: { status: updated.status },
     });
 
     res.json(updated);

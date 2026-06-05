@@ -310,6 +310,8 @@ export const assetsApi = {
   get: (id: number) => request<Asset>(`/assets/${id}`),
   withdraw: (id: number) =>
     request<Asset>(`/assets/${id}/withdraw`, { method: "POST" }),
+  relist: (id: number) =>
+    request<Asset>(`/assets/${id}/relist`, { method: "POST" }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -578,6 +580,65 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLog: (params?: { limit?: number; offset?: number; entityType?: string; action?: string; actorId?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    if (params?.actorId) qs.set("actorId", String(params.actorId));
+    return request<{ items: AuditLogEntry[]; total: number; limit: number; offset: number }>(`/admin/audit-log?${qs}`);
+  },
+  stats: () =>
+    request<{
+      payments: { capturedHalalas: number; refundedHalalas: number; pendingHalalas: number };
+      rentals: Record<string, unknown>;
+      categoryBreakdown: Array<Record<string, unknown>>;
+    }>("/admin/stats"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export interface AuditLogEntry {
+  id: number;
+  actorUserId?: number;
+  actorRole?: string;
+  action: string;
+  entityType: string;
+  entityId?: number;
+  beforeJson?: Record<string, unknown>;
+  afterJson?: Record<string, unknown>;
+  ip?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (params?: { limit?: number; unread?: boolean }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.unread) qs.set("unread", "true");
+    return request<Notification[]>(`/notifications?${qs}`);
+  },
+  unreadCount: () => request<{ unread: number }>("/notifications/count"),
+  markRead: (id: number) =>
+    request("/notifications/" + id + "/read", { method: "POST" }),
+  markAllRead: () =>
+    request("/notifications/read-all", { method: "POST" }),
 };
 
 export const healthApi = {
