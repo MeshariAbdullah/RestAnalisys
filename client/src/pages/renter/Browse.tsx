@@ -10,28 +10,45 @@ import { assetsApi, formatSar, type Asset } from "@/lib/api";
 
 const CATEGORIES = [
   { id: undefined, label: "All", icon: Diamond },
-  { id: "bag", label: "Bags", icon: Diamond },
+  { id: "handbag", label: "Bags", icon: Diamond },
   { id: "watch", label: "Watches", icon: Watch },
   { id: "dress", label: "Dresses", icon: Shirt },
   { id: "jewelry", label: "Jewelry", icon: Gem },
+  { id: "accessory", label: "Accessories", icon: Gem },
 ];
+
+type SortOption = "newest" | "price_asc" | "price_desc" | "value_desc";
 
 export default function Browse() {
   const [category, setCategory] = useState<string | undefined>(undefined);
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortOption>("newest");
 
   const { data, isLoading } = useQuery({
     queryKey: ["listings", category],
     queryFn: () => assetsApi.listings({ category }),
   });
 
-  const filtered = (data?.items ?? []).filter((a: Asset) =>
-    search
-      ? `${a.brand} ${a.title} ${a.model ?? ""}`
-          .toLowerCase()
-          .includes(search.toLowerCase())
-      : true
-  );
+  const filtered = (data?.items ?? [])
+    .filter((a: Asset) =>
+      search
+        ? `${a.brand} ${a.title} ${a.model ?? ""}`
+            .toLowerCase()
+            .includes(search.toLowerCase())
+        : true
+    )
+    .sort((a, b) => {
+      switch (sort) {
+        case "price_asc":
+          return (a.dailyRentalPriceHalalas ?? 0) - (b.dailyRentalPriceHalalas ?? 0);
+        case "price_desc":
+          return (b.dailyRentalPriceHalalas ?? 0) - (a.dailyRentalPriceHalalas ?? 0);
+        case "value_desc":
+          return (b.evaluatedValueHalalas ?? 0) - (a.evaluatedValueHalalas ?? 0);
+        default:
+          return 0;
+      }
+    });
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -42,17 +59,29 @@ export default function Browse() {
         </p>
       </header>
 
-      <div className="flex flex-col md:flex-row gap-4 mb-8">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-          <Input
-            placeholder="Search brand, model, title…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+      <div className="flex flex-col gap-4 mb-8">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+            <Input
+              placeholder="Search brand, model, title…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortOption)}
+            className="h-10 px-3 rounded-md border border-neutral-300 text-sm bg-white"
+          >
+            <option value="newest">Newest first</option>
+            <option value="price_asc">Price: low to high</option>
+            <option value="price_desc">Price: high to low</option>
+            <option value="value_desc">Value: highest</option>
+          </select>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           {CATEGORIES.map((c) => (
             <Button
               key={c.label}
@@ -67,6 +96,9 @@ export default function Browse() {
               {c.label}
             </Button>
           ))}
+          <span className="ml-auto text-sm text-neutral-500">
+            {filtered.length} {filtered.length === 1 ? "item" : "items"}
+          </span>
         </div>
       </div>
 

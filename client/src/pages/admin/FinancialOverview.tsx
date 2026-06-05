@@ -1,7 +1,8 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Receipt, TrendingUp } from "lucide-react";
+import { Receipt, TrendingUp, ArrowDownCircle, ArrowUpCircle, Clock, BarChart3 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { adminApi, formatSar } from "@/lib/api";
 
 export default function FinancialOverview() {
@@ -15,8 +16,14 @@ export default function FinancialOverview() {
     queryFn: () => adminApi.revenueTrend(),
   });
 
+  const statsQuery = useQuery({
+    queryKey: ["admin-stats"],
+    queryFn: () => adminApi.stats(),
+  });
+
   const kpis = kpisQuery.data;
   const trend = trendQuery.data ?? [];
+  const stats = statsQuery.data;
   const maxTotal = Math.max(
     ...trend.map((t) => Number(t.total_halalas ?? 0)),
     1
@@ -64,6 +71,73 @@ export default function FinancialOverview() {
           </CardContent>
         </Card>
       </div>
+
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2 text-sm text-neutral-500 mb-2">
+                <ArrowUpCircle className="w-4 h-4 text-green-500" />
+                Captured payments
+              </div>
+              <p className="text-2xl font-bold text-green-600">
+                {formatSar(stats.payments.capturedHalalas)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2 text-sm text-neutral-500 mb-2">
+                <ArrowDownCircle className="w-4 h-4 text-red-500" />
+                Refunded
+              </div>
+              <p className="text-2xl font-bold text-red-600">
+                {formatSar(stats.payments.refundedHalalas)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2 text-sm text-neutral-500 mb-2">
+                <Clock className="w-4 h-4 text-amber-500" />
+                Pending
+              </div>
+              <p className="text-2xl font-bold text-amber-600">
+                {formatSar(stats.payments.pendingHalalas)}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {stats?.categoryBreakdown && stats.categoryBreakdown.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-neutral-400" />
+            Asset categories
+          </h2>
+          <Card>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                {stats.categoryBreakdown.map((cat: any) => (
+                  <div key={cat.category} className="text-center">
+                    <p className="text-sm font-medium capitalize">{cat.category}</p>
+                    <p className="text-2xl font-bold mt-1">{cat.count}</p>
+                    <div className="flex items-center justify-center gap-2 mt-1">
+                      <Badge className="bg-green-100 text-green-700 text-[10px]">
+                        {cat.listed} listed
+                      </Badge>
+                      <Badge className="bg-amber-100 text-amber-700 text-[10px]">
+                        {cat.rented} rented
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <h2 className="text-lg font-semibold mb-3">Last 30 days</h2>
       <Card>
