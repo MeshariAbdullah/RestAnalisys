@@ -19,6 +19,7 @@ import {
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -120,6 +121,28 @@ router.post(
       after: { payment, invoice },
     });
 
+    // Notify renter that payment was captured
+    if (result.status === "captured") {
+      await notify({
+        userId: req.user!.userId,
+        type: "payment_captured",
+        title: "Payment captured",
+        body: `Your payment for rental ${rental.reference} has been captured successfully.`,
+        entityType: "payment",
+        entityId: payment.id,
+      });
+
+      // Notify the owner that the rental is confirmed
+      await notify({
+        userId: rental.ownerId,
+        type: "rental_confirmed",
+        title: "Rental confirmed",
+        body: `Rental ${rental.reference} has been confirmed. Payment received.`,
+        entityType: "rental",
+        entityId: rental.id,
+      });
+    }
+
     res.json({ payment, invoice });
   })
 );
@@ -219,6 +242,16 @@ router.post(
       entityType: "payout",
       entityId: payout.id,
       after: payout,
+    });
+
+    // Notify the owner about their payout
+    await notify({
+      userId: rental.ownerId,
+      type: "payout_released",
+      title: "Payout released",
+      body: `Your payout of ${(payoutCalc.netHalalas / 100).toFixed(2)} SAR for rental #${rental.id} is being processed.`,
+      entityType: "payout",
+      entityId: payout.id,
     });
 
     res.json(payout);

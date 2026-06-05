@@ -12,6 +12,7 @@ import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -60,6 +61,18 @@ router.post(
       after: dispute,
     });
 
+    // Notify the other party about the dispute
+    const otherPartyId =
+      rental.renterId === actorId ? rental.ownerId : rental.renterId;
+    await notify({
+      userId: otherPartyId,
+      type: "dispute_opened",
+      title: "Dispute opened",
+      body: `A ${input.category} dispute has been opened for rental #${rental.id}.`,
+      entityType: "dispute",
+      entityId: dispute.id,
+    });
+
     res.status(201).json(dispute);
   })
 );
@@ -102,6 +115,17 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    // Notify the assignee
+    await notify({
+      userId: assigneeUserId,
+      type: "system",
+      title: "Dispute assigned to you",
+      body: `Dispute #${id} has been assigned to you for investigation.`,
+      entityType: "dispute",
+      entityId: id,
+    });
+
     res.json(updated);
   })
 );
@@ -148,6 +172,16 @@ router.post(
       entityType: "dispute",
       entityId: input.disputeId,
       after: updated,
+    });
+
+    // Notify the user who opened the dispute
+    await notify({
+      userId: dispute.openedByUserId,
+      type: "dispute_resolved",
+      title: "Dispute resolved",
+      body: `Dispute #${input.disputeId} has been resolved: ${input.resolution}.`,
+      entityType: "dispute",
+      entityId: input.disputeId,
     });
 
     res.json(updated);

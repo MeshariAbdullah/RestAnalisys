@@ -27,6 +27,7 @@ import {
 import { requestNafathSignature } from "../services/nafathService.js";
 import { issueSanad, signSanad, dischargeSanad, executeSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -160,6 +161,25 @@ router.post(
       after: { signed, sanad },
     });
 
+    // Notify renter that contract is signed and sanad issued
+    await notify({
+      userId,
+      type: "system",
+      title: "Contract signed",
+      body: `Your legal commitment #${commitment.id} has been signed. Rental is now pending payment.`,
+      entityType: "legal_commitment",
+      entityId: commitment.id,
+    });
+
+    await notify({
+      userId,
+      type: "sanad_issued",
+      title: "Sanad issued",
+      body: `Sanad ${nafith.nafithReference} has been issued for rental ${rental!.reference}.`,
+      entityType: "sanad_record",
+      entityId: sanad.id,
+    });
+
     res.json({ commitment: signed, sanad });
   })
 );
@@ -214,6 +234,16 @@ router.post(
       after: updated,
     });
 
+    // Notify the renter that their sanad has been discharged
+    await notify({
+      userId: sanad.renterId,
+      type: "sanad_discharged",
+      title: "Sanad discharged",
+      body: `Your sanad ${sanad.nafithReference} has been discharged. Your obligation is fulfilled.`,
+      entityType: "sanad_record",
+      entityId: id,
+    });
+
     res.json(updated);
   })
 );
@@ -265,6 +295,16 @@ router.post(
       entityType: "sanad_record",
       entityId: sanadId,
       after: { updated, reason },
+    });
+
+    // Notify the renter that their sanad is under execution
+    await notify({
+      userId: sanad.renterId,
+      type: "sanad_executed",
+      title: "Sanad under execution",
+      body: `Sanad ${sanad.nafithReference} has been submitted for legal execution (case ${result.executionCaseNumber}).`,
+      entityType: "sanad_record",
+      entityId: sanadId,
     });
 
     res.json(updated);

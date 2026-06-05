@@ -1,12 +1,11 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ScrollText, ChevronLeft, ChevronRight, Search, Filter } from "lucide-react";
+import { ScrollText, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { adminApi, type AuditLogEntry } from "@/lib/api";
-import Layout from "@/components/Layout";
 
 const ENTITY_TYPES = ["", "user", "asset", "rental", "payment", "dispute", "shipment"];
 const PAGE_SIZE = 30;
@@ -53,7 +52,6 @@ export default function AuditLog() {
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
 
   return (
-    <Layout>
       <div className="p-8 max-w-7xl mx-auto">
         <div className="flex items-center gap-3 mb-2">
           <ScrollText className="w-7 h-7 text-amber-600" />
@@ -190,6 +188,5 @@ export default function AuditLog() {
           </div>
         )}
       </div>
-    </Layout>
   );
 }
