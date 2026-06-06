@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { sendNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -256,6 +257,12 @@ router.post(
       after: updated,
     });
 
+    sendNotification({
+      type: approved ? "asset_approved" : "asset_rejected",
+      recipientUserId: asset.ownerId,
+      data: { title: asset.title, reason: rejectionReason ?? "" },
+    }).catch(() => {});
+
     res.json(updated);
   })
 );
@@ -396,6 +403,12 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    sendNotification({
+      type: "asset_listed",
+      recipientUserId: asset.ownerId,
+      data: { title: asset.title },
+    }).catch(() => {});
 
     res.json(updated);
   })

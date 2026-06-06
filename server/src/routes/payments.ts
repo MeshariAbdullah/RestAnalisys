@@ -19,6 +19,7 @@ import {
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { sendNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -120,6 +121,17 @@ router.post(
       after: { payment, invoice },
     });
 
+    if (result.status === "captured") {
+      sendNotification({
+        type: "payment_captured",
+        recipientUserId: req.user!.userId,
+        data: {
+          amount: (rental.totalPayableHalalas / 100).toFixed(2),
+          reference: rental.reference,
+        },
+      }).catch(() => {});
+    }
+
     res.json({ payment, invoice });
   })
 );
@@ -220,6 +232,15 @@ router.post(
       entityId: payout.id,
       after: payout,
     });
+
+    sendNotification({
+      type: "payout_released",
+      recipientUserId: rental.ownerId,
+      data: {
+        amount: (payoutCalc.netHalalas / 100).toFixed(2),
+        reference: rental.reference,
+      },
+    }).catch(() => {});
 
     res.json(payout);
   })
