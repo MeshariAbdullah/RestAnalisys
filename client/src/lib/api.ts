@@ -580,6 +580,48 @@ export const adminApi = {
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
 };
 
+export const adminHealthApi = {
+  summary: () =>
+    request<{
+      pendingApprovals: number;
+      activeRentals: number;
+      lateRentals: number;
+      pendingPayments: number;
+      blockedUsers: number;
+    }>("/admin/health-summary"),
+  auditLogs: (params?: { entityType?: string; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    return request<{
+      logs: Array<{
+        id: number;
+        actorUserId?: number;
+        actorRole?: string;
+        action: string;
+        entityType: string;
+        entityId?: number;
+        createdAt: string;
+      }>;
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/admin/audit-logs?${qs}`);
+  },
+  integrationEvents: (provider?: string) => {
+    const qs = provider ? `?provider=${provider}` : "";
+    return request<Array<{
+      id: number;
+      provider: string;
+      eventType: string;
+      referenceId?: string;
+      processed: boolean;
+      createdAt: string;
+    }>>(`/admin/integration-events${qs}`);
+  },
+};
+
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };

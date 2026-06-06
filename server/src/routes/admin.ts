@@ -13,6 +13,8 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
+  integrationEvents,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -218,6 +220,96 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Audit logs ────────────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const entityType = req.query.entityType as string | undefined;
+    const limit = Math.min(Number(req.query.limit ?? 100), 500);
+    const offset = Number(req.query.offset ?? 0);
+
+    const conditions = entityType ? eq(auditLogs.entityType, entityType) : undefined;
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(conditions)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [total] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(auditLogs)
+      .where(conditions);
+
+    res.json({ logs: rows, total: Number(total?.count ?? 0), limit, offset });
+  })
+);
+
+// ── Integration events (webhook history) ──────────────────────────────────
+router.get(
+  "/integration-events",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const provider = req.query.provider as string | undefined;
+    const limit = Math.min(Number(req.query.limit ?? 100), 500);
+
+    const conditions = provider ? eq(integrationEvents.provider, provider) : undefined;
+    const rows = await db
+      .select()
+      .from(integrationEvents)
+      .where(conditions)
+      .orderBy(desc(integrationEvents.createdAt))
+      .limit(limit);
+
+    res.json(rows);
+  })
+);
+
+// ── Platform health summary ───────────────────────────────────────────────
+router.get(
+  "/health-summary",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const [pendingApprovals] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(assets)
+      .where(eq(assets.status, "pending_approval"));
+
+    const [activeRentals] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(rentals)
+      .where(eq(rentals.status, "active"));
+
+    const [lateRentals] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(rentals)
+      .where(and(eq(rentals.status, "active"), sql`end_date < CURRENT_DATE`));
+
+    const [pendingPayments] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(payments)
+      .where(eq(payments.status, "pending"));
+
+    const [blockedUsers] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(users)
+      .where(eq(users.isBlocked, true));
+
+    res.json({
+      pendingApprovals: Number(pendingApprovals?.count ?? 0),
+      activeRentals: Number(activeRentals?.count ?? 0),
+      lateRentals: Number(lateRentals?.count ?? 0),
+      pendingPayments: Number(pendingPayments?.count ?? 0),
+      blockedUsers: Number(blockedUsers?.count ?? 0),
+    });
   })
 );
 

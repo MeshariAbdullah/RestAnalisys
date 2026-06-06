@@ -26,7 +26,11 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import webhooksRouter from "./routes/webhooks.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { generalLimiter, authLimiter, paymentLimiter } from "./middleware/rateLimiter.js";
+import { requestLogger } from "./middleware/requestLogger.js";
+import { startScheduler } from "./services/schedulerService.js";
 
 dotenv.config();
 
@@ -41,6 +45,8 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(requestLogger);
+app.use("/api", generalLimiter);
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -58,15 +64,16 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRouter);
+app.use("/api/auth", authLimiter, authRouter);
 app.use("/api/assets", assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
 app.use("/api/rentals", rentalsRouter);
 app.use("/api/legal", legalRouter);
-app.use("/api/payments", paymentsRouter);
+app.use("/api/payments", paymentLimiter, paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/webhooks", webhooksRouter);
 
 // 404
 app.use((req, res) => {
@@ -81,6 +88,9 @@ app.listen(PORT, () => {
   console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   Email:    ${process.env.EMAIL_API_KEY ? "live" : "placeholder"}`);
+
+  startScheduler();
 });
 
 export default app;
