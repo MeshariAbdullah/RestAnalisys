@@ -26,7 +26,11 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import analyticsRouter from "./routes/analytics.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { globalLimiter, authLimiter } from "./middleware/rateLimiter.js";
+import { requestLogger } from "./middleware/requestLogger.js";
+import { detectOverdueRentals } from "./services/overdueService.js";
 
 dotenv.config();
 
@@ -41,6 +45,9 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(requestLogger);
+app.use("/api", globalLimiter);
+app.use("/api/auth", authLimiter);
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -67,6 +74,7 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/analytics", analyticsRouter);
 
 // 404
 app.use((req, res) => {
@@ -81,6 +89,23 @@ app.listen(PORT, () => {
   console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   Rate limiting: enabled`);
+  console.log(`   Request logging: enabled`);
+
+  // Run overdue detection every hour
+  const OVERDUE_INTERVAL_MS = 60 * 60 * 1000;
+  setInterval(async () => {
+    try {
+      const overdue = await detectOverdueRentals();
+      if (overdue.length > 0) {
+        console.log(`[overdue] Detected ${overdue.length} overdue rental(s)`);
+      }
+    } catch (err) {
+      console.error("[overdue] Detection failed:", err);
+    }
+  }, OVERDUE_INTERVAL_MS);
+
+  detectOverdueRentals().catch(() => {});
 });
 
 export default app;

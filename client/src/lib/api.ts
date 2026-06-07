@@ -266,12 +266,32 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: {
+    category?: string;
+    brand?: string;
+    q?: string;
+    minDaily?: number;
+    maxDaily?: number;
+    minValue?: number;
+    maxValue?: number;
+    riskCategory?: string;
+    sortBy?: string;
+    cursor?: number;
+    limit?: number;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.q) qs.set("q", params.q);
+    if (params?.minDaily) qs.set("minDaily", String(params.minDaily));
+    if (params?.maxDaily) qs.set("maxDaily", String(params.maxDaily));
+    if (params?.minValue) qs.set("minValue", String(params.minValue));
+    if (params?.maxValue) qs.set("maxValue", String(params.maxValue));
+    if (params?.riskCategory) qs.set("riskCategory", params.riskCategory);
+    if (params?.sortBy) qs.set("sortBy", params.sortBy);
+    if (params?.cursor) qs.set("cursor", String(params.cursor));
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    return request<{ items: Asset[]; count: number; nextCursor: number | null }>(`/assets/listings?${qs}`);
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
@@ -582,6 +602,27 @@ export const adminApi = {
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+};
+
+export const analyticsApi = {
+  assetsByCategory: () =>
+    request<Array<Record<string, unknown>>>("/analytics/assets/by-category"),
+  revenueMonthly: () =>
+    request<Array<Record<string, unknown>>>("/analytics/revenue/monthly"),
+  topRented: () =>
+    request<Array<Record<string, unknown>>>("/analytics/assets/top-rented"),
+  usersGrowth: () =>
+    request<Array<Record<string, unknown>>>("/analytics/users/growth"),
+  rentalsFunnel: () =>
+    request<Array<Record<string, unknown>>>("/analytics/rentals/funnel"),
+  rentalsAverages: () =>
+    request<Record<string, unknown>>("/analytics/rentals/averages"),
+  disputeStats: () =>
+    request<Record<string, unknown>>("/analytics/disputes/stats"),
+  payoutsSummary: () =>
+    request<Record<string, unknown>>("/analytics/payouts/summary"),
+  platformHealth: () =>
+    request<Record<string, unknown>>("/analytics/platform/health"),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
