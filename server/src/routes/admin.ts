@@ -221,4 +221,33 @@ router.get(
   })
 );
 
+// ── Trigger overdue detection manually ────────────────────────────────────
+router.post(
+  "/run-overdue-check",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (_req, res) => {
+    const { detectOverdueRentals } = await import("../services/overdueService.js");
+    const alerts = await detectOverdueRentals();
+    res.json({ alertsCreated: alerts });
+  })
+);
+
+// ── Platform activity feed (latest audit entries) ─────────────────────────
+router.get(
+  "/activity",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const { auditLogs } = await import("../db/schema.js");
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit);
+    res.json(rows);
+  })
+);
+
 export default router;

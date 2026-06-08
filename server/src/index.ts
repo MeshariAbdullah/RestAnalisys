@@ -11,6 +11,7 @@
  *   /api/disputes     — dispute creation + resolution
  *   /api/operations   — shipments, inventory, alerts
  *   /api/admin        — KPIs, risk monitoring, user management
+ *   /api/notifications — user notifications (read, mark read)
  */
 
 import express from "express";
@@ -26,7 +27,9 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import notificationsRouter from "./routes/notifications.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { apiLimiter, authLimiter } from "./middleware/rateLimit.js";
 
 dotenv.config();
 
@@ -41,6 +44,7 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(apiLimiter);
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -58,7 +62,7 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRouter);
+app.use("/api/auth", authLimiter, authRouter);
 app.use("/api/assets", assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
 app.use("/api/rentals", rentalsRouter);
@@ -67,6 +71,7 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/notifications", notificationsRouter);
 
 // 404
 app.use((req, res) => {
@@ -81,6 +86,24 @@ app.listen(PORT, () => {
   console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
+
+  if (process.env.ENABLE_OVERDUE_CHECK !== "false") {
+    const OVERDUE_INTERVAL_MS = 60 * 60 * 1000; // hourly
+    setInterval(async () => {
+      try {
+        const { detectOverdueRentals, detectUpcomingReturns } = await import(
+          "./services/overdueService.js"
+        );
+        const alerts = await detectOverdueRentals();
+        const reminders = await detectUpcomingReturns();
+        if (alerts > 0 || reminders > 0) {
+          console.log(`[overdue] ${alerts} alerts, ${reminders} reminders`);
+        }
+      } catch (err) {
+        console.error("[overdue] check failed:", err);
+      }
+    }, OVERDUE_INTERVAL_MS);
+  }
 });
 
 export default app;

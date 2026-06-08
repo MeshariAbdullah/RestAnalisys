@@ -79,8 +79,10 @@ export const AssetApprovalSchema = z.object({
 export const AssetListingFilter = z.object({
   category: AssetCategory.optional(),
   brand: z.string().optional(),
+  q: z.string().max(100).optional(),
   minDaily: HalalasAmount.optional(),
   maxDaily: HalalasAmount.optional(),
+  sortBy: z.enum(["price_asc", "price_desc", "newest", "value_desc"]).optional(),
   from: IsoDate.optional(),
   to: IsoDate.optional(),
   cursor: z.coerce.number().int().nonnegative().optional(),

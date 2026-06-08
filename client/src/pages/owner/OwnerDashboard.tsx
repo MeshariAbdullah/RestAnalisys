@@ -5,7 +5,8 @@ import { Diamond, Plus, TrendingUp, Package, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { assetsApi, paymentsApi, formatSar, type Asset } from "@/lib/api";
+import { assetsApi, paymentsApi, ownerStatsApi, formatSar, type Asset } from "@/lib/api";
+import { Progress } from "@/components/ui/progress";
 
 function statusColor(s: string): string {
   if (s === "listed" || s === "rented_out") return "bg-green-100 text-green-700";
@@ -25,7 +26,13 @@ export default function OwnerDashboard() {
     queryFn: () => paymentsApi.myPayouts(),
   });
 
+  const statsQuery = useQuery({
+    queryKey: ["owner-stats"],
+    queryFn: () => ownerStatsApi.get(),
+  });
+
   const assets = assetsQuery.data ?? [];
+  const stats = statsQuery.data;
   const totalValue = assets.reduce(
     (sum, a) => sum + (a.evaluatedValueHalalas ?? 0),
     0
@@ -37,6 +44,12 @@ export default function OwnerDashboard() {
     (sum, p) => sum + Number(p.netHalalas ?? 0),
     0
   );
+  const occupancyRate =
+    stats && stats.assets.total > 0
+      ? Math.round(
+          ((stats.assets.rented / stats.assets.total) * 100)
+        )
+      : 0;
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -93,6 +106,47 @@ export default function OwnerDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <Card>
+            <CardContent className="p-6">
+              <p className="text-sm text-neutral-500 mb-3">Asset occupancy</p>
+              <div className="flex items-center gap-3 mb-2">
+                <Progress value={occupancyRate} className="h-3 flex-1" />
+                <span className="text-lg font-bold">{occupancyRate}%</span>
+              </div>
+              <p className="text-xs text-neutral-400">
+                {stats.assets.rented} rented · {stats.assets.listed} listed ·{" "}
+                {stats.assets.total} total
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <p className="text-sm text-neutral-500 mb-3">Rental performance</p>
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <p className="text-2xl font-bold">{stats.rentals.completed}</p>
+                  <p className="text-xs text-neutral-500">Completed</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-amber-600">
+                    {stats.rentals.active}
+                  </p>
+                  <p className="text-xs text-neutral-500">Active</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">
+                    {formatSar(stats.rentals.revenueHalalas)}
+                  </p>
+                  <p className="text-xs text-neutral-500">Revenue</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <h2 className="text-xl font-bold mb-4">My assets</h2>
       {assetsQuery.isLoading ? (

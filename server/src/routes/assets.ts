@@ -11,7 +11,7 @@
  */
 
 import { Router } from "express";
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify, assetStatusNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -256,6 +257,15 @@ router.post(
       after: updated,
     });
 
+    await notify(
+      assetStatusNotification(
+        asset.ownerId,
+        asset.title,
+        assetId,
+        approved ? "awaiting_shipment" : "rejected"
+      )
+    );
+
     res.json(updated);
   })
 );
@@ -318,6 +328,27 @@ router.get(
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.q) {
+      const pattern = `%${filter.q}%`;
+      conditions.push(
+        or(
+          ilike(assets.title, pattern),
+          ilike(assets.brand, pattern),
+          ilike(assets.model, pattern),
+          ilike(assets.description, pattern)
+        )!
+      );
+    }
+
+    const orderMap = {
+      price_asc: asc(assets.dailyRentalPriceHalalas),
+      price_desc: desc(assets.dailyRentalPriceHalalas),
+      newest: desc(assets.createdAt),
+      value_desc: desc(assets.evaluatedValueHalalas),
+    } as const;
+    const orderClause = filter.sortBy
+      ? orderMap[filter.sortBy]
+      : desc(assets.updatedAt);
 
     const rows = await db
       .select({
@@ -326,6 +357,7 @@ router.get(
         brand: assets.brand,
         model: assets.model,
         category: assets.category,
+        description: assets.description,
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
@@ -334,7 +366,7 @@ router.get(
       })
       .from(assets)
       .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
+      .orderBy(orderClause)
       .limit(filter.limit);
 
     res.json({ items: rows, count: rows.length });
@@ -396,6 +428,10 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    await notify(
+      assetStatusNotification(asset.ownerId, asset.title, id, "listed")
+    );
 
     res.json(updated);
   })

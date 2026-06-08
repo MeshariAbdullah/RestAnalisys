@@ -266,10 +266,18 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: {
+    category?: string;
+    brand?: string;
+    q?: string;
+    sortBy?: "price_asc" | "price_desc" | "newest" | "value_desc";
+    limit?: number;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.q) qs.set("q", params.q);
+    if (params?.sortBy) qs.set("sortBy", params.sortBy);
     if (params?.limit) qs.set("limit", String(params.limit));
     return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
   },
@@ -560,6 +568,16 @@ export const operationsApi = {
 // Admin
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface AuditEntry {
+  id: number;
+  actorUserId?: number;
+  actorRole?: string;
+  action: string;
+  entityType: string;
+  entityId?: number;
+  createdAt: string;
+}
+
 export const adminApi = {
   kpis: () => request<AdminKPIs>("/admin/kpis"),
   revenueTrend: () =>
@@ -578,10 +596,79 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  activity: (limit?: number) =>
+    request<AuditEntry[]>(`/admin/activity?limit=${limit ?? 30}`),
+  runOverdueCheck: () =>
+    request<{ alertsCreated: number }>("/admin/run-overdue-check", {
+      method: "POST",
+    }),
 };
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  titleAr?: string;
+  body: string;
+  bodyAr?: string;
+  referenceType?: string;
+  referenceId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (params?: { unread?: boolean; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.unread) qs.set("unread", "true");
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    return request<{ notifications: Notification[]; unreadCount: number }>(
+      `/notifications?${qs}`
+    );
+  },
+  markRead: (id: number) =>
+    request<Notification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Owner Stats
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface OwnerStats {
+  earnings: {
+    totalNetHalalas: number;
+    totalGrossHalalas: number;
+    payoutCount: number;
+  };
+  assets: {
+    total: number;
+    listed: number;
+    rented: number;
+  };
+  rentals: {
+    total: number;
+    completed: number;
+    active: number;
+    revenueHalalas: number;
+  };
+  monthlyTrend: Array<{ month: string; net_halalas: string; payouts: string }>;
+}
+
+export const ownerStatsApi = {
+  get: () => request<OwnerStats>("/payments/owner/stats"),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

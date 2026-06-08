@@ -56,6 +56,11 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import {
+  notify,
+  rentalStatusNotification,
+  assetStatusNotification,
+} from "../services/notificationService.js";
 
 const router = Router();
 
@@ -280,6 +285,13 @@ router.post(
       after: { rental, decision },
     });
 
+    await notify(
+      rentalStatusNotification(renterId, rental.reference, rental.id, "pending_legal_signing")
+    );
+    await notify(
+      assetStatusNotification(asset.ownerId, asset.title, asset.id, "reserved")
+    );
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -401,6 +413,10 @@ router.post(
       after: updated,
     });
 
+    await notify(
+      rentalStatusNotification(rental.renterId, rental.reference, id, "out_for_delivery")
+    );
+
     res.json(updated);
   })
 );
@@ -440,6 +456,13 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    await notify(
+      rentalStatusNotification(rental.renterId, rental.reference, id, "active")
+    );
+    await notify(
+      assetStatusNotification(rental.ownerId, "", rental.assetId, "rented_out")
+    );
 
     res.json(updated);
   })
@@ -515,6 +538,19 @@ router.post(
         entityType: "rental",
         entityId: id,
         after: updated,
+      });
+      await notify(
+        rentalStatusNotification(rental.renterId, rental.reference, id, "closed")
+      );
+      await notify({
+        userId: rental.ownerId,
+        type: "rental_status",
+        title: `Rental ${rental.reference} closed`,
+        titleAr: `إيجار ${rental.reference} مغلق`,
+        body: "Rental completed cleanly. Payout will be processed shortly.",
+        bodyAr: "اكتمل الإيجار بنجاح. سيتم معالجة الدفعة قريباً.",
+        referenceType: "rental",
+        referenceId: id,
       });
       return res.json(updated);
     }

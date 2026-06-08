@@ -239,4 +239,73 @@ router.get(
   })
 );
 
+// ── Owner: earnings stats ─────────────────────────────────────────────────
+router.get(
+  "/owner/stats",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const ownerId = req.user!.userId;
+    const { sql: rawSql } = await import("drizzle-orm");
+
+    const [totalEarnings] = await db
+      .select({
+        totalNet: rawSql<string>`coalesce(sum(net_halalas), 0)`,
+        totalGross: rawSql<string>`coalesce(sum(gross_halalas), 0)`,
+        payoutCount: rawSql<number>`count(*)`,
+      })
+      .from(payouts)
+      .where(eq(payouts.ownerId, ownerId));
+
+    const [assetStats] = await db
+      .select({
+        totalAssets: rawSql<number>`count(*)`,
+        listedAssets: rawSql<number>`count(*) filter (where status = 'listed')`,
+        rentedAssets: rawSql<number>`count(*) filter (where status = 'rented_out')`,
+      })
+      .from(assets)
+      .where(eq(assets.ownerId, ownerId));
+
+    const [rentalStats] = await db
+      .select({
+        totalRentals: rawSql<number>`count(*)`,
+        completedRentals: rawSql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
+        activeRentals: rawSql<number>`count(*) filter (where status in ('active','out_for_delivery','confirmed'))`,
+        revenueHalalas: rawSql<string>`coalesce(sum(rental_subtotal_halalas) filter (where status in ('closed','closed_with_penalty')), 0)`,
+      })
+      .from(rentals)
+      .where(eq(rentals.ownerId, ownerId));
+
+    const monthlyTrend = await db.execute(rawSql`
+      select to_char(date_trunc('month', created_at), 'YYYY-MM') as month,
+             coalesce(sum(net_halalas), 0) as net_halalas,
+             count(*) as payouts
+      from payouts
+      where owner_id = ${ownerId}
+        and created_at >= now() - interval '6 months'
+      group by 1
+      order by 1 asc
+    `);
+
+    res.json({
+      earnings: {
+        totalNetHalalas: Number(totalEarnings?.totalNet ?? 0),
+        totalGrossHalalas: Number(totalEarnings?.totalGross ?? 0),
+        payoutCount: Number(totalEarnings?.payoutCount ?? 0),
+      },
+      assets: {
+        total: Number(assetStats?.totalAssets ?? 0),
+        listed: Number(assetStats?.listedAssets ?? 0),
+        rented: Number(assetStats?.rentedAssets ?? 0),
+      },
+      rentals: {
+        total: Number(rentalStats?.totalRentals ?? 0),
+        completed: Number(rentalStats?.completedRentals ?? 0),
+        active: Number(rentalStats?.activeRentals ?? 0),
+        revenueHalalas: Number(rentalStats?.revenueHalalas ?? 0),
+      },
+      monthlyTrend: monthlyTrend.rows,
+    });
+  })
+);
+
 export default router;

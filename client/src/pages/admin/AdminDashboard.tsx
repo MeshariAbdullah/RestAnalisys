@@ -9,14 +9,20 @@ import {
   FileSignature,
   AlertOctagon,
   TrendingUp,
+  Activity,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { adminApi, formatSar } from "@/lib/api";
+import { adminApi, formatSar, type AuditEntry } from "@/lib/api";
 
 export default function AdminDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["admin-kpis"],
     queryFn: () => adminApi.kpis(),
+  });
+
+  const { data: activityData } = useQuery({
+    queryKey: ["admin-activity"],
+    queryFn: () => adminApi.activity(15),
   });
 
   return (
@@ -123,6 +129,50 @@ export default function AdminDashboard() {
           </a>
         </Link>
       </div>
+
+      {activityData && activityData.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+            <Activity className="w-5 h-5" />
+            Recent activity
+          </h2>
+          <Card>
+            <CardContent className="p-0">
+              <div className="divide-y">
+                {activityData.map((entry: AuditEntry) => (
+                  <div
+                    key={entry.id}
+                    className="px-4 py-3 flex items-center justify-between text-sm"
+                  >
+                    <div>
+                      <span className="font-medium">{entry.action}</span>
+                      <span className="text-neutral-500 ml-2">
+                        on {entry.entityType}
+                        {entry.entityId ? ` #${entry.entityId}` : ""}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-neutral-400 text-xs">
+                      {entry.actorRole && (
+                        <span className="bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded">
+                          {entry.actorRole}
+                        </span>
+                      )}
+                      <span>
+                        {new Date(entry.createdAt).toLocaleString("en-SA", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
