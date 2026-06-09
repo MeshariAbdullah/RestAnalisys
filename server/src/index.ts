@@ -26,7 +26,9 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import uploadsRouter from "./routes/uploads.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { requestLogger } from "./middleware/requestLogger.js";
 
 dotenv.config();
 
@@ -41,6 +43,7 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(requestLogger);
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -53,6 +56,9 @@ app.get("/api/health", (_req, res) => {
       nafith: !!process.env.NAFITH_API_KEY,
       paymentGateway: !!process.env.PAYMENT_GATEWAY_API_KEY,
       zatca: !!process.env.ZATCA_API_KEY,
+      smtp: !!process.env.SMTP_HOST,
+      sms: !!process.env.TWILIO_ACCOUNT_SID,
+      storage: !!process.env.S3_BUCKET,
     },
     timestamp: new Date().toISOString(),
   });
@@ -67,6 +73,7 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/uploads", uploadsRouter);
 
 // 404
 app.use((req, res) => {
@@ -81,6 +88,8 @@ app.listen(PORT, () => {
   console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   Notify:   ${process.env.SMTP_HOST ? "live" : "placeholder"}`);
+  console.log(`   Storage:  ${process.env.S3_BUCKET ? "live" : "placeholder"}`);
 });
 
 export default app;

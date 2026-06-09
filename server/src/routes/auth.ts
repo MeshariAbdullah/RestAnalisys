@@ -14,11 +14,17 @@ import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
+import { rateLimiter } from "../middleware/rateLimiter.js";
 
 const router = Router();
 
+const registerLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 5 });
+const loginLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, maxRequests: 10 });
+const nafathLimiter = rateLimiter({ windowMs: 10 * 60 * 1000, maxRequests: 3 });
+
 router.post(
   "/register",
+  registerLimiter,
   asyncHandler(async (req, res) => {
     const input = RegisterSchema.parse(req.body);
 
@@ -77,6 +83,7 @@ router.post(
 
 router.post(
   "/login",
+  loginLimiter,
   asyncHandler(async (req, res) => {
     const { email, password } = LoginSchema.parse(req.body);
     const [user] = await db
@@ -122,6 +129,7 @@ router.post(
 
 router.post(
   "/nafath/initiate",
+  nafathLimiter,
   authenticate,
   asyncHandler(async (req: AuthedRequest, res) => {
     const { nationalId } = NafathVerifySchema.parse(req.body);
