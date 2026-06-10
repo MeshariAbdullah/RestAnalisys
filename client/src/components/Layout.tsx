@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import LanguageToggle from "./LanguageToggle";
+import NotificationBell from "./NotificationBell";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -137,6 +138,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </nav>
 
       <div className="p-2 border-t border-neutral-800 space-y-1">
+        <NotificationBell compact={!sidebarOpen && !mobileOpen} />
         <LanguageToggle compact={!sidebarOpen && !mobileOpen} />
 
         <Link href="/profile">

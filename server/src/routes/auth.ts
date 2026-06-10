@@ -67,9 +67,12 @@ router.post(
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        phoneE164: user.phoneE164,
+        nationalId: user.nationalId,
         nafathVerified: user.nafathVerified,
         kycStatus: user.kycStatus,
         trustScore: user.trustScore,
+        riskCategory: user.riskCategory,
       },
     });
   })
@@ -112,9 +115,12 @@ router.post(
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        phoneE164: user.phoneE164,
+        nationalId: user.nationalId,
         nafathVerified: user.nafathVerified,
         kycStatus: user.kycStatus,
         trustScore: user.trustScore,
+        riskCategory: user.riskCategory,
       },
     });
   })

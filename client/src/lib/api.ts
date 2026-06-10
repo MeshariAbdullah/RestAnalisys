@@ -597,6 +597,36 @@ export const profileApi = {
     }),
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  titleEn: string;
+  titleAr: string;
+  bodyEn?: string;
+  bodyAr?: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (limit?: number) => {
+    const qs = limit ? `?limit=${limit}` : "";
+    return request<{ items: AppNotification[]; unreadCount: number }>(`/notifications${qs}`);
+  },
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ message: string }>("/notifications/read-all", { method: "POST" }),
+};
+
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };
