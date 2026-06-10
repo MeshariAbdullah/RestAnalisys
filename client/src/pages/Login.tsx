@@ -6,9 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api";
 import { saveSession, homeForRole } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
+import { useToast } from "@/components/Toaster";
+import LanguageToggle from "@/components/LanguageToggle";
 
 export default function Login() {
   const [, navigate] = useLocation();
+  const { t, dir } = useI18n();
+  const { success, error: showError } = useToast();
   const [email, setEmail] = useState("renter@demo.sa");
   const [password, setPassword] = useState("Mlr@2024!");
   const [loading, setLoading] = useState(false);
@@ -21,16 +26,22 @@ export default function Login() {
     try {
       const res = await authApi.login(email, password);
       saveSession(res.token, res.user);
+      success(t("toast.loginSuccess"));
       navigate(homeForRole(res.user.role));
     } catch (err) {
-      setError((err as Error).message ?? "Login failed");
+      const msg = (err as Error).message ?? "Login failed";
+      setError(msg);
+      showError(t("toast.error"), msg);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center px-4">
+    <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center px-4" dir={dir}>
+      <div className="absolute top-4 end-4">
+        <LanguageToggle />
+      </div>
       <div className="w-full max-w-md">
         <Link href="/">
           <a className="flex items-center gap-3 justify-center mb-8">
@@ -45,29 +56,31 @@ export default function Login() {
         </Link>
 
         <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-8">
-          <h1 className="text-2xl font-bold mb-1">Sign in</h1>
+          <h1 className="text-2xl font-bold mb-1">{t("auth.welcomeBack")}</h1>
           <p className="text-sm text-neutral-400 mb-6">
-            Access your MLR dashboard
+            {t("auth.welcomeBackDesc")}
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <Label className="text-neutral-300">Email</Label>
+              <Label className="text-neutral-300">{t("auth.email")}</Label>
               <Input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="mt-1 bg-neutral-950 border-neutral-800 text-white"
+                dir="ltr"
                 required
               />
             </div>
             <div>
-              <Label className="text-neutral-300">Password</Label>
+              <Label className="text-neutral-300">{t("auth.password")}</Label>
               <Input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 bg-neutral-950 border-neutral-800 text-white"
+                dir="ltr"
                 required
               />
             </div>
@@ -79,10 +92,10 @@ export default function Login() {
             )}
 
             <div className="text-xs text-neutral-400 bg-neutral-950/60 border border-neutral-800 rounded-md p-3 space-y-1">
-              <p className="font-medium text-neutral-300">Demo credentials:</p>
-              <p>Password for all: <code>Mlr@2024!</code></p>
-              <p>· admin@mlr.sa · owner@demo.sa · renter@demo.sa</p>
-              <p>· inspector@mlr.sa · ops@mlr.sa</p>
+              <p className="font-medium text-neutral-300">{t("auth.demoCredentials")}:</p>
+              <p dir="ltr">Password for all: <code>Mlr@2024!</code></p>
+              <p dir="ltr">· admin@mlr.sa · owner@demo.sa · renter@demo.sa</p>
+              <p dir="ltr">· inspector@mlr.sa · ops@mlr.sa</p>
             </div>
 
             <Button
@@ -90,14 +103,14 @@ export default function Login() {
               className="w-full bg-amber-500 text-neutral-950 hover:bg-amber-400"
               disabled={loading}
             >
-              {loading ? "Signing in…" : "Sign in"}
+              {loading ? t("common.loading") : t("auth.login")}
             </Button>
           </form>
 
           <p className="text-center text-sm text-neutral-400 mt-6">
-            New to MLR?{" "}
+            {t("auth.noAccount")}{" "}
             <Link href="/register">
-              <a className="text-amber-400 hover:underline">Create an account</a>
+              <a className="text-amber-400 hover:underline">{t("auth.registerHere")}</a>
             </Link>
           </p>
         </div>
