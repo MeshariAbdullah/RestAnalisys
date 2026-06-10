@@ -612,8 +612,10 @@ export function halalasToSar(halalas: number | null | undefined): number {
 
 export function formatSar(halalas: number | null | undefined): string {
   const value = halalasToSar(halalas);
-  return `${value.toLocaleString("en-SA", {
+  const lang = localStorage.getItem("mlr_lang") ?? "ar";
+  const suffix = lang === "ar" ? " ر.س" : " SAR";
+  return `${value.toLocaleString(lang === "ar" ? "ar-SA" : "en-SA", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  })} SAR`;
+  })}${suffix}`;
 }

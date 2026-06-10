@@ -7,18 +7,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, formatSar, type Asset } from "@/lib/api";
-
-const CATEGORIES = [
-  { id: undefined, label: "All", icon: Diamond },
-  { id: "bag", label: "Bags", icon: Diamond },
-  { id: "watch", label: "Watches", icon: Watch },
-  { id: "dress", label: "Dresses", icon: Shirt },
-  { id: "jewelry", label: "Jewelry", icon: Gem },
-];
+import { useI18n } from "@/lib/i18n";
 
 export default function Browse() {
+  const { t } = useI18n();
   const [category, setCategory] = useState<string | undefined>(undefined);
   const [search, setSearch] = useState("");
+
+  const categories = [
+    { id: undefined, label: t("browse.allCategories"), icon: Diamond },
+    { id: "bag", label: t("browse.bags"), icon: Diamond },
+    { id: "watch", label: t("browse.watches"), icon: Watch },
+    { id: "dress", label: t("browse.dresses"), icon: Shirt },
+    { id: "jewelry", label: t("browse.jewelry"), icon: Gem },
+  ];
 
   const { data, isLoading } = useQuery({
     queryKey: ["listings", category],
@@ -34,26 +36,26 @@ export default function Browse() {
   );
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
+    <div className="p-6 md:p-8 max-w-7xl mx-auto">
       <header className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">The Collection</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t("browse.title")}</h1>
         <p className="text-neutral-500 mt-1">
-          Verified, inspected and ready to ship.
+          {t("landing.step3Desc")}
         </p>
       </header>
 
       <div className="flex flex-col md:flex-row gap-4 mb-8">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <Input
-            placeholder="Search brand, model, title…"
+            placeholder={t("common.search")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="ps-9"
           />
         </div>
         <div className="flex gap-2 flex-wrap">
-          {CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <Button
               key={c.label}
               variant={category === c.id ? "default" : "outline"}
@@ -63,7 +65,7 @@ export default function Browse() {
               }
               size="sm"
             >
-              <c.icon className="w-4 h-4 mr-1.5" />
+              <c.icon className="w-4 h-4 me-1.5" />
               {c.label}
             </Button>
           ))}
@@ -81,15 +83,15 @@ export default function Browse() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-20 text-neutral-500">
-          No assets match your filters.
+          {t("common.noResults")}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((asset) => (
             <Link key={asset.id} href={`/browse/${asset.id}`}>
               <a>
-                <Card className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer h-full">
-                  <div className="aspect-square bg-neutral-100 relative flex items-center justify-center">
+                <Card className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer h-full group">
+                  <div className="aspect-square bg-neutral-100 relative flex items-center justify-center overflow-hidden">
                     {asset.studioImagesJson?.[0] || asset.submissionImagesJson?.[0] ? (
                       <img
                         src={
@@ -97,12 +99,12 @@ export default function Browse() {
                           asset.submissionImagesJson[0]
                         }
                         alt={asset.title}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     ) : (
                       <Diamond className="w-16 h-16 text-neutral-300" />
                     )}
-                    <Badge className="absolute top-3 right-3 bg-white/90 text-neutral-900 backdrop-blur">
+                    <Badge className="absolute top-3 end-3 bg-white/90 text-neutral-900 backdrop-blur">
                       {asset.category}
                     </Badge>
                   </div>
@@ -122,12 +124,11 @@ export default function Browse() {
                       <p className="text-amber-600 font-bold">
                         {formatSar(asset.dailyRentalPriceHalalas)}
                         <span className="text-xs font-normal text-neutral-500">
-                          {" "}
-                          / day
+                          {" "}/ {t("browse.dailyRent")}
                         </span>
                       </p>
                       <p className="text-xs text-neutral-500">
-                        Value {formatSar(asset.evaluatedValueHalalas)}
+                        {t("browse.value")} {formatSar(asset.evaluatedValueHalalas)}
                       </p>
                     </div>
                   </CardContent>
