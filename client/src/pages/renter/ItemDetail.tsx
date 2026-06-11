@@ -8,12 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, rentalsApi, formatSar } from "@/lib/api";
+import NafathVerification from "@/components/NafathVerification";
+import { getCurrentUser } from "@/lib/auth";
 
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
 export default function ItemDetail({ id }: { id: number }) {
+  const user = getCurrentUser();
   const [, navigate] = useLocation();
   const today = useMemo(() => toISODate(new Date()), []);
   const threeDaysOut = useMemo(
@@ -134,6 +137,12 @@ export default function ItemDetail({ id }: { id: number }) {
             Every item is authenticated, insured and shipped by MLR operations.
           </div>
 
+          {user && !user.nafathVerified && (
+            <div className="mt-6">
+              <NafathVerification onVerified={() => window.location.reload()} />
+            </div>
+          )}
+
           {/* Booking card */}
           <Card className="mt-6 border-amber-100 bg-amber-50/30">
             <CardContent className="p-6">
@@ -197,7 +206,7 @@ export default function ItemDetail({ id }: { id: number }) {
 
               <Button
                 onClick={handleBook}
-                disabled={creating || !quoteQuery.data}
+                disabled={creating || !quoteQuery.data || !user?.nafathVerified}
                 className="w-full mt-5 bg-amber-500 text-neutral-950 hover:bg-amber-400"
               >
                 {creating ? "Reserving…" : "Reserve & sign contract"}

@@ -19,6 +19,8 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  ScrollText,
+  Bell,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
@@ -56,6 +58,7 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit-logs", label: "Audit Logs", icon: ScrollText, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
@@ -71,7 +74,7 @@ function roleLabel(role: Role): string {
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(typeof window !== "undefined" ? window.innerWidth >= 768 : true);
   const user: User | null = getCurrentUser();
 
   const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
@@ -86,7 +89,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <aside
         className={cn(
           "flex flex-col bg-neutral-950 text-white transition-all duration-300 shrink-0",
-          sidebarOpen ? "w-64" : "w-16"
+          sidebarOpen ? "w-64" : "w-16",
+          "md:relative",
+          sidebarOpen && "max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:shadow-2xl"
         )}
       >
         <div className="flex items-center gap-3 p-4 border-b border-neutral-800">
@@ -98,6 +103,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <p className="text-sm font-bold tracking-tight">MLR</p>
               <p className="text-[11px] text-neutral-400">Luxury Rental Platform</p>
             </div>
+          )}
+          {sidebarOpen && user && ["admin", "super_admin", "operations"].includes(user.role) && (
+            <Link href={user.role === "operations" ? "/ops/alerts" : "/admin/audit-logs"}>
+              <a className="p-1.5 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-amber-400" title="Notifications">
+                <Bell className="w-4 h-4" />
+              </a>
+            </Link>
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -161,6 +173,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           )}
         </div>
       </aside>
+
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
       <main className="flex-1 overflow-auto">{children}</main>
     </div>

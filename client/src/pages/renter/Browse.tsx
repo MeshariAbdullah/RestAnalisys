@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Diamond, Watch, Shirt, Gem } from "lucide-react";
+import { Search, Diamond, Watch, Shirt, Gem, Sparkles, Package } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,10 +10,12 @@ import { assetsApi, formatSar, type Asset } from "@/lib/api";
 
 const CATEGORIES = [
   { id: undefined, label: "All", icon: Diamond },
-  { id: "bag", label: "Bags", icon: Diamond },
+  { id: "handbag", label: "Bags", icon: Diamond },
   { id: "watch", label: "Watches", icon: Watch },
   { id: "dress", label: "Dresses", icon: Shirt },
   { id: "jewelry", label: "Jewelry", icon: Gem },
+  { id: "accessory", label: "Accessories", icon: Sparkles },
+  { id: "other", label: "Other", icon: Package },
 ];
 
 export default function Browse() {

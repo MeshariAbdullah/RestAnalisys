@@ -10,6 +10,7 @@ import {
   AlertOctagon,
   TrendingUp,
 } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { adminApi, formatSar } from "@/lib/api";
 
@@ -17,6 +18,11 @@ export default function AdminDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["admin-kpis"],
     queryFn: () => adminApi.kpis(),
+  });
+
+  const trendQuery = useQuery({
+    queryKey: ["admin-revenue-trend"],
+    queryFn: () => adminApi.revenueTrend(),
   });
 
   return (
@@ -79,6 +85,32 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Revenue Trend Chart */}
+      <Card className="mb-8">
+        <CardContent className="p-6">
+          <h3 className="text-lg font-semibold mb-4">30-Day Revenue Trend</h3>
+          {trendQuery.isLoading ? (
+            <div className="h-64 bg-neutral-100 animate-pulse rounded" />
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={(trendQuery.data ?? []).map(d => ({
+                day: d.day.slice(5),
+                revenue: Number(d.total_halalas) / 100,
+                fees: Number(d.fee_halalas) / 100,
+                rentals: Number(d.rentals),
+              }))}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(value: number) => [`${value.toLocaleString()} SAR`, ""]} />
+                <Line type="monotone" dataKey="revenue" stroke="#f59e0b" strokeWidth={2} dot={false} name="Revenue" />
+                <Line type="monotone" dataKey="fees" stroke="#6366f1" strokeWidth={2} dot={false} name="Platform Fees" />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Link href="/admin/disputes">

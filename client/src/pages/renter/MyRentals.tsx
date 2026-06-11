@@ -4,6 +4,8 @@ import { Package, CheckCircle, Clock, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { rentalsApi, formatSar, type Rental } from "@/lib/api";
+import NafathVerification from "@/components/NafathVerification";
+import { getCurrentUser } from "@/lib/auth";
 
 const STATUS_META: Record<string, { color: string; icon: typeof Clock }> = {
   draft: { color: "bg-neutral-200 text-neutral-700", icon: Clock },
@@ -48,6 +50,12 @@ export default function MyRentals() {
       <p className="text-neutral-500 mb-8">
         Track contracts, shipments and returns.
       </p>
+
+      {!getCurrentUser()?.nafathVerified && (
+        <div className="mb-6">
+          <NafathVerification />
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-4">

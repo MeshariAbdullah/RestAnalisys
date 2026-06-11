@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { assetsApi, inspectionsApi } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 type Grade = "A" | "B" | "C" | "D";
 type Risk = "low" | "medium" | "high" | "ultra_high";
@@ -60,9 +61,12 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
         recommendedDailyPriceHalalas,
         riskCategory,
       });
+      toast({ title: "Inspection submitted", description: "The inspection report has been filed.", variant: "success" });
       navigate("/inspector");
     } catch (err) {
-      setError((err as Error).message ?? "Submission failed");
+      const message = (err as Error).message ?? "Submission failed";
+      setError(message);
+      toast({ title: "Submission failed", description: message, variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
