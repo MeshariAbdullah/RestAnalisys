@@ -45,6 +45,7 @@ const NAV: NavItem[] = [
 
   // Operations
   { href: "/ops", label: "Ops Dashboard", icon: LayoutDashboard, roles: ["operations"] },
+  { href: "/ops/rentals", label: "Rentals", icon: FileText, roles: ["operations"] },
   { href: "/ops/shipments", label: "Shipments", icon: Truck, roles: ["operations"] },
   { href: "/ops/inventory", label: "Inventory", icon: PackageSearch, roles: ["operations"] },
   { href: "/ops/alerts", label: "Alerts", icon: AlertTriangle, roles: ["operations"] },
@@ -56,6 +57,8 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/risk", label: "Risk Dashboard", icon: Shield, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit", label: "Audit Logs", icon: FileText, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
