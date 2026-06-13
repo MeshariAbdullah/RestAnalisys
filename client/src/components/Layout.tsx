@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
+import NotificationsDropdown from "./NotificationsDropdown";
 
 interface NavItem {
   href: string;
@@ -32,6 +33,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   // Renter
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["renter"] },
   { href: "/browse", label: "Browse Catalog", icon: ShoppingBag, roles: ["renter"] },
   { href: "/my-rentals", label: "My Rentals", icon: FileText, roles: ["renter"] },
 
@@ -99,12 +101,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <p className="text-[11px] text-neutral-400">Luxury Rental Platform</p>
             </div>
           )}
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="ml-auto p-1 rounded hover:bg-neutral-800 transition-colors"
-          >
-            {sidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-          </button>
+          <div className="ml-auto flex items-center gap-1">
+            <NotificationsDropdown />
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-1 rounded hover:bg-neutral-800 transition-colors"
+            >
+              {sidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
 
         <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
@@ -133,11 +138,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="p-3 border-t border-neutral-800">
           {sidebarOpen ? (
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">
-                <Shield className="w-4 h-4 text-neutral-950" />
-              </div>
+              <Link href="/profile">
+                <a className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0 hover:bg-amber-400 transition-colors">
+                  <Shield className="w-4 h-4 text-neutral-950" />
+                </a>
+              </Link>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
+                <Link href="/profile">
+                  <a className="text-sm font-medium truncate hover:text-amber-400 transition-colors block">
+                    {user?.fullName ?? "Guest"}
+                  </a>
+                </Link>
                 <p className="text-[11px] text-neutral-400 truncate">
                   {user ? roleLabel(user.role) : ""}
                 </p>

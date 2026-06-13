@@ -580,6 +580,56 @@ export const adminApi = {
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  linkUrl?: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: () => request<Notification[]>("/notifications"),
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  readAll: () => request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+  markRead: (id: number) =>
+    request<{ ok: boolean }>(`/notifications/${id}/read`, { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UserProfile extends User {
+  phoneVerified?: boolean;
+  emailVerified?: boolean;
+  nafathVerifiedAt?: string;
+  nationalAddressJson?: Record<string, unknown>;
+  createdAt: string;
+  lastLoginAt?: string;
+}
+
+export const profileApi = {
+  get: () => request<UserProfile>("/profile"),
+  update: (data: { fullName?: string; phoneE164?: string; nationalAddressJson?: object }) =>
+    request<Partial<UserProfile>>("/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/profile/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+};
+
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };

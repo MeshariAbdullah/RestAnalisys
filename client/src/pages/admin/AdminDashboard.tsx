@@ -11,13 +11,30 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { adminApi, formatSar } from "@/lib/api";
+import { adminApi, formatSar, halalasToSar } from "@/lib/api";
+import {
+  AreaChart,
+  Area,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+} from "recharts";
 
 export default function AdminDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["admin-kpis"],
     queryFn: () => adminApi.kpis(),
   });
+
+  const { data: trendRaw } = useQuery({
+    queryKey: ["revenue-trend"],
+    queryFn: () => adminApi.revenueTrend(),
+  });
+
+  const trend = (trendRaw ?? []).map((t) => ({
+    day: new Date(t.day).toLocaleDateString("en-SA", { month: "short", day: "numeric" }),
+    revenue: halalasToSar(Number(t.total_halalas)),
+  }));
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -79,6 +96,35 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Revenue trend mini chart */}
+      {trend.length > 0 && (
+        <Card className="mb-8">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-semibold text-neutral-500">Revenue trend (30 days)</p>
+              <Link href="/admin/finance">
+                <a className="text-xs text-amber-600 hover:text-amber-500">View details →</a>
+              </Link>
+            </div>
+            <ResponsiveContainer width="100%" height={180}>
+              <AreaChart data={trend}>
+                <XAxis dataKey="day" tick={{ fontSize: 10 }} />
+                <Tooltip
+                  formatter={(value: number) => [`${value.toLocaleString()} SAR`]}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#f59e0b"
+                  fill="#fef3c7"
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Link href="/admin/disputes">

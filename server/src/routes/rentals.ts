@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -94,12 +95,23 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
   );
 
+  // Count late returns: rentals that were returned after end_date
+  const lateStats = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`returned_at is not null and returned_at::date > end_date::date`
+      )
+    );
+
   return {
     accountAgeDays,
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateStats[0]?.count ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +292,22 @@ router.post(
       after: { rental, decision },
     });
 
+    await notify({
+      userId: renterId,
+      type: "rental_created",
+      title: "Rental reserved",
+      body: `Your rental ${rental.reference} for "${asset.title}" is pending legal signing.`,
+      linkUrl: `/legal/${legalCommitment.id}`,
+    });
+
+    await notify({
+      userId: asset.ownerId,
+      type: "rental_created",
+      title: "New rental on your asset",
+      body: `Your asset "${asset.title}" has been reserved under rental ${rental.reference}.`,
+      linkUrl: `/owner/assets/${asset.id}`,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -433,6 +461,14 @@ router.post(
       .set({ status: "rented_out", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
 
+    await notify({
+      userId: rental.renterId,
+      type: "rental_status",
+      title: "Item delivered",
+      body: `Rental ${rental.reference} has been delivered. Enjoy your luxury item!`,
+      linkUrl: `/my-rentals`,
+    });
+
     await recordAudit({
       req,
       action: "rental.delivered",
@@ -509,6 +545,34 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      // Auto-discharge the Sanad and legal commitment
+      await db
+        .update(sanadRecords)
+        .set({ status: "discharged", updatedAt: new Date() })
+        .where(and(eq(sanadRecords.rentalId, id), eq(sanadRecords.status, "active")));
+
+      await db
+        .update(legalCommitments)
+        .set({ status: "discharged", dischargedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(legalCommitments.rentalId, id), eq(legalCommitments.status, "active")));
+
+      await notify({
+        userId: rental.renterId,
+        type: "rental_status",
+        title: "Rental closed",
+        body: `Rental ${rental.reference} has been closed successfully. Your Sanad has been discharged.`,
+        linkUrl: `/rental/${id}`,
+      });
+
+      await notify({
+        userId: rental.ownerId,
+        type: "rental_status",
+        title: "Rental completed",
+        body: `Rental ${rental.reference} for your asset has been completed. Payout will be processed shortly.`,
+        linkUrl: `/owner`,
+      });
+
       await recordAudit({
         req,
         action: "rental.close_clean",

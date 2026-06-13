@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -256,6 +257,16 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: asset.ownerId,
+      type: "asset_review",
+      title: approved ? "Asset approved" : "Asset rejected",
+      body: approved
+        ? `Your asset "${asset.title}" has been approved. Please ship it to our facility.`
+        : `Your asset "${asset.title}" was rejected. Reason: ${rejectionReason ?? "Not specified"}.`,
+      linkUrl: `/owner/assets/${asset.id}`,
+    });
+
     res.json(updated);
   })
 );
@@ -329,8 +340,10 @@ router.get(
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
+        submissionImagesJson: assets.submissionImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
+        status: assets.status,
       })
       .from(assets)
       .where(and(...conditions))
@@ -357,6 +370,7 @@ router.get(
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
+        submissionImagesJson: assets.submissionImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
         status: assets.status,
