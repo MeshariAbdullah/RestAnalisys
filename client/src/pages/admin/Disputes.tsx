@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { disputesApi, type Dispute } from "@/lib/api";
+import { useToast } from "@/components/ui/toast-provider";
 
 type Resolution =
   | "resolved_for_renter"
@@ -30,6 +31,7 @@ function statusColor(s: string): string {
 
 export default function DisputesPage() {
   const qc = useQueryClient();
+  const { addToast } = useToast();
   const [openId, setOpenId] = useState<number | null>(null);
   const [resolution, setResolution] = useState<Resolution>(
     "resolved_for_renter"
@@ -46,6 +48,10 @@ export default function DisputesPage() {
     setError(null);
     try {
       await disputesApi.resolve({ disputeId: id, resolution, notes });
+      addToast({
+        title: resolution === "escalated_to_legal" ? "Dispute escalated to legal" : "Dispute resolved",
+        variant: resolution === "escalated_to_legal" ? "warning" : "success",
+      });
       setOpenId(null);
       setNotes("");
       await qc.invalidateQueries({ queryKey: ["disputes"] });

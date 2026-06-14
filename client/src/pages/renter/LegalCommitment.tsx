@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { legalApi, paymentsApi, formatSar } from "@/lib/api";
+import { useToast } from "@/components/ui/toast-provider";
 
 export default function LegalCommitmentPage({
   commitmentId,
@@ -14,6 +15,7 @@ export default function LegalCommitmentPage({
 }) {
   const [, navigate] = useLocation();
   const qc = useQueryClient();
+  const { addToast } = useToast();
   const [lang, setLang] = useState<"en" | "ar">("en");
   const [accepted, setAccepted] = useState(false);
   const [signing, setSigning] = useState(false);
@@ -30,6 +32,7 @@ export default function LegalCommitmentPage({
     setError(null);
     try {
       await legalApi.sign(commitmentId);
+      addToast({ title: "Contract signed successfully", variant: "success" });
       await qc.invalidateQueries({ queryKey: ["commitment", commitmentId] });
     } catch (err) {
       setError((err as Error).message ?? "Signing failed");
@@ -44,6 +47,7 @@ export default function LegalCommitmentPage({
     setError(null);
     try {
       await paymentsApi.charge(data.rental.id);
+      addToast({ title: "Payment processed successfully", variant: "success" });
       navigate("/my-rentals");
     } catch (err) {
       setError((err as Error).message ?? "Payment failed");

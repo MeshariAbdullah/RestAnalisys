@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { operationsApi, type Shipment } from "@/lib/api";
+import { useToast } from "@/components/ui/toast-provider";
 
 const STATUSES = [
   "scheduled",
@@ -25,6 +26,7 @@ const STATUSES = [
 
 export default function Shipments() {
   const qc = useQueryClient();
+  const { addToast } = useToast();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editStatus, setEditStatus] = useState<string>("in_transit");
   const [editTracking, setEditTracking] = useState("");
@@ -39,6 +41,7 @@ export default function Shipments() {
       status: editStatus,
       trackingNumber: editTracking || undefined,
     });
+    addToast({ title: `Shipment updated to ${editStatus.replace(/_/g, " ")}`, variant: "success" });
     setEditingId(null);
     setEditTracking("");
     await qc.invalidateQueries({ queryKey: ["shipments"] });

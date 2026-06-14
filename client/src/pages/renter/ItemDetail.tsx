@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, rentalsApi, formatSar } from "@/lib/api";
+import { useToast } from "@/components/ui/toast-provider";
 
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -15,6 +16,7 @@ function toISODate(d: Date): string {
 
 export default function ItemDetail({ id }: { id: number }) {
   const [, navigate] = useLocation();
+  const { addToast } = useToast();
   const today = useMemo(() => toISODate(new Date()), []);
   const threeDaysOut = useMemo(
     () => toISODate(new Date(Date.now() + 3 * 86400000)),
@@ -50,6 +52,7 @@ export default function ItemDetail({ id }: { id: number }) {
         startDate,
         endDate,
       });
+      addToast({ title: "Rental created — please sign the contract", variant: "success" });
       navigate(`/legal/${res.legal.commitmentId}`);
     } catch (err) {
       setError((err as Error).message ?? "Unable to book");

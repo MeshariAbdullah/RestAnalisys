@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { adminApi, type User } from "@/lib/api";
+import { useToast } from "@/components/ui/toast-provider";
 
 function riskColor(c: string): string {
   if (c === "low") return "bg-green-100 text-green-700";
@@ -22,6 +23,7 @@ function riskColor(c: string): string {
 
 export default function UsersPage() {
   const qc = useQueryClient();
+  const { addToast } = useToast();
   const [role, setRole] = useState<string>("all");
 
   const { data, isLoading } = useQuery({
@@ -36,6 +38,10 @@ export default function UsersPage() {
       : undefined;
     if (block && !reason) return;
     await adminApi.blockUser(u.id, block, reason);
+    addToast({
+      title: block ? `User ${u.fullName} blocked` : `User ${u.fullName} unblocked`,
+      variant: block ? "warning" : "success",
+    });
     await qc.invalidateQueries({ queryKey: ["admin-users"] });
   }
 
