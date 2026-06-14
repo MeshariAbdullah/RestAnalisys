@@ -60,15 +60,25 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: "Cairo", "Tajawal", Arial, sans-serif;
-    direction: rtl;
+    font-family: "Inter", "Cairo", "Tajawal", system-ui, sans-serif;
+  }
+  html[lang="ar"] body {
+    font-family: "Cairo", "Tajawal", "Inter", system-ui, sans-serif;
   }
 }
 
-/* RTL fixes */
-.ltr {
-  direction: ltr;
-}
+/* RTL utilities */
+html[dir="rtl"] .rtl\:mr-0 { margin-right: 0; }
+html[dir="rtl"] .rtl\:ml-1\.5 { margin-left: 0.375rem; }
+html[dir="rtl"] .rtl\:mr-auto { margin-right: auto; }
+html[dir="rtl"] .rtl\:ml-0 { margin-left: 0; }
+html[dir="rtl"] .rtl\:right-auto { right: auto; }
+html[dir="rtl"] .rtl\:left-3 { left: 0.75rem; }
+html[dir="rtl"] .rtl\:left-4 { left: 1rem; }
+html[dir="rtl"] .rtl\:left-auto { left: auto; }
+html[dir="rtl"] .rtl\:right-3 { right: 0.75rem; }
+html[dir="rtl"] .rtl\:pl-3 { padding-left: 0.75rem; }
+html[dir="rtl"] .rtl\:pr-9 { padding-right: 2.25rem; }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
@@ -83,6 +93,46 @@
   border-radius: 3px;
 }
 
+/* Toast animations */
+@keyframes slide-in-from-bottom-2 {
+  from {
+    transform: translateY(0.5rem);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-in.slide-in-from-bottom-2 {
+  animation: slide-in-from-bottom-2 0.2s ease-out;
+}
+
+.animate-in.slide-in-from-top-2 {
+  animation: slide-in-from-top 0.2s ease-out;
+}
+
+@keyframes slide-in-from-top {
+  from {
+    transform: translateY(-0.5rem);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.fade-in {
+  animation: fade-in 0.15s ease-out;
+}
+
 /* Status badge animations */
 @keyframes pulse-glow {
   0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
@@ -91,25 +141,4 @@
 
 .animate-pulse-glow {
   animation: pulse-glow 2s infinite;
-}
-
-/* Video upload area */
-.upload-zone {
-  @apply border-2 border-dashed border-muted-foreground/30 rounded-xl p-8 text-center cursor-pointer transition-all;
-}
-.upload-zone:hover, .upload-zone.drag-over {
-  @apply border-primary bg-primary/5;
-}
-
-/* Score ring */
-.score-ring {
-  @apply relative inline-flex items-center justify-center;
-}
-
-/* Provider badge */
-.badge-gemini {
-  @apply bg-blue-100 text-blue-700 border border-blue-200;
-}
-.badge-gpt {
-  @apply bg-green-100 text-green-700 border border-green-200;
 }

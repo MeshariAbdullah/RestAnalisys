@@ -560,6 +560,39 @@ export const operationsApi = {
 // Admin
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface AuditLog {
+  id: number;
+  actorUserId: number | null;
+  actorRole: string | null;
+  action: string;
+  entityType: string;
+  entityId: number | null;
+  beforeJson: unknown;
+  afterJson: unknown;
+  ip: string | null;
+  createdAt: string;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface Notification {
+  id: number;
+  type: string;
+  severity: string;
+  subjectType: string;
+  subjectId: number;
+  message: string;
+  status: string;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
 export const adminApi = {
   kpis: () => request<AdminKPIs>("/admin/kpis"),
   revenueTrend: () =>
@@ -578,6 +611,15 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: { page?: number; limit?: number; entityType?: string; action?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    return request<PaginatedResponse<AuditLog>>(`/admin/audit-logs?${qs}`);
+  },
+  notifications: () => request<Notification[]>("/admin/notifications"),
 };
 
 export const healthApi = {

@@ -13,6 +13,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -217,6 +218,65 @@ router.get(
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
+    res.json(rows);
+  })
+);
+
+// ── Audit logs ────────────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Number(req.query.limit) || 50);
+    const entityType = req.query.entityType as string | undefined;
+    const action = req.query.action as string | undefined;
+    const offset = (page - 1) * limit;
+
+    let query = db.select().from(auditLogs).$dynamic();
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (action) conditions.push(sql`${auditLogs.action} ILIKE ${'%' + action + '%'}`);
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+
+    const rows = await query
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [countResult] = conditions.length > 0
+      ? await db
+          .select({ count: sql<number>`count(*)` })
+          .from(auditLogs)
+          .where(and(...conditions))
+      : await db.select({ count: sql<number>`count(*)` }).from(auditLogs);
+
+    res.json({
+      items: rows,
+      total: Number(countResult?.count ?? 0),
+      page,
+      limit,
+      totalPages: Math.ceil(Number(countResult?.count ?? 0) / limit),
+    });
+  })
+);
+
+// ── Platform notifications (operational alerts as notifications) ──────────
+router.get(
+  "/notifications",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const { operationalAlerts } = await import("../db/schema.js");
+    const rows = await db
+      .select()
+      .from(operationalAlerts)
+      .orderBy(desc(operationalAlerts.createdAt))
+      .limit(50);
     res.json(rows);
   })
 );

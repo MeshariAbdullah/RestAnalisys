@@ -19,60 +19,56 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  User,
+  Globe,
+  ScrollText,
 } from "lucide-react";
-import type { Role, User } from "@/lib/api";
+import type { Role, User as UserType } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
+import { useLocale } from "@/lib/i18n";
 
 interface NavItem {
   href: string;
-  label: string;
+  labelKey: string;
   icon: React.ComponentType<{ className?: string }>;
   roles: Role[];
 }
 
 const NAV: NavItem[] = [
   // Renter
-  { href: "/browse", label: "Browse Catalog", icon: ShoppingBag, roles: ["renter"] },
-  { href: "/my-rentals", label: "My Rentals", icon: FileText, roles: ["renter"] },
+  { href: "/browse", labelKey: "nav.browse", icon: ShoppingBag, roles: ["renter"] },
+  { href: "/my-rentals", labelKey: "nav.myRentals", icon: FileText, roles: ["renter"] },
 
   // Owner
-  { href: "/owner", label: "Owner Dashboard", icon: LayoutDashboard, roles: ["owner"] },
-  { href: "/owner/submit", label: "Submit Asset", icon: Diamond, roles: ["owner"] },
-  { href: "/owner/payouts", label: "Payouts", icon: Wallet, roles: ["owner"] },
+  { href: "/owner", labelKey: "nav.ownerDashboard", icon: LayoutDashboard, roles: ["owner"] },
+  { href: "/owner/submit", labelKey: "nav.submitAsset", icon: Diamond, roles: ["owner"] },
+  { href: "/owner/payouts", labelKey: "nav.payouts", icon: Wallet, roles: ["owner"] },
 
   // Inspector
-  { href: "/inspector", label: "Inspection Queue", icon: ClipboardCheck, roles: ["inspector"] },
+  { href: "/inspector", labelKey: "nav.inspectionQueue", icon: ClipboardCheck, roles: ["inspector"] },
 
   // Operations
-  { href: "/ops", label: "Ops Dashboard", icon: LayoutDashboard, roles: ["operations"] },
-  { href: "/ops/shipments", label: "Shipments", icon: Truck, roles: ["operations"] },
-  { href: "/ops/inventory", label: "Inventory", icon: PackageSearch, roles: ["operations"] },
-  { href: "/ops/alerts", label: "Alerts", icon: AlertTriangle, roles: ["operations"] },
+  { href: "/ops", labelKey: "nav.opsDashboard", icon: LayoutDashboard, roles: ["operations"] },
+  { href: "/ops/shipments", labelKey: "nav.shipments", icon: Truck, roles: ["operations"] },
+  { href: "/ops/inventory", labelKey: "nav.inventory", icon: PackageSearch, roles: ["operations"] },
+  { href: "/ops/alerts", labelKey: "nav.alerts", icon: AlertTriangle, roles: ["operations"] },
 
   // Admin
-  { href: "/admin", label: "Admin Dashboard", icon: LayoutDashboard, roles: ["admin", "super_admin"] },
-  { href: "/admin/approvals", label: "Asset Approvals", icon: ClipboardCheck, roles: ["admin", "super_admin"] },
-  { href: "/admin/users", label: "Users", icon: UsersIcon, roles: ["admin", "super_admin"] },
-  { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
-  { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
-  { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin", labelKey: "nav.adminDashboard", icon: LayoutDashboard, roles: ["admin", "super_admin"] },
+  { href: "/admin/approvals", labelKey: "nav.assetApprovals", icon: ClipboardCheck, roles: ["admin", "super_admin"] },
+  { href: "/admin/users", labelKey: "nav.users", icon: UsersIcon, roles: ["admin", "super_admin"] },
+  { href: "/admin/disputes", labelKey: "nav.disputes", icon: Gavel, roles: ["admin", "super_admin"] },
+  { href: "/admin/sanad", labelKey: "nav.sanadTracking", icon: FileSignature, roles: ["admin", "super_admin"] },
+  { href: "/admin/finance", labelKey: "nav.financialOverview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit", labelKey: "nav.auditLogs", icon: ScrollText, roles: ["admin", "super_admin"] },
 ];
-
-function roleLabel(role: Role): string {
-  return {
-    renter: "Renter",
-    owner: "Asset Owner",
-    inspector: "Inspector",
-    operations: "Operations",
-    admin: "Admin",
-    super_admin: "Super Admin",
-  }[role];
-}
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const user: User | null = getCurrentUser();
+  const user: UserType | null = getCurrentUser();
+  const { t, locale, changeLocale, isRtl } = useLocale();
 
   const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
 
@@ -82,7 +78,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen bg-neutral-50 text-neutral-900 overflow-hidden">
+    <div className={cn("flex h-screen bg-neutral-50 text-neutral-900 overflow-hidden", isRtl && "flex-row-reverse")}>
       <aside
         className={cn(
           "flex flex-col bg-neutral-950 text-white transition-all duration-300 shrink-0",
@@ -95,13 +91,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
           {sidebarOpen && (
             <div>
-              <p className="text-sm font-bold tracking-tight">MLR</p>
-              <p className="text-[11px] text-neutral-400">Luxury Rental Platform</p>
+              <p className="text-sm font-bold tracking-tight">{t("app.name")}</p>
+              <p className="text-[11px] text-neutral-400">{t("app.tagline")}</p>
             </div>
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="ml-auto p-1 rounded hover:bg-neutral-800 transition-colors"
+            className={cn("p-1 rounded hover:bg-neutral-800 transition-colors", sidebarOpen ? "ml-auto" : "")}
           >
             {sidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           </button>
@@ -123,12 +119,36 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   )}
                 >
                   <Icon className="w-5 h-5 shrink-0" />
-                  {sidebarOpen && <span>{item.label}</span>}
+                  {sidebarOpen && <span>{t(item.labelKey as any)}</span>}
                 </a>
               </Link>
             );
           })}
         </nav>
+
+        <div className="p-2 border-t border-neutral-800 space-y-1">
+          <Link href="/profile">
+            <a
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+                location === "/profile"
+                  ? "bg-amber-500 text-neutral-950 font-medium"
+                  : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+              )}
+            >
+              <User className="w-5 h-5 shrink-0" />
+              {sidebarOpen && <span>{t("nav.profile")}</span>}
+            </a>
+          </Link>
+
+          <button
+            onClick={() => changeLocale(locale === "en" ? "ar" : "en")}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-neutral-300 hover:bg-neutral-800 hover:text-white transition-colors"
+          >
+            <Globe className="w-5 h-5 shrink-0" />
+            {sidebarOpen && <span>{locale === "en" ? "العربية" : "English"}</span>}
+          </button>
+        </div>
 
         <div className="p-3 border-t border-neutral-800">
           {sidebarOpen ? (
@@ -137,15 +157,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <Shield className="w-4 h-4 text-neutral-950" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
+                <p className="text-sm font-medium truncate">{user?.fullName ?? t("common.guest")}</p>
                 <p className="text-[11px] text-neutral-400 truncate">
-                  {user ? roleLabel(user.role) : ""}
+                  {user ? t(`role.${user.role}` as any) : ""}
                 </p>
               </div>
               <button
                 onClick={handleLogout}
                 className="p-1.5 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white"
-                title="Logout"
+                title={t("common.logout")}
               >
                 <LogOut className="w-4 h-4" />
               </button>
@@ -154,7 +174,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <button
               onClick={handleLogout}
               className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400"
-              title="Logout"
+              title={t("common.logout")}
             >
               <LogOut className="w-4 h-4" />
             </button>

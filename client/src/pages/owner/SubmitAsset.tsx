@@ -14,9 +14,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { assetsApi } from "@/lib/api";
+import { useToast } from "@/components/ui/toast-provider";
+import { useLocale } from "@/lib/i18n";
 
 export default function SubmitAsset() {
   const [, navigate] = useLocation();
+  const { addToast } = useToast();
+  const { t } = useLocale();
   const [category, setCategory] = useState("bag");
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
@@ -56,6 +60,7 @@ export default function SubmitAsset() {
         ownerDeclaredValueHalalas: value,
         submissionImages: imageUrls,
       });
+      addToast({ title: t("toast.assetSubmitted"), variant: "success" });
       navigate("/owner");
     } catch (err) {
       setError((err as Error).message ?? "Submission failed");
