@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, paymentsApi, formatSar, type Asset } from "@/lib/api";
+import { useLocale } from "@/lib/i18n";
 
 function statusColor(s: string): string {
   if (s === "listed" || s === "rented_out") return "bg-green-100 text-green-700";
@@ -15,6 +16,7 @@ function statusColor(s: string): string {
 }
 
 export default function OwnerDashboard() {
+  const { locale } = useLocale();
   const assetsQuery = useQuery({
     queryKey: ["assets-mine"],
     queryFn: () => assetsApi.mine(),
@@ -42,15 +44,17 @@ export default function OwnerDashboard() {
     <div className="p-8 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold">Owner dashboard</h1>
+          <h1 className="text-3xl font-bold">
+            {locale === "ar" ? "لوحة تحكم المالك" : "Owner dashboard"}
+          </h1>
           <p className="text-neutral-500 mt-1">
-            Your assets under management with MLR
+            {locale === "ar" ? "أصولك المُدارة مع MLR" : "Your assets under management with MLR"}
           </p>
         </div>
         <Link href="/owner/submit">
           <Button className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
-            <Plus className="w-4 h-4 mr-1.5" />
-            Submit new asset
+            <Plus className="w-4 h-4 mr-1.5 rtl:ml-1.5 rtl:mr-0" />
+            {locale === "ar" ? "تقديم أصل جديد" : "Submit new asset"}
           </Button>
         </Link>
       </div>
@@ -60,7 +64,7 @@ export default function OwnerDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-2 text-neutral-500 text-sm">
               <Diamond className="w-4 h-4" />
-              Active assets
+              {locale === "ar" ? "الأصول النشطة" : "Active assets"}
             </div>
             <p className="text-3xl font-bold">{activeCount}</p>
             <p className="text-xs text-neutral-500 mt-1">
@@ -72,7 +76,7 @@ export default function OwnerDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-2 text-neutral-500 text-sm">
               <TrendingUp className="w-4 h-4" />
-              Portfolio value
+              {locale === "ar" ? "قيمة المحفظة" : "Portfolio value"}
             </div>
             <p className="text-3xl font-bold">{formatSar(totalValue)}</p>
             <p className="text-xs text-neutral-500 mt-1">Sum of evaluations</p>
@@ -82,7 +86,7 @@ export default function OwnerDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-2 text-neutral-500 text-sm">
               <Wallet className="w-4 h-4" />
-              Lifetime payouts
+              {locale === "ar" ? "إجمالي المدفوعات" : "Lifetime payouts"}
             </div>
             <p className="text-3xl font-bold">{formatSar(totalPayouts)}</p>
             <Link href="/owner/payouts">
@@ -94,7 +98,7 @@ export default function OwnerDashboard() {
         </Card>
       </div>
 
-      <h2 className="text-xl font-bold mb-4">My assets</h2>
+      <h2 className="text-xl font-bold mb-4">{locale === "ar" ? "أصولي" : "My assets"}</h2>
       {assetsQuery.isLoading ? (
         <p className="text-neutral-500">Loading…</p>
       ) : assets.length === 0 ? (
