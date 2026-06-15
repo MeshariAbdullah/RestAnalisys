@@ -52,10 +52,11 @@ import {
   computeRentalQuote,
   DEFAULT_PLATFORM_FEE_PCT,
 } from "../utils/money.js";
-import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
+import { computeRiskDecision, RiskFeatures, trustScoreToCategory } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyRentalCreated } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -78,7 +79,6 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) throw new NotFoundError("User");
 
-  // Aggregate rental history.
   const stats = await db
     .select({
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
@@ -88,6 +88,17 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     .from(rentals)
     .where(eq(rentals.renterId, userId));
   const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+
+  const lateReturnStats = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`returned_at IS NOT NULL AND returned_at::date > end_date::date`
+      )
+    );
+  const lateReturns = Number(lateReturnStats[0]?.count ?? 0);
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +110,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns,
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -109,6 +120,27 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     userRole: user.role,
     countryIsSaudi: true,
   };
+}
+
+async function updateUserTrustScore(userId: number): Promise<void> {
+  const recentScores = await db
+    .select({ finalScore: riskScores.finalScore })
+    .from(riskScores)
+    .where(and(eq(riskScores.userId, userId), eq(riskScores.approved, true)))
+    .orderBy(desc(riskScores.createdAt))
+    .limit(10);
+
+  if (recentScores.length === 0) return;
+
+  const avg = Math.round(
+    recentScores.reduce((sum, r) => sum + r.finalScore, 0) / recentScores.length
+  );
+  const category = trustScoreToCategory(avg);
+
+  await db
+    .update(users)
+    .set({ trustScore: avg, riskCategory: category, updatedAt: new Date() })
+    .where(eq(users.id, userId));
 }
 
 // ── Quote (no side effects) ─────────────────────────────────────────────────
@@ -156,6 +188,16 @@ router.post(
       throw new LegalStateError(`Asset not available (status=${asset.status})`);
     if (asset.ownerId === renterId)
       throw new LegalStateError("Cannot rent your own asset");
+
+    // Atomically reserve to prevent overbooking (optimistic lock)
+    const reserveResult = await db
+      .update(assets)
+      .set({ status: "reserved", updatedAt: new Date() })
+      .where(and(eq(assets.id, input.assetId), eq(assets.status, "listed")))
+      .returning({ id: assets.id });
+    if (reserveResult.length === 0) {
+      throw new LegalStateError("Asset was just reserved by another renter. Please try a different item.");
+    }
 
     // Risk engine ----------------------------------------------------------
     const features = await buildRiskFeatures(renterId, asset.evaluatedValueHalalas ?? 0);
@@ -218,12 +260,6 @@ router.post(
       })
       .returning();
 
-    // Reserve the asset
-    await db
-      .update(assets)
-      .set({ status: "reserved", updatedAt: new Date() })
-      .where(eq(assets.id, asset.id));
-
     // Persist the risk score row now that we have rental_id
     await db.insert(riskScores).values({
       userId: renterId,
@@ -279,6 +315,8 @@ router.post(
       entityId: rental.id,
       after: { rental, decision },
     });
+
+    notifyRentalCreated(renterId, rental.reference).catch(() => {});
 
     res.status(201).json({
       rental,
@@ -516,6 +554,7 @@ router.post(
         entityId: id,
         after: updated,
       });
+      updateUserTrustScore(rental.renterId).catch(() => {});
       return res.json(updated);
     }
 

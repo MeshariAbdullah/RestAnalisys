@@ -14,11 +14,13 @@ import {
   sanadRecords,
   riskScores,
 } from "../db/schema.js";
-import { authenticate, AuthedRequest } from "../middleware/auth.js";
+import { authenticate, AuthedRequest, Role } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { NotFoundError } from "../utils/errors.js";
+import { NotFoundError, ValidationError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+
+const VALID_ROLES: Role[] = ["renter", "owner", "inspector", "operations", "admin", "super_admin"];
 
 const router = Router();
 
@@ -83,22 +85,42 @@ router.get(
   })
 );
 
-// ── Revenue trend chart ────────────────────────────────────────────────────
+// ── Revenue trend chart (supports custom date range) ──────────────────────
 router.get(
   "/revenue-trend",
   authenticate,
   requirePermission("finance.read"),
-  asyncHandler(async (_req, res) => {
-    const rows = await db.execute(sql`
-      select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as day,
-             sum(total_payable_halalas) as total_halalas,
-             sum(platform_fee_halalas) as fee_halalas,
-             count(*) as rentals
-      from rentals
-      where created_at >= now() - interval '30 days'
-      group by 1
-      order by 1 asc
-    `);
+  asyncHandler(async (req, res) => {
+    const days = Number(req.query.days) || 30;
+    const from = (req.query.from as string) ?? undefined;
+    const to = (req.query.to as string) ?? undefined;
+
+    let query;
+    if (from && to) {
+      query = sql`
+        select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as day,
+               sum(total_payable_halalas) as total_halalas,
+               sum(platform_fee_halalas) as fee_halalas,
+               count(*) as rentals
+        from rentals
+        where created_at >= ${from}::date and created_at <= ${to}::date + interval '1 day'
+        group by 1
+        order by 1 asc
+      `;
+    } else {
+      query = sql`
+        select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as day,
+               sum(total_payable_halalas) as total_halalas,
+               sum(platform_fee_halalas) as fee_halalas,
+               count(*) as rentals
+        from rentals
+        where created_at >= now() - ${days + ' days'}::interval
+        group by 1
+        order by 1 asc
+      `;
+    }
+
+    const rows = await db.execute(query);
     res.json(rows.rows);
   })
 );
@@ -133,9 +155,12 @@ router.get(
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
     const role = (req.query.role as string | undefined) ?? undefined;
+    if (role && !VALID_ROLES.includes(role as Role)) {
+      throw new ValidationError(`Invalid role filter. Valid roles: ${VALID_ROLES.join(", ")}`);
+    }
     const query = db.select().from(users);
     const rows = role
-      ? await query.where(eq(users.role, role as any)).limit(200)
+      ? await query.where(eq(users.role, role as Role)).limit(200)
       : await query.limit(200);
     res.json(rows);
   })

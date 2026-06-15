@@ -4,7 +4,7 @@
  */
 
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { payments, rentals, users, assets, payouts } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -19,6 +19,7 @@ import {
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyRentalConfirmed, notifyPaymentRefunded } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -110,6 +111,8 @@ router.post(
           updatedAt: new Date(),
         })
         .where(eq(rentals.id, rental.id));
+
+      notifyRentalConfirmed(rental.renterId, rental.ownerId, rental.reference).catch(() => {});
     }
 
     await recordAudit({
@@ -156,6 +159,26 @@ router.post(
       .where(eq(payments.id, input.paymentId))
       .returning();
 
+    // Release the asset back to listed if rental is in a pre-active state
+    if (payment.rentalId) {
+      const [rental] = await db
+        .select()
+        .from(rentals)
+        .where(eq(rentals.id, payment.rentalId))
+        .limit(1);
+      if (rental && ["confirmed", "pending_payment", "pending_legal_signing"].includes(rental.status)) {
+        await db
+          .update(rentals)
+          .set({ status: "cancelled", cancelledAt: new Date(), cancellationReason: "Payment refunded", updatedAt: new Date() })
+          .where(eq(rentals.id, rental.id));
+        await db
+          .update(assets)
+          .set({ status: "listed", updatedAt: new Date() })
+          .where(eq(assets.id, rental.assetId));
+      }
+      notifyPaymentRefunded(payment.userId, input.amountHalalas ?? payment.amountHalalas).catch(() => {});
+    }
+
     await recordAudit({
       req,
       action: "payment.refund",
@@ -196,8 +219,22 @@ router.post(
       throw new LegalStateError("Rental must be closed before payout");
     }
 
+    // Deduct any penalties paid by renter from the gross before computing payout
+    const penaltyRows = await db
+      .select({ total: sql<string>`coalesce(sum(amount_halalas), 0)` })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.rentalId, rentalId),
+          eq(payments.type, "penalty"),
+          eq(payments.status, "captured")
+        )
+      );
+    const penaltyCaptured = Number(penaltyRows[0]?.total ?? 0);
+
     const payoutCalc = computeOwnerPayout({
       rentalSubtotalHalalas: rental.rentalSubtotalHalalas,
+      penaltyDeductionHalalas: penaltyCaptured,
       commissionPct: 20,
     });
 

@@ -562,10 +562,15 @@ export const operationsApi = {
 
 export const adminApi = {
   kpis: () => request<AdminKPIs>("/admin/kpis"),
-  revenueTrend: () =>
-    request<Array<{ day: string; total_halalas: string; fee_halalas: string; rentals: string }>>(
-      "/admin/revenue-trend"
-    ),
+  revenueTrend: (params?: { days?: number; from?: string; to?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.days) qs.set("days", String(params.days));
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    return request<Array<{ day: string; total_halalas: string; fee_halalas: string; rentals: string }>>(
+      `/admin/revenue-trend?${qs}`
+    );
+  },
   lowTrustUsers: () => request<User[]>("/admin/risk/low-trust"),
   users: (role?: string) => {
     const qs = role ? `?role=${role}` : "";
@@ -582,6 +587,54 @@ export const adminApi = {
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  status: string;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: () => request<Notification[]>("/notifications"),
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<Notification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Export / Reports
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const exportApi = {
+  rentals: (params?: { from?: string; to?: string; format?: "json" | "csv" }) => {
+    const qs = new URLSearchParams();
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    if (params?.format) qs.set("format", params.format);
+    return request<{ count: number; rows: Rental[] }>(`/export/rentals?${qs}`);
+  },
+  financialSummary: (from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
+    return request<{
+      period: { from: string; to: string };
+      revenue: Record<string, unknown>;
+      payouts: Record<string, unknown>;
+    }>(`/export/financial-summary?${qs}`);
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

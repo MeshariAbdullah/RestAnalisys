@@ -697,6 +697,30 @@ export const integrationEvents = pgTable("integration_events", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    channelsJson: jsonb("channels_json").notNull().default("[]"),
+    metadataJson: jsonb("metadata_json"),
+    status: text("status").notNull().default("pending"), // pending | sent | read | failed
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    statusIdx: index("notifications_status_idx").on(t.status),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Type exports
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -713,3 +737,4 @@ export type SanadRecord = typeof sanadRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
 export type Shipment = typeof shipments.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;

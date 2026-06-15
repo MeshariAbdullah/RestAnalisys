@@ -56,12 +56,16 @@ export function computeRentalQuote(args: {
 export function computeOwnerPayout(args: {
   rentalSubtotalHalalas: number;
   commissionPct: number;
+  penaltyDeductionHalalas?: number;
 }) {
-  const commissionHalalas = Math.round((args.rentalSubtotalHalalas * args.commissionPct) / 100);
-  const netHalalas = args.rentalSubtotalHalalas - commissionHalalas;
+  const adjustedGross = args.rentalSubtotalHalalas - (args.penaltyDeductionHalalas ?? 0);
+  const grossHalalas = Math.max(0, adjustedGross);
+  const commissionHalalas = Math.round((grossHalalas * args.commissionPct) / 100);
+  const netHalalas = grossHalalas - commissionHalalas;
   return {
-    grossHalalas: args.rentalSubtotalHalalas,
+    grossHalalas,
     commissionHalalas,
     netHalalas,
+    penaltyDeductionHalalas: args.penaltyDeductionHalalas ?? 0,
   };
 }

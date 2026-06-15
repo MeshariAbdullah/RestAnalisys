@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
@@ -19,8 +19,11 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  Download,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
+import { notificationsApi } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
 
 interface NavItem {
@@ -56,6 +59,10 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/export", label: "Reports & Export", icon: Download, roles: ["admin", "super_admin"] },
+
+  // Notifications (all roles)
+  { href: "/notifications", label: "Notifications", icon: Bell, roles: ["renter", "owner", "inspector", "operations", "admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
@@ -73,6 +80,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const user: User | null = getCurrentUser();
+
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    notificationsApi.unreadCount().then((r) => setUnreadCount(r.count)).catch(() => {});
+    const interval = setInterval(() => {
+      notificationsApi.unreadCount().then((r) => setUnreadCount(r.count)).catch(() => {});
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
 
   const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
 
@@ -122,7 +140,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
                   )}
                 >
-                  <Icon className="w-5 h-5 shrink-0" />
+                  <div className="relative shrink-0">
+                    <Icon className="w-5 h-5" />
+                    {item.href === "/notifications" && unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    )}
+                  </div>
                   {sidebarOpen && <span>{item.label}</span>}
                 </a>
               </Link>

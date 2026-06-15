@@ -12,6 +12,7 @@ import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyDisputeOpened } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -59,6 +60,9 @@ router.post(
       entityId: dispute.id,
       after: dispute,
     });
+
+    const otherParty = rental.renterId === actorId ? rental.ownerId : rental.renterId;
+    notifyDisputeOpened(otherParty, dispute.id).catch(() => {});
 
     res.status(201).json(dispute);
   })
