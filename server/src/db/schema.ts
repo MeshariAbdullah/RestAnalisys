@@ -697,6 +697,47 @@ export const integrationEvents = pgTable("integration_events", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications (in-app + email)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notificationChannelEnum = pgEnum("notification_channel", [
+  "in_app",
+  "email",
+  "both",
+]);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+
+    channel: notificationChannelEnum("channel").notNull().default("in_app"),
+    category: text("category").notNull(),
+    title: text("title").notNull(),
+    titleAr: text("title_ar"),
+    body: text("body").notNull(),
+    bodyAr: text("body_ar"),
+
+    entityType: text("entity_type"),
+    entityId: integer("entity_id"),
+    actionUrl: text("action_url"),
+
+    read: boolean("read").notNull().default(false),
+    readAt: timestamp("read_at"),
+    emailSent: boolean("email_sent").notNull().default(false),
+    emailSentAt: timestamp("email_sent_at"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    userReadIdx: index("notifications_user_read_idx").on(t.userId, t.read),
+    createdIdx: index("notifications_created_idx").on(t.createdAt),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Type exports
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -713,3 +754,5 @@ export type SanadRecord = typeof sanadRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
 export type Shipment = typeof shipments.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
@@ -19,9 +19,11 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
-import { clearSession, getCurrentUser } from "@/lib/auth";
+import { notificationsApi } from "@/lib/api";
+import { clearSession, getCurrentUser, isAuthenticated } from "@/lib/auth";
 
 interface NavItem {
   href: string;
@@ -73,6 +75,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const user: User | null = getCurrentUser();
+
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!isAuthenticated()) return;
+    notificationsApi.unreadCount().then((d) => setUnreadCount(d.unreadCount)).catch(() => {});
+    const interval = setInterval(() => {
+      notificationsApi.unreadCount().then((d) => setUnreadCount(d.unreadCount)).catch(() => {});
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
 
@@ -162,7 +175,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="flex-1 overflow-auto">
+        {user && (
+          <div className="flex justify-end items-center px-6 py-3 border-b border-neutral-100 bg-white">
+            <Link href="/notifications">
+              <a className="relative p-2 rounded-lg hover:bg-neutral-100 transition-colors">
+                <Bell className="w-5 h-5 text-neutral-500" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 bg-amber-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </a>
+            </Link>
+          </div>
+        )}
+        {children}
+      </main>
     </div>
   );
 }

@@ -44,7 +44,7 @@ or full compensation equal to its evaluated value, backed by a Nafith Sanad
 │       ├── middleware/       auth, rbac, errorHandler
 │       ├── services/         riskEngine, legalService, nafath/nafith/payment/audit
 │       ├── routes/           auth, assets, inspections, rentals, legal,
-│       │                     payments, disputes, operations, admin
+│       │                     payments, disputes, operations, admin, notifications
 │       └── utils/            money, errors, schemas (Zod), asyncHandler
 ├── server/migrations/        drizzle-kit SQL
 ├── docs/                     ARCHITECTURE, API, RISK_ENGINE, LEGAL_FLOW,
@@ -107,6 +107,7 @@ production mode.
 | Nafith Sanad    | `server/src/services/nafithService.ts` | `NAFITH_API_BASE`, `NAFITH_API_KEY` |
 | Payment gateway | `server/src/services/paymentService.ts`| `PAYMENT_GATEWAY_*`               |
 | ZATCA invoicing | `server/src/services/paymentService.ts`| `ZATCA_API_*`                     |
+| Email / SMTP    | `server/src/services/emailService.ts`  | `SMTP_HOST`, `SMTP_PORT`, etc.    |
 | National Address| (planned)                              | `SPL_API_KEY`                     |
 
 ---

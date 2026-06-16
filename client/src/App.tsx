@@ -6,6 +6,8 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 
+import NotificationsPage from "./pages/Notifications";
+
 // Renter
 import Browse from "./pages/renter/Browse";
 import ItemDetail from "./pages/renter/ItemDetail";
@@ -43,6 +45,13 @@ export default function App() {
       <Route path="/" component={Landing} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+
+      {/* Notifications (all authenticated users) */}
+      <Route path="/notifications">
+        <ProtectedRoute roles={["renter", "owner", "inspector", "operations", "admin", "super_admin"]}>
+          <NotificationsPage />
+        </ProtectedRoute>
+      </Route>
 
       {/* Renter */}
       <Route path="/browse">

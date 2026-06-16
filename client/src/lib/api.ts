@@ -223,6 +223,23 @@ export interface RentalQuote {
   totalPayableHalalas: number;
 }
 
+export interface AppNotification {
+  id: number;
+  userId: number;
+  channel: "in_app" | "email" | "both";
+  category: string;
+  title: string;
+  titleAr?: string;
+  body: string;
+  bodyAr?: string;
+  entityType?: string;
+  entityId?: number;
+  actionUrl?: string;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
 export interface AdminKPIs {
   users: number;
   listedAssets: number;
@@ -578,6 +595,28 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notificationsApi = {
+  list: (params?: { limit?: number; offset?: number; unread?: boolean }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    if (params?.unread) qs.set("unread", "true");
+    return request<{ notifications: AppNotification[]; unreadCount: number }>(
+      `/notifications?${qs}`
+    );
+  },
+  unreadCount: () =>
+    request<{ unreadCount: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
 };
 
 export const healthApi = {

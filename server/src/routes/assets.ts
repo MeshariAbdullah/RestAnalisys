@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -256,6 +257,26 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: asset.ownerId,
+      category: approved ? "asset_approved" : "asset_rejected",
+      title: approved
+        ? `Asset "${asset.title}" approved`
+        : `Asset "${asset.title}" rejected`,
+      titleAr: approved
+        ? `تمت الموافقة على "${asset.title}"`
+        : `تم رفض "${asset.title}"`,
+      body: approved
+        ? `Your asset "${asset.title}" has been approved. Please arrange shipment to our facility.`
+        : `Your asset "${asset.title}" was rejected. Reason: ${rejectionReason ?? "Not specified"}`,
+      bodyAr: approved
+        ? `تمت الموافقة على الأصل "${asset.title}". يرجى ترتيب الشحن إلى منشأتنا.`
+        : `تم رفض الأصل "${asset.title}". السبب: ${rejectionReason ?? "غير محدد"}`,
+      entityType: "asset",
+      entityId: assetId,
+      actionUrl: `/owner/assets/${assetId}`,
+    });
+
     res.json(updated);
   })
 );
@@ -395,6 +416,18 @@ router.post(
       entityType: "asset",
       entityId: id,
       after: updated,
+    });
+
+    await notify({
+      userId: asset.ownerId,
+      category: "asset_listed",
+      title: `"${asset.title}" is now live`,
+      titleAr: `"${asset.title}" متاح الآن`,
+      body: `Your asset "${asset.title}" is now listed and available for renters to browse.`,
+      bodyAr: `الأصل "${asset.title}" معروض الآن ومتاح للمستأجرين.`,
+      entityType: "asset",
+      entityId: id,
+      actionUrl: `/owner/assets/${id}`,
     });
 
     res.json(updated);

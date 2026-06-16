@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify, notifyMultiple } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -72,6 +73,22 @@ function generateRentalReference(): string {
   const year = new Date().getFullYear();
   const rand = Math.floor(100000 + Math.random() * 900000);
   return `MLR-${year}-${rand}`;
+}
+
+async function countLateReturns(userId: number): Promise<number> {
+  const [row] = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`${rentals.returnedAt} IS NOT NULL`,
+        sql`${rentals.returnedAt}::date > ${rentals.endDate}::date`
+      )
+    );
+  return Number(row?.count ?? 0);
 }
 
 async function buildRiskFeatures(userId: number, assetValueHalalas: number): Promise<RiskFeatures> {
@@ -99,7 +116,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await countLateReturns(userId),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +297,31 @@ router.post(
       after: { rental, decision },
     });
 
+    await notifyMultiple([
+      {
+        userId: renterId,
+        category: "rental_created",
+        title: `Rental ${rental.reference} created`,
+        titleAr: `تم إنشاء الإيجار ${rental.reference}`,
+        body: `Your rental for "${asset.title}" is pending legal signing. Please review and sign the contract.`,
+        bodyAr: `إيجارك لـ "${asset.title}" بانتظار التوقيع القانوني. يرجى مراجعة العقد والتوقيع.`,
+        entityType: "rental",
+        entityId: rental.id,
+        actionUrl: `/legal/${legalCommitment.id}`,
+      },
+      {
+        userId: asset.ownerId,
+        category: "rental_created",
+        title: `New rental for "${asset.title}"`,
+        titleAr: `إيجار جديد لـ "${asset.title}"`,
+        body: `A renter has initiated a rental for your asset "${asset.title}" (${rental.reference}).`,
+        bodyAr: `قام مستأجر ببدء إيجار لأصلك "${asset.title}" (${rental.reference}).`,
+        entityType: "rental",
+        entityId: rental.id,
+        channel: "both",
+      },
+    ]);
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -441,6 +483,18 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: rental.renterId,
+      category: "rental_delivered",
+      title: `Rental ${rental.reference} delivered`,
+      titleAr: `تم تسليم الإيجار ${rental.reference}`,
+      body: `Your rented item has been delivered. Your rental period is now active until ${rental.endDate}.`,
+      bodyAr: `تم تسليم القطعة المستأجرة. فترة الإيجار نشطة حتى ${rental.endDate}.`,
+      entityType: "rental",
+      entityId: id,
+      actionUrl: `/my-rentals`,
+    });
+
     res.json(updated);
   })
 );
@@ -516,6 +570,28 @@ router.post(
         entityId: id,
         after: updated,
       });
+      await notifyMultiple([
+        {
+          userId: rental.renterId,
+          category: "rental_closed",
+          title: `Rental ${rental.reference} closed`,
+          titleAr: `تم إغلاق الإيجار ${rental.reference}`,
+          body: "Your rental has been closed successfully. Thank you for using MLR!",
+          bodyAr: "تم إغلاق إيجارك بنجاح. شكراً لاستخدامك MLR!",
+          entityType: "rental",
+          entityId: id,
+        },
+        {
+          userId: rental.ownerId,
+          category: "rental_closed",
+          title: `Rental ${rental.reference} completed`,
+          titleAr: `اكتمل الإيجار ${rental.reference}`,
+          body: "Your asset has been returned in good condition and is back in the catalog.",
+          bodyAr: "تم إرجاع أصلك بحالة جيدة وأصبح متاحاً مرة أخرى.",
+          entityType: "rental",
+          entityId: id,
+        },
+      ]);
       return res.json(updated);
     }
 
