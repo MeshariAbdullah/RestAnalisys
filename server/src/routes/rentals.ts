@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { createNotification, NOTIFICATION_TYPES } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -66,6 +67,23 @@ function daysBetween(startIso: string, endIso: string): number {
   const end = new Date(endIso + "T00:00:00Z").getTime();
   if (end <= start) throw new LegalStateError("endDate must be after startDate");
   return Math.round((end - start) / (1000 * 60 * 60 * 24));
+}
+
+async function countLateReturns(userId: number): Promise<number> {
+  const result = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`status in ('closed', 'closed_with_penalty', 'under_inspection')`,
+        sql`returned_at IS NOT NULL`,
+        sql`returned_at::date > end_date::date`
+      )
+    );
+  return Number(result[0]?.count ?? 0);
 }
 
 function generateRentalReference(): string {
@@ -99,7 +117,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await countLateReturns(userId),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +298,18 @@ router.post(
       after: { rental, decision },
     });
 
+    createNotification({
+      userId: asset.ownerId,
+      type: NOTIFICATION_TYPES.RENTAL_CREATED,
+      title: "New rental for your asset",
+      titleAr: "إيجار جديد لأصلك",
+      body: `Your asset "${asset.title}" has a new rental request (${reference}).`,
+      bodyAr: `أصلك "${asset.title}" لديه طلب إيجار جديد (${reference}).`,
+      entityType: "rental",
+      entityId: rental.id,
+      actionUrl: `/owner/assets/${asset.id}`,
+    }).catch(() => {});
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -440,6 +470,18 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    createNotification({
+      userId: rental.renterId,
+      type: NOTIFICATION_TYPES.RENTAL_DELIVERED,
+      title: "Your rental has been delivered",
+      titleAr: "تم تسليم الإيجار الخاص بك",
+      body: `Rental ${rental.reference} has been delivered. Enjoy your item!`,
+      bodyAr: `تم تسليم الإيجار ${rental.reference}. استمتع بالمنتج!`,
+      entityType: "rental",
+      entityId: id,
+      actionUrl: `/my-rentals`,
+    }).catch(() => {});
 
     res.json(updated);
   })

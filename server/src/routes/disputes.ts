@@ -12,6 +12,7 @@ import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { createNotification, NOTIFICATION_TYPES } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -59,6 +60,18 @@ router.post(
       entityId: dispute.id,
       after: dispute,
     });
+
+    createNotification({
+      userId: rental.ownerId,
+      type: NOTIFICATION_TYPES.DISPUTE_OPENED,
+      title: "Dispute opened",
+      titleAr: "تم فتح نزاع",
+      body: `A ${input.category} dispute has been opened for rental #${rental.id}.`,
+      bodyAr: `تم فتح نزاع ${input.category} للإيجار رقم #${rental.id}.`,
+      entityType: "dispute",
+      entityId: dispute.id,
+      actionUrl: `/admin/disputes`,
+    }).catch(() => {});
 
     res.status(201).json(dispute);
   })
@@ -149,6 +162,25 @@ router.post(
       entityId: input.disputeId,
       after: updated,
     });
+
+    const [rental] = await db.select().from(rentals).where(eq(rentals.id, dispute.rentalId)).limit(1);
+    if (rental) {
+      const partyIds = [rental.renterId, rental.ownerId].filter(
+        (id) => id !== req.user!.userId
+      );
+      for (const uid of partyIds) {
+        createNotification({
+          userId: uid,
+          type: NOTIFICATION_TYPES.DISPUTE_RESOLVED,
+          title: "Dispute resolved",
+          titleAr: "تم حل النزاع",
+          body: `Dispute #${dispute.id} has been resolved: ${input.resolution.replace(/_/g, " ")}.`,
+          bodyAr: `تم حل النزاع رقم #${dispute.id}.`,
+          entityType: "dispute",
+          entityId: dispute.id,
+        }).catch(() => {});
+      }
+    }
 
     res.json(updated);
   })
