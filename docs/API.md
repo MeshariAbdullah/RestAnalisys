@@ -106,6 +106,16 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | GET    | `/inventory/:assetId/movements`   | operations  | Movement history for an asset    |
 | GET    | `/alerts`                         | operations  | Operational alerts               |
 | POST   | `/alerts/:id/resolve`             | operations  | Resolve an alert                 |
+| POST   | `/detect-overdue`                 | operations  | Detect overdue rentals & create alerts |
+| POST   | `/validate-address`               | authenticated | Validate a Saudi national address |
+
+## Uploads — `/api/uploads`
+
+| Method | Path          | Roles          | Purpose                              |
+| ------ | ------------- | -------------- | ------------------------------------ |
+| POST   | `/`           | authenticated  | Upload a single file (multipart)     |
+| POST   | `/batch`      | authenticated  | Upload multiple files (multipart)    |
+| DELETE  | `/:key`       | authenticated  | Delete an uploaded file              |
 
 ## Admin — `/api/admin`
 

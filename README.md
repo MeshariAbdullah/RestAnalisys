@@ -107,7 +107,9 @@ production mode.
 | Nafith Sanad    | `server/src/services/nafithService.ts` | `NAFITH_API_BASE`, `NAFITH_API_KEY` |
 | Payment gateway | `server/src/services/paymentService.ts`| `PAYMENT_GATEWAY_*`               |
 | ZATCA invoicing | `server/src/services/paymentService.ts`| `ZATCA_API_*`                     |
-| National Address| (planned)                              | `SPL_API_KEY`                     |
+| National Address| `server/src/services/splService.ts`     | `SPL_API_BASE`, `SPL_API_KEY`     |
+| File storage    | `server/src/services/uploadService.ts`  | `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` |
+| Notifications   | `server/src/services/notificationService.ts` | `EMAIL_PROVIDER_KEY`, `SMS_PROVIDER_KEY` |
 
 ---
 
@@ -132,6 +134,7 @@ production mode.
 | `npm run db:generate` | Drizzle-kit generate a new migration           |
 | `npm run db:migrate`  | Apply migrations to `DATABASE_URL`             |
 | `npm run db:seed`     | Seed the database with demo data               |
+| `npm run test`        | Run server unit tests (vitest)                 |
 
 ---
 

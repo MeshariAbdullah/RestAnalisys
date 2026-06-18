@@ -10,6 +10,7 @@
     "build": "cd client && npm run build && cd ../server && npm run build",
     "db:migrate": "cd server && npm run db:migrate",
     "db:seed": "cd server && npx tsx src/db/seed.ts",
+    "test": "cd server && npm test",
     "db:generate": "cd server && npm run db:generate"
   },
   "devDependencies": {

@@ -26,7 +26,9 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import uploadsRouter from "./routes/uploads.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { getLocalUploadDir } from "./services/uploadService.js";
 
 dotenv.config();
 
@@ -42,17 +44,24 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
+// Serve uploaded files in dev mode
+app.use("/uploads", express.static(getLocalUploadDir()));
+
 // Health
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     service: "mlr-platform",
-    version: "1.0.0",
+    version: "1.1.0",
     integrations: {
       nafath: !!process.env.NAFATH_API_KEY,
       nafith: !!process.env.NAFITH_API_KEY,
       paymentGateway: !!process.env.PAYMENT_GATEWAY_API_KEY,
       zatca: !!process.env.ZATCA_API_KEY,
+      spl: !!process.env.SPL_API_KEY,
+      s3: !!process.env.S3_ACCESS_KEY,
+      email: !!process.env.EMAIL_PROVIDER_KEY,
+      sms: !!process.env.SMS_PROVIDER_KEY,
     },
     timestamp: new Date().toISOString(),
   });
@@ -67,6 +76,7 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/uploads", uploadsRouter);
 
 // 404
 app.use((req, res) => {
@@ -81,6 +91,9 @@ app.listen(PORT, () => {
   console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   SPL:      ${process.env.SPL_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   S3:       ${process.env.S3_ACCESS_KEY ? "live" : "local"}`);
+  console.log(`   Email:    ${process.env.EMAIL_PROVIDER_KEY ? "live" : "console"}`);
 });
 
 export default app;
