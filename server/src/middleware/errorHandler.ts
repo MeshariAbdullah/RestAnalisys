@@ -6,6 +6,7 @@
 import { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 import { AppError } from "../utils/errors.js";
+import { logger } from "../lib/logger.js";
 
 export function errorHandler(
   err: unknown,
@@ -31,7 +32,7 @@ export function errorHandler(
     return;
   }
 
-  console.error(`[error] ${req.method} ${req.path}:`, err);
+  logger.error({ err, method: req.method, path: req.path }, "Unhandled error");
   res.status(500).json({
     error: err instanceof Error ? err.message : "Internal server error",
     code: "INTERNAL",

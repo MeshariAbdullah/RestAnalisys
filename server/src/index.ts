@@ -27,6 +27,8 @@ import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { globalLimiter, authLimiter, paymentLimiter } from "./middleware/rateLimiter.js";
+import { httpLogger, logger } from "./lib/logger.js";
 
 dotenv.config();
 
@@ -41,6 +43,8 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(httpLogger);
+app.use(globalLimiter);
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -58,12 +62,12 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRouter);
+app.use("/api/auth", authLimiter, authRouter);
 app.use("/api/assets", assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
 app.use("/api/rentals", rentalsRouter);
 app.use("/api/legal", legalRouter);
-app.use("/api/payments", paymentsRouter);
+app.use("/api/payments", paymentLimiter, paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
@@ -77,10 +81,15 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 app.listen(PORT, () => {
-  console.log(`🇸🇦  Managed Luxury Rental Platform API running on :${PORT}`);
-  console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
-  console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
-  console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
+  logger.info(
+    {
+      port: PORT,
+      nafath: process.env.NAFATH_API_KEY ? "live" : "placeholder",
+      nafith: process.env.NAFITH_API_KEY ? "live" : "placeholder",
+      payment: process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder",
+    },
+    "Managed Luxury Rental Platform API started"
+  );
 });
 
 export default app;
