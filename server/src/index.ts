@@ -16,6 +16,8 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import swaggerUi from "swagger-ui-express";
+import swaggerSpec from "./swagger.js";
 
 import authRouter from "./routes/auth.js";
 import assetsRouter from "./routes/assets.js";
@@ -41,6 +43,12 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Swagger API docs
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'MLR Platform API Docs',
+}));
 
 // Health
 app.get("/api/health", (_req, res) => {
