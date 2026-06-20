@@ -11,7 +11,7 @@
  */
 
 import { Router } from "express";
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql, count } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -318,8 +318,49 @@ router.get(
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.condition)
+      conditions.push(eq(assets.riskCategory, filter.condition as "low" | "medium" | "high" | "ultra_high"));
 
-    const rows = await db
+    // Text search across title, brand, and model
+    if (filter.search) {
+      const term = `%${filter.search}%`;
+      conditions.push(
+        or(
+          ilike(assets.title, term),
+          ilike(assets.brand, term),
+          ilike(assets.model, term),
+        )!
+      );
+    }
+
+    // Determine sort order
+    let orderByClause;
+    switch (filter.sort) {
+      case "price_asc":
+        orderByClause = asc(assets.dailyRentalPriceHalalas);
+        break;
+      case "price_desc":
+        orderByClause = desc(assets.dailyRentalPriceHalalas);
+        break;
+      case "oldest":
+        orderByClause = asc(assets.createdAt);
+        break;
+      case "newest":
+      default:
+        orderByClause = desc(assets.createdAt);
+        break;
+    }
+
+    const whereClause = and(...conditions);
+
+    // Total count query (for pagination)
+    const [{ total }] = await db
+      .select({ total: count() })
+      .from(assets)
+      .where(whereClause);
+
+    // Main listing query with offset-based pagination
+    const query = db
       .select({
         id: assets.id,
         title: assets.title,
@@ -333,11 +374,15 @@ router.get(
         riskCategory: assets.riskCategory,
       })
       .from(assets)
-      .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
+      .where(whereClause)
+      .orderBy(orderByClause)
       .limit(filter.limit);
 
-    res.json({ items: rows, count: rows.length });
+    const rows = filter.offset
+      ? await query.offset(filter.offset)
+      : await query;
+
+    res.json({ items: rows, total, count: rows.length });
   })
 );
 
