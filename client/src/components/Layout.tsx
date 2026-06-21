@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -19,9 +20,13 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  Heart,
+  User as UserIcon,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
-import { clearSession, getCurrentUser } from "@/lib/auth";
+import { notificationsApi, type AppNotification } from "@/lib/api";
+import { clearSession, getCurrentUser, isAuthenticated } from "@/lib/auth";
 
 interface NavItem {
   href: string;
@@ -34,6 +39,7 @@ const NAV: NavItem[] = [
   // Renter
   { href: "/browse", label: "Browse Catalog", icon: ShoppingBag, roles: ["renter"] },
   { href: "/my-rentals", label: "My Rentals", icon: FileText, roles: ["renter"] },
+  { href: "/favorites", label: "Wishlist", icon: Heart, roles: ["renter"] },
 
   // Owner
   { href: "/owner", label: "Owner Dashboard", icon: LayoutDashboard, roles: ["owner"] },
@@ -162,7 +168,111 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <TopBar user={user} />
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
     </div>
+  );
+}
+
+function TopBar({ user }: { user: User | null }) {
+  const [showNotifs, setShowNotifs] = useState(false);
+  const queryClient = useQueryClient();
+  const authenticated = isAuthenticated();
+
+  const { data: unreadData } = useQuery({
+    queryKey: ["notifications-unread"],
+    queryFn: () => notificationsApi.unreadCount(),
+    enabled: authenticated,
+    refetchInterval: 30000,
+  });
+
+  const { data: notifs } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => notificationsApi.list(),
+    enabled: authenticated && showNotifs,
+  });
+
+  const markAllRead = useMutation({
+    mutationFn: () => notificationsApi.markAllRead(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+
+  const unread = unreadData?.count ?? 0;
+
+  if (!authenticated) return null;
+
+  return (
+    <header className="h-14 border-b border-neutral-200 bg-white flex items-center justify-end px-6 gap-3 shrink-0">
+      <Link href="/profile">
+        <a className="p-2 rounded-lg hover:bg-neutral-100 transition-colors text-neutral-600 hover:text-neutral-900">
+          <UserIcon className="w-5 h-5" />
+        </a>
+      </Link>
+
+      <div className="relative">
+        <button
+          onClick={() => setShowNotifs(!showNotifs)}
+          className="p-2 rounded-lg hover:bg-neutral-100 transition-colors text-neutral-600 hover:text-neutral-900 relative"
+        >
+          <Bell className="w-5 h-5" />
+          {unread > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
+        </button>
+
+        {showNotifs && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setShowNotifs(false)} />
+            <div className="absolute right-0 top-12 w-96 max-h-[70vh] bg-white rounded-xl shadow-xl border border-neutral-200 z-50 overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100">
+                <h3 className="font-semibold text-sm">Notifications</h3>
+                {unread > 0 && (
+                  <button
+                    onClick={() => markAllRead.mutate()}
+                    className="text-xs text-amber-600 hover:underline"
+                  >
+                    Mark all read
+                  </button>
+                )}
+              </div>
+              <div className="overflow-y-auto flex-1">
+                {!notifs || notifs.length === 0 ? (
+                  <p className="p-6 text-center text-sm text-neutral-400">
+                    No notifications yet.
+                  </p>
+                ) : (
+                  notifs.map((n: AppNotification) => (
+                    <a
+                      key={n.id}
+                      href={n.linkUrl ?? "#"}
+                      className={cn(
+                        "block px-4 py-3 border-b border-neutral-50 hover:bg-neutral-50 transition-colors",
+                        !n.read && "bg-amber-50/50"
+                      )}
+                      onClick={() => setShowNotifs(false)}
+                    >
+                      <p className="text-sm font-medium">{n.title}</p>
+                      <p className="text-xs text-neutral-500 mt-0.5 line-clamp-2">
+                        {n.message}
+                      </p>
+                      <p className="text-[10px] text-neutral-400 mt-1">
+                        {new Date(n.createdAt).toLocaleString()}
+                      </p>
+                    </a>
+                  ))
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </header>
   );
 }

@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
-import { Diamond, Calendar, Shield, Info } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Diamond, Calendar, Shield, Info, Heart, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { assetsApi, rentalsApi, formatSar } from "@/lib/api";
+import { assetsApi, rentalsApi, favoritesApi, reviewsApi, formatSar } from "@/lib/api";
 
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -30,9 +30,32 @@ export default function ItemDetail({ id }: { id: number }) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const queryClient = useQueryClient();
+
   const assetQuery = useQuery({
     queryKey: ["asset", id],
     queryFn: () => assetsApi.listingDetail(id),
+  });
+
+  const favQuery = useQuery({
+    queryKey: ["fav-check", id],
+    queryFn: () => favoritesApi.check(id),
+  });
+
+  const reviewsQuery = useQuery({
+    queryKey: ["reviews", id],
+    queryFn: () => reviewsApi.forAsset(id),
+  });
+
+  const toggleFav = useMutation({
+    mutationFn: () =>
+      favQuery.data?.favorited
+        ? favoritesApi.remove(id)
+        : favoritesApi.toggle(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["fav-check", id] });
+      queryClient.invalidateQueries({ queryKey: ["favorites"] });
+    },
   });
 
   const quoteQuery = useQuery({
@@ -115,7 +138,7 @@ export default function ItemDetail({ id }: { id: number }) {
             <p className="text-neutral-500 mt-1">{asset.model}</p>
           )}
 
-          <div className="flex items-center gap-2 mt-4">
+          <div className="flex items-center gap-2 mt-4 flex-wrap">
             <Badge className="bg-amber-500 text-neutral-950">
               {asset.category}
             </Badge>
@@ -123,6 +146,20 @@ export default function ItemDetail({ id }: { id: number }) {
             <Badge variant="outline">
               Evaluated {formatSar(asset.evaluatedValueHalalas)}
             </Badge>
+            {reviewsQuery.data && reviewsQuery.data.totalReviews > 0 && (
+              <Badge variant="outline" className="flex items-center gap-1">
+                <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                {reviewsQuery.data.averageRating?.toFixed(1)} ({reviewsQuery.data.totalReviews})
+              </Badge>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => toggleFav.mutate()}
+              className={favQuery.data?.favorited ? "text-red-500 hover:text-red-700" : "text-neutral-400 hover:text-red-500"}
+            >
+              <Heart className={`w-5 h-5 ${favQuery.data?.favorited ? "fill-current" : ""}`} />
+            </Button>
           </div>
 
           <p className="mt-6 text-sm text-neutral-600 leading-relaxed">
@@ -210,6 +247,48 @@ export default function ItemDetail({ id }: { id: number }) {
           </Card>
         </div>
       </div>
+
+      {/* Reviews section */}
+      {reviewsQuery.data && reviewsQuery.data.reviews.length > 0 && (
+        <div className="mt-12">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Star className="w-5 h-5 text-amber-400" />
+            Reviews ({reviewsQuery.data.totalReviews})
+            {reviewsQuery.data.averageRating && (
+              <span className="text-neutral-500 font-normal text-base ml-2">
+                Avg: {reviewsQuery.data.averageRating.toFixed(1)}/5
+              </span>
+            )}
+          </h2>
+          <div className="space-y-3">
+            {reviewsQuery.data.reviews.map((r) => (
+              <Card key={r.id}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="flex">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-4 h-4 ${i < r.rating ? "fill-amber-400 text-amber-400" : "text-neutral-200"}`}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-sm font-medium">{r.reviewerName}</span>
+                    </div>
+                    <span className="text-xs text-neutral-400">
+                      {new Date(r.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  {r.comment && (
+                    <p className="text-sm text-neutral-600 mt-2">{r.comment}</p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

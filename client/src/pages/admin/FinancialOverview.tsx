@@ -1,8 +1,18 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Receipt, TrendingUp } from "lucide-react";
+import { Receipt, TrendingUp, BarChart3 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
-import { adminApi, formatSar } from "@/lib/api";
+import { adminApi, formatSar, halalasToSar } from "@/lib/api";
 
 export default function FinancialOverview() {
   const kpisQuery = useQuery({
@@ -65,7 +75,45 @@ export default function FinancialOverview() {
         </Card>
       </div>
 
-      <h2 className="text-lg font-semibold mb-3">Last 30 days</h2>
+      <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+        <BarChart3 className="w-5 h-5" />
+        Last 30 days
+      </h2>
+      <Card>
+        <CardContent className="p-6">
+          {trend.length === 0 ? (
+            <p className="text-neutral-500 text-sm">No recent rentals.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={350}>
+              <BarChart
+                data={trend.map((t) => ({
+                  day: new Date(t.day).toLocaleDateString("en-SA", {
+                    month: "short",
+                    day: "numeric",
+                  }),
+                  revenue: halalasToSar(Number(t.total_halalas)),
+                  fees: halalasToSar(Number(t.fee_halalas)),
+                  rentals: Number(t.rentals),
+                }))}
+                margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip
+                  formatter={(value: number) => `${value.toLocaleString()} SAR`}
+                  labelStyle={{ fontWeight: "bold" }}
+                />
+                <Legend />
+                <Bar dataKey="revenue" name="Total Revenue" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="fees" name="Platform Fees" fill="#78716c" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      <h2 className="text-lg font-semibold mb-3 mt-8">Daily breakdown</h2>
       <Card>
         <CardContent className="p-6">
           {trend.length === 0 ? (

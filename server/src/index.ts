@@ -26,6 +26,9 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import notificationsRouter from "./routes/notifications.js";
+import reviewsRouter from "./routes/reviews.js";
+import favoritesRouter from "./routes/favorites.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 dotenv.config();
@@ -67,6 +70,9 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/notifications", notificationsRouter);
+app.use("/api/reviews", reviewsRouter);
+app.use("/api/favorites", favoritesRouter);
 
 // 404
 app.use((req, res) => {

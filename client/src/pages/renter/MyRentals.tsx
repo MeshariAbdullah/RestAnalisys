@@ -1,9 +1,10 @@
-import React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Package, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Package, CheckCircle, Clock, AlertCircle, Star } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { rentalsApi, formatSar, type Rental } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { rentalsApi, reviewsApi, formatSar, type Rental } from "@/lib/api";
 
 const STATUS_META: Record<string, { color: string; icon: typeof Clock }> = {
   draft: { color: "bg-neutral-200 text-neutral-700", icon: Clock },
@@ -36,10 +37,72 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function ReviewForm({ rentalId, onDone }: { rentalId: number; onDone: () => void }) {
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const queryClient = useQueryClient();
+
+  const submitReview = useMutation({
+    mutationFn: () => reviewsApi.create(rentalId, rating, comment || undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["my-reviews"] });
+      onDone();
+    },
+  });
+
+  return (
+    <div className="mt-3 p-3 bg-neutral-50 rounded-lg border border-neutral-200">
+      <p className="text-sm font-medium mb-2">Rate your experience</p>
+      <div className="flex gap-1 mb-2">
+        {[1, 2, 3, 4, 5].map((v) => (
+          <button key={v} onClick={() => setRating(v)}>
+            <Star
+              className={`w-6 h-6 cursor-pointer transition-colors ${
+                v <= rating ? "fill-amber-400 text-amber-400" : "text-neutral-300 hover:text-amber-300"
+              }`}
+            />
+          </button>
+        ))}
+      </div>
+      <textarea
+        placeholder="Optional comment…"
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        className="w-full text-sm p-2 border rounded-md mb-2 resize-none h-16"
+      />
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          onClick={() => submitReview.mutate()}
+          disabled={rating === 0 || submitReview.isPending}
+          className="bg-amber-500 hover:bg-amber-600 text-neutral-950"
+        >
+          {submitReview.isPending ? "Submitting…" : "Submit review"}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onDone}>
+          Cancel
+        </Button>
+      </div>
+      {submitReview.isError && (
+        <p className="text-xs text-red-600 mt-1">
+          {(submitReview.error as Error).message}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function MyRentals() {
+  const [reviewingId, setReviewingId] = useState<number | null>(null);
+
   const { data, isLoading } = useQuery({
     queryKey: ["rentals-mine"],
     queryFn: () => rentalsApi.mine(),
+  });
+
+  const { data: myReviews } = useQuery({
+    queryKey: ["my-reviews"],
+    queryFn: () => reviewsApi.mine(),
   });
 
   return (
@@ -100,8 +163,31 @@ export default function MyRentals() {
                       Commitment {formatSar(r.legalCommitmentHalalas)} (
                       {r.legalCommitmentPct}%)
                     </p>
+                    {["closed", "closed_with_penalty"].includes(r.status) &&
+                      !myReviews?.find((rev) => rev.rentalId === r.id) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="mt-2 text-xs"
+                          onClick={() => setReviewingId(reviewingId === r.id ? null : r.id)}
+                        >
+                          <Star className="w-3 h-3 mr-1" />
+                          Leave review
+                        </Button>
+                      )}
+                    {myReviews?.find((rev) => rev.rentalId === r.id) && (
+                      <div className="flex items-center gap-0.5 mt-2 justify-end">
+                        {Array.from({ length: myReviews.find((rev) => rev.rentalId === r.id)!.rating }).map((_, i) => (
+                          <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
+                        ))}
+                        <span className="text-xs text-neutral-400 ml-1">Reviewed</span>
+                      </div>
+                    )}
                   </div>
                 </div>
+                {reviewingId === r.id && (
+                  <ReviewForm rentalId={r.id} onDone={() => setReviewingId(null)} />
+                )}
               </CardContent>
             </Card>
           ))}

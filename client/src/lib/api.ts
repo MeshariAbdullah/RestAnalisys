@@ -72,9 +72,12 @@ export interface User {
   nationalId?: string;
   nafathVerified: boolean;
   kycStatus: "unverified" | "pending" | "verified" | "rejected";
+  phoneVerified?: boolean;
+  emailVerified?: boolean;
   trustScore: number;
   riskCategory: "low" | "medium" | "high" | "ultra_high";
   isBlocked?: boolean;
+  createdAt?: string;
 }
 
 export interface Asset {
@@ -582,6 +585,97 @@ export const adminApi = {
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  linkUrl?: string;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: () => request<AppNotification[]>("/notifications"),
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reviews
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ReviewItem {
+  id: number;
+  rating: number;
+  comment?: string;
+  createdAt: string;
+  reviewerName: string;
+}
+
+export interface AssetReviews {
+  reviews: ReviewItem[];
+  averageRating: number | null;
+  totalReviews: number;
+}
+
+export const reviewsApi = {
+  create: (rentalId: number, rating: number, comment?: string) =>
+    request<{ id: number; rating: number; comment?: string }>("/reviews", {
+      method: "POST",
+      body: JSON.stringify({ rentalId, rating, comment }),
+    }),
+  forAsset: (assetId: number) => request<AssetReviews>(`/reviews/asset/${assetId}`),
+  mine: () => request<Array<{ id: number; rentalId: number; rating: number; comment?: string; createdAt: string }>>("/reviews/mine"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Favorites
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface FavoriteItem {
+  id: number;
+  assetId: number;
+  createdAt: string;
+  asset: Asset;
+}
+
+export const favoritesApi = {
+  list: () => request<FavoriteItem[]>("/favorites"),
+  toggle: (assetId: number) =>
+    request<{ favorited: boolean; id?: number }>(`/favorites/${assetId}`, {
+      method: "POST",
+    }),
+  remove: (assetId: number) =>
+    request<{ favorited: boolean }>(`/favorites/${assetId}`, {
+      method: "DELETE",
+    }),
+  check: (assetId: number) =>
+    request<{ favorited: boolean }>(`/favorites/check/${assetId}`),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const profileApi = {
+  get: () => authApi.me(),
+  update: (data: { fullName?: string; phoneE164?: string }) =>
+    request<User>("/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

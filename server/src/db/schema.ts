@@ -697,6 +697,91 @@ export const integrationEvents = pgTable("integration_events", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "rental_created",
+  "rental_confirmed",
+  "rental_delivered",
+  "rental_returned",
+  "rental_closed",
+  "rental_cancelled",
+  "asset_approved",
+  "asset_rejected",
+  "asset_listed",
+  "inspection_complete",
+  "dispute_opened",
+  "dispute_resolved",
+  "payment_captured",
+  "payout_released",
+  "sanad_issued",
+  "review_received",
+  "system",
+]);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    type: notificationTypeEnum("type").notNull(),
+    title: text("title").notNull(),
+    message: text("message").notNull(),
+    linkUrl: text("link_url"),
+    read: boolean("read").notNull().default(false),
+    readAt: timestamp("read_at"),
+    metadataJson: jsonb("metadata_json"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    readIdx: index("notifications_read_idx").on(t.userId, t.read),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reviews (renter reviews after completed rental)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const reviews = pgTable(
+  "reviews",
+  {
+    id: serial("id").primaryKey(),
+    rentalId: integer("rental_id").references(() => rentals.id).notNull(),
+    assetId: integer("asset_id").references(() => assets.id).notNull(),
+    reviewerId: integer("reviewer_id").references(() => users.id).notNull(),
+    rating: integer("rating").notNull(), // 1-5
+    comment: text("comment"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    rentalIdx: uniqueIndex("reviews_rental_idx").on(t.rentalId),
+    assetIdx: index("reviews_asset_idx").on(t.assetId),
+    reviewerIdx: index("reviews_reviewer_idx").on(t.reviewerId),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Favorites (renter wishlists)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const favorites = pgTable(
+  "favorites",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    assetId: integer("asset_id").references(() => assets.id).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userAssetIdx: uniqueIndex("favorites_user_asset_idx").on(t.userId, t.assetId),
+    userIdx: index("favorites_user_idx").on(t.userId),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Type exports
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -713,3 +798,6 @@ export type SanadRecord = typeof sanadRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
 export type Shipment = typeof shipments.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type Review = typeof reviews.$inferSelect;
+export type Favorite = typeof favorites.$inferSelect;

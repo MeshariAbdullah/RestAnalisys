@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { createNotification } from "./notifications.js";
 
 const router = Router();
 
@@ -99,7 +100,18 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await (async () => {
+      const lateRentals = await db
+        .select({ id: rentals.id })
+        .from(rentals)
+        .where(
+          and(
+            eq(rentals.renterId, userId),
+            sql`returned_at IS NOT NULL AND returned_at::date > end_date::date`
+          )
+        );
+      return lateRentals.length;
+    })(),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +292,14 @@ router.post(
       after: { rental, decision },
     });
 
+    await createNotification({
+      userId: asset.ownerId,
+      type: "rental_created",
+      title: "New rental request",
+      message: `${renter!.fullName} wants to rent "${asset.title}" (${rental.reference}).`,
+      linkUrl: `/owner/assets/${asset.id}`,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -433,6 +453,14 @@ router.post(
       .set({ status: "rented_out", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
 
+    await createNotification({
+      userId: rental.renterId,
+      type: "rental_delivered",
+      title: "Your rental has been delivered",
+      message: `Rental ${rental.reference} is now active. Enjoy!`,
+      linkUrl: `/my-rentals`,
+    });
+
     await recordAudit({
       req,
       action: "rental.delivered",
@@ -509,6 +537,20 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await createNotification({
+        userId: rental.renterId,
+        type: "rental_closed",
+        title: "Rental completed",
+        message: `Rental ${rental.reference} has been closed successfully. Leave a review!`,
+        linkUrl: `/my-rentals`,
+      });
+      await createNotification({
+        userId: rental.ownerId,
+        type: "rental_closed",
+        title: "Rental completed",
+        message: `Rental ${rental.reference} closed cleanly. Payout will be released.`,
+        linkUrl: `/owner/payouts`,
+      });
       await recordAudit({
         req,
         action: "rental.close_clean",
