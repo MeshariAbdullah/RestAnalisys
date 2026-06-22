@@ -36,6 +36,9 @@ import DisputesPage from "./pages/admin/Disputes";
 import FinancialOverview from "./pages/admin/FinancialOverview";
 import SanadTracking from "./pages/admin/SanadTracking";
 
+// Shared
+import NotificationsPage from "./pages/Notifications";
+
 export default function App() {
   return (
     <Switch>
@@ -108,6 +111,13 @@ export default function App() {
       </Route>
       <Route path="/ops/alerts">
         <ProtectedRoute roles={["operations"]}><AlertsPage /></ProtectedRoute>
+      </Route>
+
+      {/* Notifications (all authenticated users) */}
+      <Route path="/notifications">
+        <ProtectedRoute roles={["renter", "owner", "inspector", "operations", "admin", "super_admin"]}>
+          <NotificationsPage />
+        </ProtectedRoute>
       </Route>
 
       {/* Admin */}

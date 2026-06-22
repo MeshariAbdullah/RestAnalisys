@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -89,6 +90,20 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     .where(eq(rentals.renterId, userId));
   const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
 
+  // Count rentals where the item was returned after end_date
+  const lateStats = await db
+    .select({
+      lateCount: sql<number>`count(*) filter (where ${rentals.returnedAt} > (${rentals.endDate} || 'T23:59:59Z')::timestamp)`,
+    })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`${rentals.returnedAt} is not null`
+      )
+    );
+  const lateReturns = Number(lateStats[0]?.lateCount ?? 0);
+
   const accountAgeDays = Math.max(
     0,
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
@@ -99,7 +114,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns,
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -278,6 +293,30 @@ router.post(
       entityType: "rental",
       entityId: rental.id,
       after: { rental, decision },
+    });
+
+    // Notify renter and owner
+    notify({
+      userId: renterId,
+      type: "rental.created",
+      title: "Rental Created",
+      titleAr: "تم إنشاء الإيجار",
+      body: `Your rental request ${rental.reference} for "${asset.title}" has been created. Please sign the legal commitment to proceed.`,
+      bodyAr: `تم إنشاء طلب الإيجار ${rental.reference} لـ "${asset.title}". يرجى توقيع الالتزام القانوني للمتابعة.`,
+      entityType: "rental",
+      entityId: rental.id,
+      actionUrl: `/rentals/${rental.id}`,
+    });
+    notify({
+      userId: asset.ownerId,
+      type: "rental.asset_reserved",
+      title: "Your Asset Has Been Reserved",
+      titleAr: "تم حجز أصلك",
+      body: `Your item "${asset.title}" has been reserved by a renter (ref: ${rental.reference}).`,
+      bodyAr: `تم حجز "${asset.title}" من قبل مستأجر (المرجع: ${rental.reference}).`,
+      entityType: "rental",
+      entityId: rental.id,
+      actionUrl: `/owner/assets/${asset.id}`,
     });
 
     res.status(201).json({

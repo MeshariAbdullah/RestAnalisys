@@ -41,10 +41,11 @@ or full compensation equal to its evaluated value, backed by a Nafith Sanad
 ├── server/                   Express + TypeScript
 │   └── src/
 │       ├── db/               Drizzle schema, migrate, seed
-│       ├── middleware/       auth, rbac, errorHandler
-│       ├── services/         riskEngine, legalService, nafath/nafith/payment/audit
+│       ├── middleware/       auth, rbac, errorHandler, rateLimiter
+│       ├── services/         riskEngine, legalService, nafath/nafith/payment/audit,
+│       │                     notificationService, splAddressService
 │       ├── routes/           auth, assets, inspections, rentals, legal,
-│       │                     payments, disputes, operations, admin
+│       │                     payments, disputes, operations, admin, notifications
 │       └── utils/            money, errors, schemas (Zod), asyncHandler
 ├── server/migrations/        drizzle-kit SQL
 ├── docs/                     ARCHITECTURE, API, RISK_ENGINE, LEGAL_FLOW,
@@ -107,7 +108,9 @@ production mode.
 | Nafith Sanad    | `server/src/services/nafithService.ts` | `NAFITH_API_BASE`, `NAFITH_API_KEY` |
 | Payment gateway | `server/src/services/paymentService.ts`| `PAYMENT_GATEWAY_*`               |
 | ZATCA invoicing | `server/src/services/paymentService.ts`| `ZATCA_API_*`                     |
-| National Address| (planned)                              | `SPL_API_KEY`                     |
+| National Address| `server/src/services/splAddressService.ts` | `SPL_API_BASE`, `SPL_API_KEY` |
+| Email (SMTP)    | `server/src/services/notificationService.ts` | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` |
+| SMS             | `server/src/services/notificationService.ts` | `SMS_API_KEY`, `SMS_SENDER_ID` |
 
 ---
 
@@ -119,6 +122,7 @@ production mode.
 - [Legal & Sanad flow](docs/LEGAL_FLOW.md)
 - [RBAC permission matrix](docs/RBAC.md)
 - [User journeys](docs/USER_JOURNEYS.md)
+- [Notifications](docs/NOTIFICATIONS.md)
 
 ---
 

@@ -266,12 +266,26 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: {
+    category?: string;
+    brand?: string;
+    search?: string;
+    sortBy?: "price_asc" | "price_desc" | "newest" | "value_desc";
+    minDaily?: number;
+    maxDaily?: number;
+    limit?: number;
+    cursor?: number;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.sortBy) qs.set("sortBy", params.sortBy);
+    if (params?.minDaily) qs.set("minDaily", String(params.minDaily));
+    if (params?.maxDaily) qs.set("maxDaily", String(params.maxDaily));
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    if (params?.cursor) qs.set("cursor", String(params.cursor));
+    return request<{ items: Asset[]; count: number; total: number; hasMore: boolean }>(`/assets/listings?${qs}`);
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
@@ -578,6 +592,42 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id: number;
+  userId: number;
+  channel: "in_app" | "email" | "sms";
+  type: string;
+  title: string;
+  titleAr?: string;
+  body: string;
+  bodyAr?: string;
+  entityType?: string;
+  entityId?: number;
+  actionUrl?: string;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (opts?: { unreadOnly?: boolean; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (opts?.unreadOnly) qs.set("unreadOnly", "true");
+    if (opts?.limit) qs.set("limit", String(opts.limit));
+    if (opts?.offset) qs.set("offset", String(opts.offset));
+    return request<{ items: Notification[]; total: number }>(`/notifications?${qs}`);
+  },
+  unreadCount: () => request<{ unreadCount: number }>("/notifications/unread"),
+  markRead: (id: number) =>
+    request<{ ok: boolean }>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean; markedRead: number }>("/notifications/read-all", { method: "POST" }),
 };
 
 export const healthApi = {

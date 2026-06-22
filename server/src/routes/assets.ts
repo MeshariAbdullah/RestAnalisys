@@ -11,7 +11,7 @@
  */
 
 import { Router } from "express";
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -256,6 +257,22 @@ router.post(
       after: updated,
     });
 
+    notify({
+      userId: asset.ownerId,
+      type: approved ? "asset.approved" : "asset.rejected",
+      title: approved ? "Asset Approved" : "Asset Rejected",
+      titleAr: approved ? "تمت الموافقة على الأصل" : "تم رفض الأصل",
+      body: approved
+        ? `Your asset "${asset.title}" has been approved. Please arrange shipment to our facility.`
+        : `Your asset "${asset.title}" was rejected. Reason: ${rejectionReason ?? "Not specified"}.`,
+      bodyAr: approved
+        ? `تمت الموافقة على "${asset.title}". يرجى ترتيب الشحن إلى منشأتنا.`
+        : `تم رفض "${asset.title}". السبب: ${rejectionReason ?? "غير محدد"}.`,
+      entityType: "asset",
+      entityId: assetId,
+      actionUrl: `/owner/assets/${assetId}`,
+    });
+
     res.json(updated);
   })
 );
@@ -318,6 +335,23 @@ router.get(
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.search) {
+      const term = `%${filter.search}%`;
+      conditions.push(
+        or(
+          ilike(assets.title, term),
+          ilike(assets.brand, term),
+          ilike(assets.model, term),
+          ilike(assets.description, term)
+        )!
+      );
+    }
+
+    const orderClause =
+      filter.sortBy === "price_asc" ? asc(assets.dailyRentalPriceHalalas) :
+      filter.sortBy === "price_desc" ? desc(assets.dailyRentalPriceHalalas) :
+      filter.sortBy === "value_desc" ? desc(assets.evaluatedValueHalalas) :
+      desc(assets.createdAt);
 
     const rows = await db
       .select({
@@ -334,10 +368,21 @@ router.get(
       })
       .from(assets)
       .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
-      .limit(filter.limit);
+      .orderBy(orderClause)
+      .limit(filter.limit)
+      .offset(filter.cursor ?? 0);
 
-    res.json({ items: rows, count: rows.length });
+    const [totalResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(assets)
+      .where(and(...conditions));
+
+    res.json({
+      items: rows,
+      count: rows.length,
+      total: Number(totalResult?.count ?? 0),
+      hasMore: (filter.cursor ?? 0) + rows.length < Number(totalResult?.count ?? 0),
+    });
   })
 );
 
