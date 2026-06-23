@@ -17,8 +17,9 @@ import {
   ForbiddenError,
 } from "../utils/errors.js";
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
-import { computeOwnerPayout } from "../utils/money.js";
+import { computeOwnerPayout, formatHalalas } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyRentalEvent } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -120,6 +121,16 @@ router.post(
       after: { payment, invoice },
     });
 
+    if (result.status === "captured") {
+      notifyRentalEvent("payment_captured", {
+        email: req.user!.email,
+        fullName: user?.fullName ?? "Customer",
+      }, {
+        rentalReference: rental.reference,
+        amount: formatHalalas(rental.totalPayableHalalas),
+      }).catch(() => {});
+    }
+
     res.json({ payment, invoice });
   })
 );
@@ -220,6 +231,22 @@ router.post(
       entityId: payout.id,
       after: payout,
     });
+
+    const [owner] = await db
+      .select({ email: users.email, phoneE164: users.phoneE164, fullName: users.fullName })
+      .from(users)
+      .where(eq(users.id, rental.ownerId))
+      .limit(1);
+    if (owner) {
+      notifyRentalEvent("payout_released", {
+        email: owner.email,
+        phoneE164: owner.phoneE164 ?? undefined,
+        fullName: owner.fullName,
+      }, {
+        rentalReference: rental.reference,
+        amount: formatHalalas(payoutCalc.netHalalas),
+      }).catch(() => {});
+    }
 
     res.json(payout);
   })

@@ -26,12 +26,17 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import uploadsRouter from "./routes/uploads.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { apiLimiter, authLimiter, paymentLimiter } from "./middleware/rateLimiter.js";
+import { logger } from "./utils/logger.js";
+import { startScheduledTasks } from "./services/scheduledTasks.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "3001");
+const startedAt = new Date().toISOString();
 
 app.use(
   cors({
@@ -42,31 +47,55 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
+// Request logging
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    const level = res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "warn" : "info";
+    logger[level](`${req.method} ${req.path}`, {
+      status: res.statusCode,
+      duration,
+      ip: (req.headers["x-forwarded-for"] as string) ?? req.ip,
+    });
+  });
+  next();
+});
+
+// Global rate limit
+app.use("/api", apiLimiter);
+
 // Health
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     service: "mlr-platform",
-    version: "1.0.0",
+    version: "1.1.0",
+    startedAt,
+    uptime: process.uptime(),
     integrations: {
       nafath: !!process.env.NAFATH_API_KEY,
       nafith: !!process.env.NAFITH_API_KEY,
       paymentGateway: !!process.env.PAYMENT_GATEWAY_API_KEY,
       zatca: !!process.env.ZATCA_API_KEY,
+      s3: !!process.env.S3_ACCESS_KEY,
+      smtp: !!process.env.SMTP_HOST,
+      sms: !!process.env.SMS_API_KEY,
     },
     timestamp: new Date().toISOString(),
   });
 });
 
-app.use("/api/auth", authRouter);
+app.use("/api/auth", authLimiter, authRouter);
 app.use("/api/assets", assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
 app.use("/api/rentals", rentalsRouter);
 app.use("/api/legal", legalRouter);
-app.use("/api/payments", paymentsRouter);
+app.use("/api/payments", paymentLimiter, paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/uploads", uploadsRouter);
 
 // 404
 app.use((req, res) => {
@@ -77,10 +106,16 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 app.listen(PORT, () => {
-  console.log(`🇸🇦  Managed Luxury Rental Platform API running on :${PORT}`);
-  console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
-  console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
-  console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
+  logger.info(`Managed Luxury Rental Platform API running on :${PORT}`);
+  logger.info("Integration status", {
+    nafath: process.env.NAFATH_API_KEY ? "live" : "placeholder",
+    nafith: process.env.NAFITH_API_KEY ? "live" : "placeholder",
+    payment: process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder",
+    s3: process.env.S3_ACCESS_KEY ? "live" : "placeholder",
+    smtp: process.env.SMTP_HOST ? "live" : "placeholder",
+  });
+
+  startScheduledTasks();
 });
 
 export default app;

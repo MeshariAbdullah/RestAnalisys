@@ -581,7 +581,32 @@ export const adminApi = {
 };
 
 export const healthApi = {
-  check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+  check: () => request<{ ok: boolean; service: string; version: string; uptime: number; integrations: Record<string, boolean> }>("/health"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Uploads
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type UploadCategory = "asset-submission" | "asset-studio" | "inspection" | "contract" | "invoice" | "avatar";
+
+export const uploadsApi = {
+  presign: (data: {
+    category: UploadCategory;
+    fileName: string;
+    contentType: string;
+    fileSizeBytes: number;
+    entityId?: number;
+  }) =>
+    request<{ uploadUrl: string; publicUrl: string; key: string; expiresAt: string }>(
+      "/uploads/presign",
+      { method: "POST", body: JSON.stringify(data) }
+    ),
+  confirm: (key: string) =>
+    request<{ key: string; publicUrl: string; uploadedAt: string }>(
+      "/uploads/confirm",
+      { method: "POST", body: JSON.stringify({ key }) }
+    ),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
