@@ -580,6 +580,44 @@ export const adminApi = {
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
 };
 
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  entityType?: string;
+  entityId?: number;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: () => request<Notification[]>("/notifications"),
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<Notification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+};
+
+export const auditApi = {
+  list: (params?: { limit?: number; entityType?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    return request<Array<{
+      id: number;
+      actorUserId: number | null;
+      actorRole: string | null;
+      action: string;
+      entityType: string;
+      entityId: number | null;
+      createdAt: string;
+    }>>(`/admin/audit-logs?${qs}`);
+  },
+};
+
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };

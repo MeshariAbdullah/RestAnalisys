@@ -19,6 +19,8 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  ScrollText,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
@@ -31,6 +33,9 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
+  // All roles
+  { href: "/notifications", label: "Notifications", icon: Bell, roles: ["renter", "owner", "inspector", "operations", "admin", "super_admin"] },
+
   // Renter
   { href: "/browse", label: "Browse Catalog", icon: ShoppingBag, roles: ["renter"] },
   { href: "/my-rentals", label: "My Rentals", icon: FileText, roles: ["renter"] },
@@ -56,6 +61,7 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit", label: "Audit Log", icon: ScrollText, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
