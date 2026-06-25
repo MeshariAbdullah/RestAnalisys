@@ -697,6 +697,54 @@ export const integrationEvents = pgTable("integration_events", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications (in-app)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    titleAr: text("title_ar").notNull(),
+    body: text("body").notNull(),
+    bodyAr: text("body_ar").notNull(),
+    entityType: text("entity_type"),
+    entityId: integer("entity_id"),
+    actionUrl: text("action_url"),
+    metadataJson: jsonb("metadata_json"),
+    read: boolean("read").notNull().default(false),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    userReadIdx: index("notifications_user_read_idx").on(t.userId, t.read),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Refresh tokens
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const refreshTokens = pgTable(
+  "refresh_tokens",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    token: text("token").notNull().unique(),
+    expiresAt: timestamp("expires_at").notNull(),
+    revokedAt: timestamp("revoked_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    tokenIdx: uniqueIndex("refresh_tokens_token_idx").on(t.token),
+    userIdx: index("refresh_tokens_user_idx").on(t.userId),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Type exports
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -713,3 +761,5 @@ export type SanadRecord = typeof sanadRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
 export type Shipment = typeof shipments.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type RefreshToken = typeof refreshTokens.$inferSelect;

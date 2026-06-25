@@ -15,6 +15,8 @@
 
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 
 import authRouter from "./routes/auth.js";
@@ -26,6 +28,7 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import notificationsRouter from "./routes/notifications.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 dotenv.config();
@@ -33,14 +36,48 @@ dotenv.config();
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "3001");
 
+// Security headers
+app.use(helmet());
+
+// CORS
+const allowedOrigins = (process.env.CLIENT_URL ?? "http://localhost:5173")
+  .split(",")
+  .map((o) => o.trim());
 app.use(
   cors({
-    origin: process.env.CLIENT_URL ?? "http://localhost:5173",
+    origin: (origin, cb) => {
+      if (!origin || allowedOrigins.includes(origin)) cb(null, true);
+      else cb(new Error("CORS: origin not allowed"));
+    },
     credentials: true,
   })
 );
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Global rate limiter
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many requests, please try again later" },
+  })
+);
+
+// Auth endpoints get a tighter limit
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many auth attempts, please try again later" },
+});
+
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: true, limit: "5mb" }));
+
+// Trust proxy for correct IP behind reverse proxies (Render, etc.)
+app.set("trust proxy", 1);
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -58,7 +95,7 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRouter);
+app.use("/api/auth", authLimiter, authRouter);
 app.use("/api/assets", assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
 app.use("/api/rentals", rentalsRouter);
@@ -67,6 +104,7 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/notifications", notificationsRouter);
 
 // 404
 app.use((req, res) => {

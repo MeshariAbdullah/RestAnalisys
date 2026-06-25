@@ -5,10 +5,10 @@
 
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { users } from "../db/schema.js";
-import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
+import { users, refreshTokens } from "../db/schema.js";
+import { signToken, authenticate, AuthedRequest, generateRefreshToken, verifyToken } from "../middleware/auth.js";
 import { LoginSchema, RegisterSchema, NafathVerifySchema } from "../utils/schemas.js";
 import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -50,6 +50,13 @@ router.post(
       nafathVerified: user.nafathVerified,
     });
 
+    const refresh = generateRefreshToken();
+    await db.insert(refreshTokens).values({
+      userId: user.id,
+      token: refresh.token,
+      expiresAt: refresh.expiresAt,
+    });
+
     await recordAudit({
       req,
       actorUserId: user.id,
@@ -62,6 +69,7 @@ router.post(
 
     return res.status(201).json({
       token,
+      refreshToken: refresh.token,
       user: {
         id: user.id,
         email: user.email,
@@ -105,8 +113,16 @@ router.post(
       nafathVerified: user.nafathVerified,
     });
 
+    const refresh = generateRefreshToken();
+    await db.insert(refreshTokens).values({
+      userId: user.id,
+      token: refresh.token,
+      expiresAt: refresh.expiresAt,
+    });
+
     return res.json({
       token,
+      refreshToken: refresh.token,
       user: {
         id: user.id,
         email: user.email,
@@ -186,6 +202,80 @@ router.get(
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
     });
+  })
+);
+
+// ── Refresh token → new access token ──────────────────────────────────────
+router.post(
+  "/refresh",
+  asyncHandler(async (req, res) => {
+    const { refreshToken: rt } = req.body as { refreshToken?: string };
+    if (!rt) throw new UnauthorizedError("Refresh token required");
+
+    const [record] = await db
+      .select()
+      .from(refreshTokens)
+      .where(and(eq(refreshTokens.token, rt), isNull(refreshTokens.revokedAt)))
+      .limit(1);
+
+    if (!record || record.expiresAt < new Date()) {
+      throw new UnauthorizedError("Invalid or expired refresh token");
+    }
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, record.userId))
+      .limit(1);
+    if (!user || user.isBlocked) {
+      throw new UnauthorizedError("Account unavailable");
+    }
+
+    // Rotate: revoke old, issue new
+    await db
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(eq(refreshTokens.id, record.id));
+
+    const newRefresh = generateRefreshToken();
+    await db.insert(refreshTokens).values({
+      userId: user.id,
+      token: newRefresh.token,
+      expiresAt: newRefresh.expiresAt,
+    });
+
+    const token = signToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      nafathVerified: user.nafathVerified,
+    });
+
+    return res.json({
+      token,
+      refreshToken: newRefresh.token,
+    });
+  })
+);
+
+// ── Logout (revoke refresh token) ─────────────────────────────────────────
+router.post(
+  "/logout",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const { refreshToken: rt } = req.body as { refreshToken?: string };
+    if (rt) {
+      await db
+        .update(refreshTokens)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            eq(refreshTokens.token, rt),
+            eq(refreshTokens.userId, req.user!.userId)
+          )
+        );
+    }
+    return res.json({ ok: true });
   })
 );
 
