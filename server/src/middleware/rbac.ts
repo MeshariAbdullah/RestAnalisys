@@ -51,7 +51,9 @@ export type Permission =
   | "operations.read"
   | "operations.update"
   | "system.audit"
-  | "system.impersonate";
+  | "system.impersonate"
+  | "agreement.sign"
+  | "agreement.read";
 
 /**
  * Permission matrix. The super_admin role inherits every permission.

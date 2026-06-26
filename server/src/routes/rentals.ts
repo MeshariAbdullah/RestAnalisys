@@ -56,6 +56,8 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyRentalCreated, notifyRentalDelivered } from "../services/notificationService.js";
+import { halalasToSar } from "../utils/money.js";
 
 const router = Router();
 
@@ -89,6 +91,15 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     .where(eq(rentals.renterId, userId));
   const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
 
+  // Count late returns: rentals where returnedAt > endDate
+  const [lateRow] = await db
+    .select({
+      count: sql<number>`count(*) filter (where returned_at::date > end_date::date)`,
+    })
+    .from(rentals)
+    .where(eq(rentals.renterId, userId));
+  const lateReturnCount = lateRow?.count ?? 0;
+
   const accountAgeDays = Math.max(
     0,
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
@@ -99,7 +110,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateReturnCount ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -125,6 +136,20 @@ router.get(
     if (asset.status !== "listed")
       throw new LegalStateError(`Asset not listed (status=${asset.status})`);
 
+    // Check availability for requested dates
+    const [dateConflict] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(rentals)
+      .where(
+        and(
+          eq(rentals.assetId, input.assetId),
+          sql`status not in ('cancelled', 'closed', 'closed_with_penalty')`,
+          sql`start_date <= ${input.endDate}::date`,
+          sql`end_date >= ${input.startDate}::date`
+        )
+      );
+    const available = Number(dateConflict?.count ?? 0) === 0;
+
     const durationDays = daysBetween(input.startDate, input.endDate);
     const quote = computeRentalQuote({
       dailyPriceHalalas: asset.dailyRentalPriceHalalas ?? 0,
@@ -135,6 +160,7 @@ router.get(
       assetId: asset.id,
       assetTitle: asset.title,
       evaluatedValueHalalas: asset.evaluatedValueHalalas,
+      available,
       ...quote,
     });
   })
@@ -156,6 +182,22 @@ router.post(
       throw new LegalStateError(`Asset not available (status=${asset.status})`);
     if (asset.ownerId === renterId)
       throw new LegalStateError("Cannot rent your own asset");
+
+    // Check for overlapping active rentals on this asset
+    const [overlap] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(rentals)
+      .where(
+        and(
+          eq(rentals.assetId, input.assetId),
+          sql`status not in ('cancelled', 'closed', 'closed_with_penalty')`,
+          sql`start_date <= ${input.endDate}::date`,
+          sql`end_date >= ${input.startDate}::date`
+        )
+      );
+    if (Number(overlap?.count ?? 0) > 0) {
+      throw new LegalStateError("Asset is already booked for the requested dates");
+    }
 
     // Risk engine ----------------------------------------------------------
     const features = await buildRiskFeatures(renterId, asset.evaluatedValueHalalas ?? 0);
@@ -278,6 +320,14 @@ router.post(
       entityType: "rental",
       entityId: rental.id,
       after: { rental, decision },
+    });
+
+    notifyRentalCreated(renter!.email, renter!.phoneE164, {
+      reference: rental.reference,
+      assetTitle: asset.title,
+      totalSar: halalasToSar(quote.totalPayableHalalas).toFixed(2),
+      startDate: input.startDate,
+      endDate: input.endDate,
     });
 
     res.status(201).json({
@@ -440,6 +490,16 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    const [renterUser] = await db.select().from(users).where(eq(users.id, rental.renterId)).limit(1);
+    const [assetRow] = await db.select().from(assets).where(eq(assets.id, rental.assetId)).limit(1);
+    if (renterUser && assetRow) {
+      notifyRentalDelivered(renterUser.email, {
+        reference: rental.reference,
+        assetTitle: assetRow.title,
+        endDate: rental.endDate,
+      });
+    }
 
     res.json(updated);
   })

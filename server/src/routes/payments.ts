@@ -19,6 +19,8 @@ import {
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyPaymentConfirmed, notifyOwnerPayout } from "../services/notificationService.js";
+import { halalasToSar } from "../utils/money.js";
 
 const router = Router();
 
@@ -62,7 +64,7 @@ router.post(
 
     // ZATCA e-invoice
     const [user] = await db
-      .select({ fullName: users.fullName })
+      .select({ fullName: users.fullName, email: users.email, phoneE164: users.phoneE164 })
       .from(users)
       .where(eq(users.id, req.user!.userId))
       .limit(1);
@@ -119,6 +121,15 @@ router.post(
       entityId: payment.id,
       after: { payment, invoice },
     });
+
+    if (result.status === "captured" && user) {
+      notifyPaymentConfirmed(user.email, user.phoneE164, {
+        reference: rental.reference,
+        assetTitle: `Rental ${rental.reference}`,
+        totalSar: halalasToSar(rental.totalPayableHalalas).toFixed(2),
+        invoiceNumber: invoice.invoiceNumber,
+      });
+    }
 
     res.json({ payment, invoice });
   })
@@ -220,6 +231,24 @@ router.post(
       entityId: payout.id,
       after: payout,
     });
+
+    const [owner] = await db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, rental.ownerId))
+      .limit(1);
+    const [asset] = await db
+      .select({ title: assets.title })
+      .from(assets)
+      .where(eq(assets.id, rental.assetId))
+      .limit(1);
+    if (owner) {
+      notifyOwnerPayout(owner.email, {
+        reference: rental.reference,
+        netSar: halalasToSar(payoutCalc.netHalalas).toFixed(2),
+        assetTitle: asset?.title ?? rental.reference,
+      });
+    }
 
     res.json(payout);
   })

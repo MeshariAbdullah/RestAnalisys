@@ -215,6 +215,7 @@ export interface RentalQuote {
   assetId: number;
   assetTitle: string;
   evaluatedValueHalalas: number;
+  available: boolean;
   dailyPriceHalalas: number;
   durationDays: number;
   rentalSubtotalHalalas: number;
@@ -578,10 +579,86 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  createStaff: (data: { email: string; fullName: string; role: "admin" | "operations" | "inspector"; password: string }) =>
+    request<User>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  auditLogs: (params?: { entityType?: string; entityId?: number; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.entityId) qs.set("entityId", String(params.entityId));
+    if (params?.limit) qs.set("limit", String(params.limit));
+    return request<Array<Record<string, unknown>>>(`/admin/audit-logs?${qs}`);
+  },
+  lateRentals: () =>
+    request<Array<{
+      id: number;
+      reference: string;
+      end_date: string;
+      status: string;
+      renter_name: string;
+      renter_email: string;
+      asset_title: string;
+    }>>("/admin/rentals/late"),
 };
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const profileApi = {
+  update: (data: { fullName?: string; phoneE164?: string; nationalAddressJson?: object }) =>
+    request<User>("/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/profile/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Owner Agreements
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface OwnerAgreement {
+  id: number;
+  ownerId: number;
+  version: string;
+  commissionPct: number;
+  guaranteeAccepted: boolean;
+  signedAt?: string;
+  effectiveFrom?: string;
+  effectiveUntil?: string;
+}
+
+export const ownerAgreementsApi = {
+  mine: () => request<OwnerAgreement | null>("/owner-agreements/mine"),
+  sign: (acceptGuarantee: boolean) =>
+    request<OwnerAgreement>("/owner-agreements/sign", {
+      method: "POST",
+      body: JSON.stringify({ acceptGuarantee }),
+    }),
+  list: () =>
+    request<Array<OwnerAgreement & { ownerName: string; ownerEmail: string }>>(
+      "/owner-agreements"
+    ),
+  updateCommission: (id: number, commissionPct: number) =>
+    request<OwnerAgreement>(`/owner-agreements/${id}/commission`, {
+      method: "POST",
+      body: JSON.stringify({ commissionPct }),
+    }),
+  terminate: (id: number) =>
+    request<OwnerAgreement>(`/owner-agreements/${id}/terminate`, {
+      method: "POST",
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

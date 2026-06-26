@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyOwnerAssetApproved } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -255,6 +256,19 @@ router.post(
       before: asset,
       after: updated,
     });
+
+    const [owner] = await db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, asset.ownerId))
+      .limit(1);
+    if (owner) {
+      notifyOwnerAssetApproved(owner.email, {
+        assetTitle: asset.title,
+        status: approved ? "approved" : "rejected",
+        rejectionReason: rejectionReason ?? undefined,
+      });
+    }
 
     res.json(updated);
   })

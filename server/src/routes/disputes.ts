@@ -5,7 +5,7 @@
 import { Router } from "express";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { disputes, rentals } from "../db/schema.js";
+import { disputes, rentals, payments } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
@@ -140,6 +140,46 @@ router.post(
         .update(rentals)
         .set({ status: "enforcement", updatedAt: new Date() })
         .where(eq(rentals.id, dispute.rentalId));
+    }
+
+    // Create financial adjustment if resolution includes an amount
+    if (input.resolutionAmountHalalas && input.resolutionAmountHalalas > 0) {
+      const [rental] = await db
+        .select()
+        .from(rentals)
+        .where(eq(rentals.id, dispute.rentalId))
+        .limit(1);
+
+      if (rental) {
+        const paymentType = input.resolution === "resolved_for_renter" ? "refund" : "compensation";
+        const paymentUserId =
+          input.resolution === "resolved_for_renter"
+            ? rental.renterId
+            : rental.ownerId;
+
+        await db.insert(payments).values({
+          rentalId: rental.id,
+          userId: paymentUserId,
+          type: paymentType as any,
+          status: "pending",
+          amountHalalas: input.resolutionAmountHalalas,
+        });
+      }
+    }
+
+    // Close the rental dispute status if fully resolved
+    if (["resolved_for_renter", "resolved_for_platform", "resolved_for_owner"].includes(input.resolution)) {
+      const [rental] = await db
+        .select()
+        .from(rentals)
+        .where(eq(rentals.id, dispute.rentalId))
+        .limit(1);
+      if (rental && rental.status === "in_dispute") {
+        await db
+          .update(rentals)
+          .set({ status: "closed_with_penalty", closedAt: new Date(), updatedAt: new Date() })
+          .where(eq(rentals.id, dispute.rentalId));
+      }
     }
 
     await recordAudit({

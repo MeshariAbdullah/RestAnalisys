@@ -119,7 +119,7 @@ export const OwnerValuationResponseSchema = z.object({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const RentalQuoteRequestSchema = z.object({
-  assetId: z.number().int().positive(),
+  assetId: z.coerce.number().int().positive(),
   startDate: IsoDate,
   endDate: IsoDate,
 });
@@ -226,4 +226,30 @@ export const ShipmentUpdateSchema = z.object({
     "returned",
   ]),
   trackingNumber: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ProfileUpdateSchema = z.object({
+  fullName: z.string().min(2).optional(),
+  phoneE164: SaudiPhone.optional(),
+  nationalAddressJson: z.record(z.any()).optional(),
+});
+
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Staff creation (admin)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const StaffCreateSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().min(2),
+  role: z.enum(["admin", "operations", "inspector"]),
+  password: z.string().min(8, "Password must be at least 8 characters"),
 });

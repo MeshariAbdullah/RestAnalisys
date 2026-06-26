@@ -3,6 +3,7 @@
  */
 
 import { Router } from "express";
+import bcrypt from "bcryptjs";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
@@ -13,11 +14,12 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { NotFoundError } from "../utils/errors.js";
+import { NotFoundError, ValidationError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
 
 const router = Router();
@@ -178,12 +180,19 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
+    const { email, fullName, role, password } = req.body as {
       email: string;
       fullName: string;
       role: "admin" | "operations" | "inspector";
-      passwordHash: string;
+      password: string;
     };
+    if (!password || password.length < 8) {
+      throw new ValidationError("Password must be at least 8 characters");
+    }
+    if (!["admin", "operations", "inspector"].includes(role)) {
+      throw new ValidationError("Role must be admin, operations, or inspector");
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db
       .insert(users)
       .values({
@@ -218,6 +227,50 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const entityType = req.query.entityType as string | undefined;
+    const entityId = req.query.entityId ? Number(req.query.entityId) : undefined;
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+
+    let query = db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(limit).$dynamic();
+
+    if (entityType && entityId) {
+      query = query.where(and(eq(auditLogs.entityType, entityType), eq(auditLogs.entityId, entityId)));
+    } else if (entityType) {
+      query = query.where(eq(auditLogs.entityType, entityType));
+    }
+
+    const rows = await query;
+    res.json(rows);
+  })
+);
+
+// ── Late rentals detection ────────────────────────────────────────────
+router.get(
+  "/rentals/late",
+  authenticate,
+  requirePermission("rental.read.any"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select r.id, r.reference, r.end_date, r.status, r.renter_id,
+             u.full_name as renter_name, u.email as renter_email,
+             a.title as asset_title, a.evaluated_value_halalas
+      from rentals r
+      join users u on u.id = r.renter_id
+      join assets a on a.id = r.asset_id
+      where r.status = 'active'
+        and r.end_date < current_date
+      order by r.end_date asc
+    `);
+    res.json(rows.rows);
   })
 );
 
