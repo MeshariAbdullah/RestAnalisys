@@ -114,13 +114,29 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | GET    | `/kpis`               | admin / super_admin   | Platform-wide KPIs                     |
 | GET    | `/revenue-trend`      | admin / super_admin   | 30-day revenue trend                   |
 | GET    | `/risk/low-trust`     | admin / super_admin   | Low-trust renters                      |
-| GET    | `/risk/recent`        | admin / super_admin   | Recent risk engine decisions           |
-| GET    | `/users`              | admin / super_admin   | All users (filter by role)             |
+| GET    | `/risk/recent`        | admin / super_admin   | Recent risk decisions (paginated)      |
+| GET    | `/users`              | admin / super_admin   | Users (paginated, filterable, search)  |
 | POST   | `/users/:id/block`    | admin / super_admin   | Block or unblock a user                |
 | POST   | `/users`              | super_admin           | Create staff users                     |
+| GET    | `/overdue`            | admin / operations    | List overdue rentals                   |
+| POST   | `/overdue/process`    | admin / operations    | Trigger overdue processing + alerts    |
+| GET    | `/audit-logs`         | admin / super_admin   | Searchable audit log (paginated)       |
+| GET    | `/stats`              | admin / super_admin   | Platform statistics breakdown          |
+
+### Pagination
+
+Paginated endpoints accept `page` (default 1) and `limit` (default 50, max 100) query params.
+Response shape: `{ data: [...], pagination: { page, limit, total, totalPages } }`.
+
+### Rate Limiting
+
+All API requests are rate-limited per IP:
+- Global: 100 requests/minute
+- Auth endpoints: 15 requests/15 minutes
+- Response headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `Retry-After` (on 429)
 
 ## Health
 
-| Method | Path          | Roles  | Purpose                                |
-| ------ | ------------- | ------ | -------------------------------------- |
-| GET    | `/api/health` | public | Service status + integration readiness |
+| Method | Path          | Roles  | Purpose                                     |
+| ------ | ------------- | ------ | ------------------------------------------- |
+| GET    | `/api/health` | public | Service + DB status + integration readiness |

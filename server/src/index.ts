@@ -27,6 +27,10 @@ import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { globalLimiter, authLimiter } from "./middleware/rateLimiter.js";
+import { requestLogger } from "./middleware/requestLogger.js";
+import { pool } from "./db/index.js";
+import { processOverdueRentals } from "./services/overdueService.js";
 
 dotenv.config();
 
@@ -41,24 +45,37 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(requestLogger);
+app.use(globalLimiter);
 
-// Health
-app.get("/api/health", (_req, res) => {
-  res.json({
-    ok: true,
+// Health with DB connectivity check
+app.get("/api/health", async (_req, res) => {
+  let dbOk = false;
+  try {
+    const result = await pool.query("SELECT 1 as ping");
+    dbOk = result.rows?.[0]?.ping === 1;
+  } catch {
+    dbOk = false;
+  }
+
+  const status = dbOk ? 200 : 503;
+  res.status(status).json({
+    ok: dbOk,
     service: "mlr-platform",
-    version: "1.0.0",
+    version: "1.1.0",
+    database: dbOk ? "connected" : "unreachable",
     integrations: {
       nafath: !!process.env.NAFATH_API_KEY,
       nafith: !!process.env.NAFITH_API_KEY,
       paymentGateway: !!process.env.PAYMENT_GATEWAY_API_KEY,
       zatca: !!process.env.ZATCA_API_KEY,
+      notifications: !!process.env.NOTIFICATION_API_KEY,
     },
     timestamp: new Date().toISOString(),
   });
 });
 
-app.use("/api/auth", authRouter);
+app.use("/api/auth", authLimiter, authRouter);
 app.use("/api/assets", assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
 app.use("/api/rentals", rentalsRouter);
@@ -81,6 +98,23 @@ app.listen(PORT, () => {
   console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   Notify:   ${process.env.NOTIFICATION_API_KEY ? "live" : "placeholder"}`);
+
+  // Overdue rental detection — runs every 6 hours
+  const OVERDUE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+  const runOverdueCheck = () => {
+    processOverdueRentals()
+      .then((result) => {
+        if (result.detected > 0) {
+          console.log(
+            `[overdue] detected=${result.detected} alerts=${result.alertsCreated} notified=${result.notificationsSent}`
+          );
+        }
+      })
+      .catch((err) => console.error("[overdue] check failed:", err));
+  };
+  setTimeout(runOverdueCheck, 30_000);
+  setInterval(runOverdueCheck, OVERDUE_INTERVAL_MS);
 });
 
 export default app;

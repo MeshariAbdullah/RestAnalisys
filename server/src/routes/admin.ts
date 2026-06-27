@@ -13,12 +13,14 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { detectOverdueRentals, processOverdueRentals } from "../services/overdueService.js";
 
 const router = Router();
 
@@ -126,18 +128,50 @@ router.get(
   })
 );
 
-// ── User list ──────────────────────────────────────────────────────────────
+// ── User list (paginated) ─────────────────────────────────────────────────
 router.get(
   "/users",
   authenticate,
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
-    const rows = role
-      ? await query.where(eq(users.role, role as any)).limit(200)
-      : await query.limit(200);
-    res.json(rows);
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+    const offset = (page - 1) * limit;
+    const search = (req.query.search as string | undefined)?.trim();
+
+    const conditions = [];
+    if (role) conditions.push(eq(users.role, role as any));
+    if (search) {
+      conditions.push(
+        sql`(lower(full_name) LIKE ${`%${search.toLowerCase()}%`} OR lower(email) LIKE ${`%${search.toLowerCase()}%`})`
+      );
+    }
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const rows = await db
+      .select()
+      .from(users)
+      .where(where)
+      .orderBy(desc(users.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [total] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(users)
+      .where(where);
+
+    res.json({
+      data: rows,
+      pagination: {
+        page,
+        limit,
+        total: Number(total?.count ?? 0),
+        totalPages: Math.ceil(Number(total?.count ?? 0) / limit),
+      },
+    });
   })
 );
 
@@ -211,13 +245,168 @@ router.get(
   "/risk/recent",
   authenticate,
   requirePermission("system.audit"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+    const offset = (page - 1) * limit;
+
     const rows = await db
       .select()
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
-      .limit(100);
-    res.json(rows);
+      .limit(limit)
+      .offset(offset);
+
+    const [total] = await db.select({ count: sql<number>`count(*)` }).from(riskScores);
+
+    res.json({
+      data: rows,
+      pagination: {
+        page,
+        limit,
+        total: Number(total?.count ?? 0),
+        totalPages: Math.ceil(Number(total?.count ?? 0) / limit),
+      },
+    });
+  })
+);
+
+// ── Overdue rentals — view and trigger processing ─────────────────────────
+router.get(
+  "/overdue",
+  authenticate,
+  requirePermission("operations.read"),
+  asyncHandler(async (_req, res) => {
+    const overdue = await detectOverdueRentals();
+    res.json({
+      count: overdue.length,
+      rentals: overdue,
+    });
+  })
+);
+
+router.post(
+  "/overdue/process",
+  authenticate,
+  requirePermission("operations.update"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const result = await processOverdueRentals();
+
+    await recordAudit({
+      req,
+      action: "admin.process_overdue",
+      entityType: "system",
+      after: result,
+    });
+
+    res.json(result);
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+    const offset = (page - 1) * limit;
+    const entityType = req.query.entityType as string | undefined;
+    const action = req.query.action as string | undefined;
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (action) conditions.push(sql`action LIKE ${action + "%"}`);
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(where)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [total] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(auditLogs)
+      .where(where);
+
+    res.json({
+      data: rows,
+      pagination: {
+        page,
+        limit,
+        total: Number(total?.count ?? 0),
+        totalPages: Math.ceil(Number(total?.count ?? 0) / limit),
+      },
+    });
+  })
+);
+
+// ── Platform statistics summary ───────────────────────────────────────────
+router.get(
+  "/stats",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const [totalUsers] = await db.select({ count: sql<number>`count(*)` }).from(users);
+    const [totalAssets] = await db.select({ count: sql<number>`count(*)` }).from(assets);
+    const [totalRentals] = await db.select({ count: sql<number>`count(*)` }).from(rentals);
+    const [totalDisputes] = await db.select({ count: sql<number>`count(*)` }).from(disputes);
+
+    const rentalsByStatus = await db
+      .select({
+        status: rentals.status,
+        count: sql<number>`count(*)`,
+      })
+      .from(rentals)
+      .groupBy(rentals.status);
+
+    const assetsByCategory = await db
+      .select({
+        category: assets.category,
+        count: sql<number>`count(*)`,
+      })
+      .from(assets)
+      .groupBy(assets.category);
+
+    const usersByRole = await db
+      .select({
+        role: users.role,
+        count: sql<number>`count(*)`,
+      })
+      .from(users)
+      .groupBy(users.role);
+
+    const [avgTrustScore] = await db
+      .select({ avg: sql<number>`round(avg(trust_score), 1)` })
+      .from(users)
+      .where(eq(users.role, "renter"));
+
+    res.json({
+      totals: {
+        users: Number(totalUsers?.count ?? 0),
+        assets: Number(totalAssets?.count ?? 0),
+        rentals: Number(totalRentals?.count ?? 0),
+        disputes: Number(totalDisputes?.count ?? 0),
+      },
+      rentalsByStatus: rentalsByStatus.map((r) => ({
+        status: r.status,
+        count: Number(r.count),
+      })),
+      assetsByCategory: assetsByCategory.map((a) => ({
+        category: a.category,
+        count: Number(a.count),
+      })),
+      usersByRole: usersByRole.map((u) => ({
+        role: u.role,
+        count: Number(u.count),
+      })),
+      avgRenterTrustScore: Number(avgTrustScore?.avg ?? 0),
+    });
   })
 );
 
