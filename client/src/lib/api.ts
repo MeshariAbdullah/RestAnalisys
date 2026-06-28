@@ -580,6 +580,36 @@ export const adminApi = {
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  channel: string;
+  category: string;
+  title: string;
+  body: string;
+  linkUrl?: string;
+  referenceType?: string;
+  referenceId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (unreadOnly = false) =>
+    request<AppNotification[]>(`/notifications${unreadOnly ? "?unread=true" : ""}`),
+  unreadCount: () =>
+    request<{ unread: number }>("/notifications/count"),
+  markRead: (id: number) =>
+    request<{ ok: boolean }>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ marked: number }>("/notifications/read-all", { method: "POST" }),
+};
+
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };

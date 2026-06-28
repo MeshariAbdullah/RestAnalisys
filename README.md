@@ -24,6 +24,8 @@ or full compensation equal to its evaluated value, backed by a Nafith Sanad
 - **VAT 15%** computed and stored on every rental
 - **RBAC** with a declarative permission matrix
 - **Immutable audit logging** of every material action
+- **In-app notification system** with real-time bell + email service stub
+- **Rate limiting** on all API endpoints
 - **State machines** via Postgres enums for assets, rentals, Sanads, shipments,
   payments and disputes
 
@@ -107,6 +109,7 @@ production mode.
 | Nafith Sanad    | `server/src/services/nafithService.ts` | `NAFITH_API_BASE`, `NAFITH_API_KEY` |
 | Payment gateway | `server/src/services/paymentService.ts`| `PAYMENT_GATEWAY_*`               |
 | ZATCA invoicing | `server/src/services/paymentService.ts`| `ZATCA_API_*`                     |
+| Email           | `server/src/services/emailService.ts`  | `EMAIL_PROVIDER`, `EMAIL_API_KEY` |
 | National Address| (planned)                              | `SPL_API_KEY`                     |
 
 ---

@@ -56,10 +56,28 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
+import { formatHalalas } from "../utils/money.js";
 
 const router = Router();
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+async function countLateReturns(userId: number): Promise<number> {
+  const result = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`${rentals.returnedAt} IS NOT NULL`,
+        sql`${rentals.returnedAt}::date > ${rentals.endDate}::date`
+      )
+    );
+  return Number(result[0]?.count ?? 0);
+}
 
 function daysBetween(startIso: string, endIso: string): number {
   const start = new Date(startIso + "T00:00:00Z").getTime();
@@ -99,7 +117,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await countLateReturns(userId),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +298,27 @@ router.post(
       after: { rental, decision },
     });
 
+    await Promise.all([
+      notify({
+        userId: renterId,
+        category: "rental",
+        title: "Rental Created",
+        body: `Your rental ${reference} for ${asset.title} has been created. Please sign the legal commitment to proceed.`,
+        linkUrl: `/legal/${legalCommitment.id}`,
+        referenceType: "rental",
+        referenceId: rental.id,
+      }),
+      notify({
+        userId: asset.ownerId,
+        category: "rental",
+        title: "New Rental Request",
+        body: `Your asset "${asset.title}" has been reserved for rental ${reference}.`,
+        linkUrl: `/owner/assets/${asset.id}`,
+        referenceType: "rental",
+        referenceId: rental.id,
+      }),
+    ]);
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -441,6 +480,16 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: rental.renterId,
+      category: "rental",
+      title: "Item Delivered",
+      body: `Your rental item has been delivered. Your rental period for ${rental.reference} is now active.`,
+      linkUrl: `/my-rentals`,
+      referenceType: "rental",
+      referenceId: rental.id,
+    });
+
     res.json(updated);
   })
 );
@@ -516,6 +565,26 @@ router.post(
         entityId: id,
         after: updated,
       });
+
+      await Promise.all([
+        notify({
+          userId: rental.renterId,
+          category: "rental",
+          title: "Rental Closed",
+          body: `Your rental ${rental.reference} has been closed successfully. Thank you for using MLR!`,
+          referenceType: "rental",
+          referenceId: rental.id,
+        }),
+        notify({
+          userId: rental.ownerId,
+          category: "rental",
+          title: "Rental Completed",
+          body: `Rental ${rental.reference} for your asset has been completed. Your payout will be processed shortly.`,
+          referenceType: "rental",
+          referenceId: rental.id,
+        }),
+      ]);
+
       return res.json(updated);
     }
 

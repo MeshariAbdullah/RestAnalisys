@@ -26,7 +26,9 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import notificationsRouter from "./routes/notifications.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { apiLimiter, authLimiter } from "./middleware/rateLimiter.js";
 
 dotenv.config();
 
@@ -58,15 +60,16 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRouter);
-app.use("/api/assets", assetsRouter);
-app.use("/api/inspections", inspectionsRouter);
-app.use("/api/rentals", rentalsRouter);
-app.use("/api/legal", legalRouter);
-app.use("/api/payments", paymentsRouter);
-app.use("/api/disputes", disputesRouter);
-app.use("/api/operations", operationsRouter);
-app.use("/api/admin", adminRouter);
+app.use("/api/auth", authLimiter, authRouter);
+app.use("/api/assets", apiLimiter, assetsRouter);
+app.use("/api/inspections", apiLimiter, inspectionsRouter);
+app.use("/api/rentals", apiLimiter, rentalsRouter);
+app.use("/api/legal", apiLimiter, legalRouter);
+app.use("/api/payments", apiLimiter, paymentsRouter);
+app.use("/api/disputes", apiLimiter, disputesRouter);
+app.use("/api/operations", apiLimiter, operationsRouter);
+app.use("/api/admin", apiLimiter, adminRouter);
+app.use("/api/notifications", apiLimiter, notificationsRouter);
 
 // 404
 app.use((req, res) => {

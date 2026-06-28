@@ -19,6 +19,8 @@ import {
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
+import { formatHalalas } from "../utils/money.js";
 
 const router = Router();
 
@@ -120,6 +122,18 @@ router.post(
       after: { payment, invoice },
     });
 
+    if (result.status === "captured") {
+      await notify({
+        userId: req.user!.userId,
+        category: "payment",
+        title: "Payment Confirmed",
+        body: `Payment of ${formatHalalas(rental.totalPayableHalalas)} for rental ${rental.reference} confirmed. Invoice: ${invoice.invoiceNumber}.`,
+        linkUrl: `/my-rentals`,
+        referenceType: "payment",
+        referenceId: payment.id,
+      });
+    }
+
     res.json({ payment, invoice });
   })
 );
@@ -219,6 +233,16 @@ router.post(
       entityType: "payout",
       entityId: payout.id,
       after: payout,
+    });
+
+    await notify({
+      userId: rental.ownerId,
+      category: "payment",
+      title: "Payout Initiated",
+      body: `A payout of ${formatHalalas(payoutCalc.netHalalas)} has been initiated for rental ${rental.reference}.`,
+      linkUrl: `/owner/payouts`,
+      referenceType: "payout",
+      referenceId: payout.id,
     });
 
     res.json(payout);

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
+import NotificationBell from "./NotificationBell";
 
 interface NavItem {
   href: string;
@@ -162,7 +163,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="flex-1 overflow-auto">
+        {user && (
+          <div className="flex justify-end items-center px-6 py-2 border-b border-neutral-100 bg-white">
+            <NotificationBell />
+          </div>
+        )}
+        {children}
+      </main>
     </div>
   );
 }
