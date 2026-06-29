@@ -63,7 +63,7 @@ export default function DisputesPage() {
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>
-      ) : !data || data.length === 0 ? (
+      ) : !data?.items || data.items.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">
             <Gavel className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
@@ -72,7 +72,7 @@ export default function DisputesPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {data.map((d: Dispute) => (
+          {data.items.map((d: Dispute) => (
             <Card key={d.id}>
               <CardContent className="p-5">
                 <div className="flex items-start gap-4">

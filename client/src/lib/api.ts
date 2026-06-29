@@ -394,7 +394,10 @@ export const rentalsApi = {
       body: JSON.stringify(data),
     }),
   mine: () => request<Rental[]>("/rentals/mine"),
-  list: () => request<Rental[]>("/rentals"),
+  list: (limit = 50, offset = 0) =>
+    request<{ items: Rental[]; total: number; limit: number; offset: number }>(
+      `/rentals?limit=${limit}&offset=${offset}`
+    ),
   get: (id: number) =>
     request<{
       rental: Rental;
@@ -491,7 +494,10 @@ export const disputesApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  list: () => request<Dispute[]>("/disputes"),
+  list: (limit = 50, offset = 0) =>
+    request<{ items: Dispute[]; total: number; limit: number; offset: number }>(
+      `/disputes?limit=${limit}&offset=${offset}`
+    ),
   assign: (id: number, assigneeUserId: number) =>
     request<Dispute>(`/disputes/${id}/assign`, {
       method: "POST",
@@ -567,9 +573,14 @@ export const adminApi = {
       "/admin/revenue-trend"
     ),
   lowTrustUsers: () => request<User[]>("/admin/risk/low-trust"),
-  users: (role?: string) => {
-    const qs = role ? `?role=${role}` : "";
-    return request<User[]>(`/admin/users${qs}`);
+  users: (role?: string, limit = 50, offset = 0) => {
+    const qs = new URLSearchParams();
+    if (role) qs.set("role", role);
+    qs.set("limit", String(limit));
+    qs.set("offset", String(offset));
+    return request<{ items: User[]; total: number; limit: number; offset: number }>(
+      `/admin/users?${qs}`
+    );
   },
   blockUser: (id: number, block: boolean, reason?: string) =>
     request<User>(`/admin/users/${id}/block`, {
@@ -578,6 +589,35 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (limit = 50, offset = 0) =>
+    request<{ items: AppNotification[]; total: number; unread: number; limit: number; offset: number }>(
+      `/notifications?limit=${limit}&offset=${offset}`
+    ),
+  unreadCount: () => request<{ unread: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<{ ok: boolean }>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
 };
 
 export const healthApi = {

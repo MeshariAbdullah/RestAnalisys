@@ -126,18 +126,27 @@ router.get(
   })
 );
 
-// ── User list ──────────────────────────────────────────────────────────────
+// ── User list (paginated) ─────────────────────────────────────────────────
 router.get(
   "/users",
   authenticate,
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
-    const rows = role
-      ? await query.where(eq(users.role, role as any)).limit(200)
-      : await query.limit(200);
-    res.json(rows);
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Number(req.query.offset) || 0;
+
+    const condition = role ? eq(users.role, role as any) : undefined;
+
+    const rows = condition
+      ? await db.select().from(users).where(condition).limit(limit).offset(offset)
+      : await db.select().from(users).limit(limit).offset(offset);
+
+    const [{ count }] = condition
+      ? await db.select({ count: sql<number>`count(*)` }).from(users).where(condition)
+      : await db.select({ count: sql<number>`count(*)` }).from(users);
+
+    res.json({ items: rows, total: Number(count), limit, offset });
   })
 );
 

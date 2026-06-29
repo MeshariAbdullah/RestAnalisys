@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -94,12 +95,19 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
   );
 
+  const [lateRow] = await db
+    .select({
+      count: sql<number>`count(*) filter (where returned_at > (end_date::date + interval '1 day'))`,
+    })
+    .from(rentals)
+    .where(eq(rentals.renterId, userId));
+
   return {
     accountAgeDays,
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateRow?.count ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +288,15 @@ router.post(
       after: { rental, decision },
     });
 
+    notify({
+      userId: asset.ownerId,
+      type: "rental_created",
+      title: "New rental on your asset",
+      body: `${asset.title} has been reserved (${rental.reference}).`,
+      entityType: "rental",
+      entityId: rental.id,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -311,18 +328,27 @@ router.get(
   })
 );
 
-// ── Admin/Ops: list all rentals ─────────────────────────────────────────────
+// ── Admin/Ops: list all rentals (paginated) ────────────────────────────────
 router.get(
   "/",
   authenticate,
   requirePermission("rental.read.any"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Number(req.query.offset) || 0;
+
     const rows = await db
       .select()
       .from(rentals)
       .orderBy(desc(rentals.createdAt))
-      .limit(200);
-    res.json(rows);
+      .limit(limit)
+      .offset(offset);
+
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(rentals);
+
+    res.json({ items: rows, total: Number(count), limit, offset });
   })
 );
 
@@ -441,6 +467,15 @@ router.post(
       after: updated,
     });
 
+    notify({
+      userId: rental.renterId,
+      type: "rental_delivered",
+      title: "Your rental is active",
+      body: `Rental ${rental.reference} has been delivered. Enjoy!`,
+      entityType: "rental",
+      entityId: id,
+    });
+
     res.json(updated);
   })
 );
@@ -515,6 +550,22 @@ router.post(
         entityType: "rental",
         entityId: id,
         after: updated,
+      });
+      notify({
+        userId: rental.renterId,
+        type: "rental_closed",
+        title: "Rental closed",
+        body: `Rental ${rental.reference} has been closed successfully.`,
+        entityType: "rental",
+        entityId: id,
+      });
+      notify({
+        userId: rental.ownerId,
+        type: "rental_closed",
+        title: "Rental completed",
+        body: `Your asset from rental ${rental.reference} has been returned.`,
+        entityType: "rental",
+        entityId: id,
       });
       return res.json(updated);
     }
@@ -626,6 +677,15 @@ router.post(
       entityType: "rental",
       entityId: id,
       after: updated,
+    });
+
+    notify({
+      userId: rental.ownerId,
+      type: "rental_cancelled",
+      title: "Rental cancelled",
+      body: `Rental ${rental.reference} has been cancelled. Your asset is back on the market.`,
+      entityType: "rental",
+      entityId: id,
     });
 
     res.json(updated);

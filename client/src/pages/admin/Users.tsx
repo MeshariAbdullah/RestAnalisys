@@ -64,7 +64,7 @@ export default function UsersPage() {
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>
-      ) : !data || data.length === 0 ? (
+      ) : !data?.items || data.items.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">
             <UsersIcon className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
@@ -87,7 +87,7 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.map((u) => (
+                {data.items.map((u) => (
                   <tr key={u.id} className="border-b last:border-0">
                     <td className="p-4 font-medium">{u.fullName}</td>
                     <td className="p-4 text-neutral-600">{u.email}</td>

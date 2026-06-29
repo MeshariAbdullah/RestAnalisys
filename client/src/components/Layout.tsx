@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -19,8 +20,11 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  Check,
 } from "lucide-react";
-import type { Role, User } from "@/lib/api";
+import type { Role, User, AppNotification } from "@/lib/api";
+import { notificationsApi } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
 
 interface NavItem {
@@ -72,7 +76,36 @@ function roleLabel(role: Role): string {
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [notifOpen, setNotifOpen] = useState(false);
   const user: User | null = getCurrentUser();
+  const qc = useQueryClient();
+
+  const unreadQuery = useQuery({
+    queryKey: ["notifications-unread"],
+    queryFn: () => notificationsApi.unreadCount(),
+    refetchInterval: 30000,
+    enabled: !!user,
+  });
+
+  const notifQuery = useQuery({
+    queryKey: ["notifications-list"],
+    queryFn: () => notificationsApi.list(20),
+    enabled: notifOpen && !!user,
+  });
+
+  const unreadCount = unreadQuery.data?.unread ?? 0;
+
+  async function markAllRead() {
+    await notificationsApi.markAllRead();
+    qc.invalidateQueries({ queryKey: ["notifications-unread"] });
+    qc.invalidateQueries({ queryKey: ["notifications-list"] });
+  }
+
+  async function markOneRead(id: number) {
+    await notificationsApi.markRead(id);
+    qc.invalidateQueries({ queryKey: ["notifications-unread"] });
+    qc.invalidateQueries({ queryKey: ["notifications-list"] });
+  }
 
   const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
 
@@ -162,7 +195,73 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="flex items-center justify-end px-6 py-3 border-b bg-white shrink-0">
+          <div className="relative">
+            <button
+              onClick={() => setNotifOpen(!notifOpen)}
+              className="relative p-2 rounded-lg hover:bg-neutral-100 transition-colors"
+            >
+              <Bell className="w-5 h-5 text-neutral-600" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-amber-500 text-neutral-950 text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {notifOpen && (
+              <div className="absolute right-0 top-12 w-96 max-h-[480px] bg-white border rounded-xl shadow-xl z-50 flex flex-col">
+                <div className="flex items-center justify-between p-4 border-b">
+                  <h3 className="font-semibold text-sm">Notifications</h3>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllRead}
+                      className="text-xs text-amber-600 hover:text-amber-700 font-medium"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+                <div className="overflow-y-auto flex-1">
+                  {!notifQuery.data?.items?.length ? (
+                    <p className="p-6 text-center text-sm text-neutral-400">
+                      No notifications yet
+                    </p>
+                  ) : (
+                    notifQuery.data.items.map((n: AppNotification) => (
+                      <div
+                        key={n.id}
+                        className={cn(
+                          "px-4 py-3 border-b last:border-0 flex gap-3 items-start cursor-pointer hover:bg-neutral-50 transition-colors",
+                          !n.read && "bg-amber-50/50"
+                        )}
+                        onClick={() => !n.read && markOneRead(n.id)}
+                      >
+                        <div className={cn(
+                          "mt-1 w-2 h-2 rounded-full shrink-0",
+                          n.read ? "bg-transparent" : "bg-amber-500"
+                        )} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{n.title}</p>
+                          <p className="text-xs text-neutral-500 mt-0.5">{n.body}</p>
+                          <p className="text-[10px] text-neutral-400 mt-1">
+                            {new Date(n.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                        {!n.read && (
+                          <Check className="w-4 h-4 text-neutral-400 mt-1 shrink-0" />
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </header>
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
     </div>
   );
 }

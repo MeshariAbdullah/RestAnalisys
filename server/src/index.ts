@@ -15,6 +15,7 @@
 
 import express from "express";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 
 import authRouter from "./routes/auth.js";
@@ -26,6 +27,7 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import notificationsRouter from "./routes/notifications.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 dotenv.config();
@@ -41,6 +43,26 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later." },
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many auth attempts, please try again later." },
+});
+
+app.use("/api", apiLimiter);
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/register", authLimiter);
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -67,6 +89,7 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/notifications", notificationsRouter);
 
 // 404
 app.use((req, res) => {

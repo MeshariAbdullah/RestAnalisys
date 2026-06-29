@@ -3,7 +3,7 @@
  */
 
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { disputes, rentals } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -68,13 +68,22 @@ router.get(
   "/",
   authenticate,
   requirePermission("dispute.assign"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Number(req.query.offset) || 0;
+
     const rows = await db
       .select()
       .from(disputes)
       .orderBy(desc(disputes.openedAt))
-      .limit(200);
-    res.json(rows);
+      .limit(limit)
+      .offset(offset);
+
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(disputes);
+
+    res.json({ items: rows, total: Number(count), limit, offset });
   })
 );
 
