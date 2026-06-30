@@ -29,6 +29,13 @@ export default function ItemDetail({ id }: { id: number }) {
   const [endDate, setEndDate] = useState(weekOut);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deliveryAddress, setDeliveryAddress] = useState({
+    city: "",
+    district: "",
+    street: "",
+    buildingNumber: "",
+    postalCode: "",
+  });
 
   const assetQuery = useQuery({
     queryKey: ["asset", id],
@@ -49,6 +56,7 @@ export default function ItemDetail({ id }: { id: number }) {
         assetId: id,
         startDate,
         endDate,
+        deliveryAddress: deliveryAddress.city ? deliveryAddress : undefined,
       });
       navigate(`/legal/${res.legal.commitmentId}`);
     } catch (err) {
@@ -158,6 +166,54 @@ export default function ItemDetail({ id }: { id: number }) {
                     min={startDate}
                     onChange={(e) => setEndDate(e.target.value)}
                   />
+                </div>
+              </div>
+
+              <div className="border-t border-amber-200 pt-4 mt-4">
+                <p className="text-xs font-semibold mb-2">Delivery Address</p>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <div>
+                    <Label className="text-xs">City</Label>
+                    <Input
+                      placeholder="e.g. Riyadh"
+                      value={deliveryAddress.city}
+                      onChange={(e) => setDeliveryAddress(prev => ({ ...prev, city: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">District</Label>
+                    <Input
+                      placeholder="e.g. Al Olaya"
+                      value={deliveryAddress.district}
+                      onChange={(e) => setDeliveryAddress(prev => ({ ...prev, district: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="mb-2">
+                  <Label className="text-xs">Street</Label>
+                  <Input
+                    placeholder="Street name"
+                    value={deliveryAddress.street}
+                    onChange={(e) => setDeliveryAddress(prev => ({ ...prev, street: e.target.value }))}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Building No.</Label>
+                    <Input
+                      placeholder="1234"
+                      value={deliveryAddress.buildingNumber}
+                      onChange={(e) => setDeliveryAddress(prev => ({ ...prev, buildingNumber: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Postal Code</Label>
+                    <Input
+                      placeholder="12345"
+                      value={deliveryAddress.postalCode}
+                      onChange={(e) => setDeliveryAddress(prev => ({ ...prev, postalCode: e.target.value }))}
+                    />
+                  </div>
                 </div>
               </div>
 

@@ -189,4 +189,124 @@ router.get(
   })
 );
 
+// ── Email & Phone Verification (dev placeholder) ───────────────────────────
+
+const otpStore = new Map<string, { code: string; expiresAt: number }>();
+function generateOtp(): string {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function cleanExpiredOtps(): void {
+  const now = Date.now();
+  for (const [key, value] of otpStore) {
+    if (value.expiresAt < now) otpStore.delete(key);
+  }
+}
+
+router.post(
+  "/verify-email",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    cleanExpiredOtps();
+    const code = generateOtp();
+    otpStore.set(`email:${userId}`, {
+      code,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    });
+
+    await recordAudit({
+      req,
+      action: "auth.email_verification.requested",
+      entityType: "user",
+      entityId: userId,
+    });
+
+    return res.json({ message: "Verification code sent", code });
+  })
+);
+
+router.post(
+  "/verify-email/confirm",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const { code } = req.body as { code: string };
+    cleanExpiredOtps();
+
+    const entry = otpStore.get(`email:${userId}`);
+    if (!entry || entry.code !== code) {
+      throw new UnauthorizedError("Invalid or expired verification code");
+    }
+    otpStore.delete(`email:${userId}`);
+
+    await db
+      .update(users)
+      .set({ emailVerified: true })
+      .where(eq(users.id, userId));
+
+    await recordAudit({
+      req,
+      action: "auth.email_verification.confirmed",
+      entityType: "user",
+      entityId: userId,
+    });
+
+    return res.json({ verified: true });
+  })
+);
+
+router.post(
+  "/verify-phone",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    cleanExpiredOtps();
+    const code = generateOtp();
+    otpStore.set(`phone:${userId}`, {
+      code,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    });
+
+    await recordAudit({
+      req,
+      action: "auth.phone_verification.requested",
+      entityType: "user",
+      entityId: userId,
+    });
+
+    return res.json({ message: "SMS sent", code });
+  })
+);
+
+router.post(
+  "/verify-phone/confirm",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const { code } = req.body as { code: string };
+    cleanExpiredOtps();
+
+    const entry = otpStore.get(`phone:${userId}`);
+    if (!entry || entry.code !== code) {
+      throw new UnauthorizedError("Invalid or expired verification code");
+    }
+    otpStore.delete(`phone:${userId}`);
+
+    await db
+      .update(users)
+      .set({ phoneVerified: true, phoneVerifiedAt: new Date() })
+      .where(eq(users.id, userId));
+
+    await recordAudit({
+      req,
+      action: "auth.phone_verification.confirmed",
+      entityType: "user",
+      entityId: userId,
+    });
+
+    return res.json({ verified: true });
+  })
+);
+
 export default router;

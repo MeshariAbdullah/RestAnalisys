@@ -11,6 +11,8 @@
  *   /api/disputes     — dispute creation + resolution
  *   /api/operations   — shipments, inventory, alerts
  *   /api/admin        — KPIs, risk monitoring, user management
+ *   /api/owner-agreements — consignment contracts between owners and platform
+ *   /api/webhooks     — external system callbacks (Nafath, Nafith, payment, courier)
  */
 
 import express from "express";
@@ -26,7 +28,10 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import ownerAgreementsRouter from "./routes/ownerAgreements.js";
+import webhooksRouter from "./routes/webhooks.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { rateLimit } from "./middleware/rateLimit.js";
 
 dotenv.config();
 
@@ -41,6 +46,12 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+app.use("/api/auth/login", rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyPrefix: "login" }));
+app.use("/api/auth/register", rateLimit({ windowMs: 60 * 60 * 1000, max: 5, keyPrefix: "register" }));
+app.use("/api/auth/verify-email", rateLimit({ windowMs: 60 * 1000, max: 3, keyPrefix: "otp-email" }));
+app.use("/api/auth/verify-phone", rateLimit({ windowMs: 60 * 1000, max: 3, keyPrefix: "otp-phone" }));
+app.use("/api/webhooks", rateLimit({ windowMs: 60 * 1000, max: 100, keyPrefix: "webhook" }));
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -67,6 +78,8 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/owner-agreements", ownerAgreementsRouter);
+app.use("/api/webhooks", webhooksRouter);
 
 // 404
 app.use((req, res) => {

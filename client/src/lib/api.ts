@@ -259,6 +259,24 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ nationalId }),
     }),
+  requestEmailVerification: () =>
+    request<{ message: string; code?: string }>("/auth/verify-email", {
+      method: "POST",
+    }),
+  confirmEmailVerification: (code: string) =>
+    request<{ verified: boolean }>("/auth/verify-email/confirm", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
+  requestPhoneVerification: () =>
+    request<{ message: string; code?: string }>("/auth/verify-phone", {
+      method: "POST",
+    }),
+  confirmPhoneVerification: (code: string) =>
+    request<{ verified: boolean }>("/auth/verify-phone/confirm", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -578,6 +596,29 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+};
+
+export const ownerAgreementsApi = {
+  mine: () => request<Array<{
+    id: number;
+    ownerId: number;
+    version: string;
+    commissionPct: number;
+    guaranteeAccepted: boolean;
+    signedAt?: string;
+    effectiveFrom?: string;
+    effectiveUntil?: string;
+    createdAt: string;
+  }>>("/owner-agreements/mine"),
+  create: (guaranteeAccepted: boolean) =>
+    request<{ id: number; commissionPct: number; effectiveFrom: string; effectiveUntil: string }>("/owner-agreements", {
+      method: "POST",
+      body: JSON.stringify({ guaranteeAccepted }),
+    }),
+  get: (id: number) =>
+    request<{ id: number; ownerId: number; version: string; commissionPct: number; guaranteeAccepted: boolean }>(`/owner-agreements/${id}`),
+  list: () =>
+    request<Array<{ id: number; ownerId: number; version: string; commissionPct: number; guaranteeAccepted: boolean; createdAt: string }>>("/owner-agreements"),
 };
 
 export const healthApi = {

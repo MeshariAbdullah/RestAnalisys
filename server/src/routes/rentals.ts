@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyUser } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -99,7 +100,20 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await (async () => {
+      const lateReturnResult = await db
+        .select({
+          count: sql<number>`count(*) filter (where returned_at > (end_date || 'T23:59:59Z')::timestamptz)`,
+        })
+        .from(rentals)
+        .where(
+          and(
+            eq(rentals.renterId, userId),
+            sql`status in ('closed', 'closed_with_penalty')`
+          )
+        );
+      return Number(lateReturnResult[0]?.count ?? 0);
+    })(),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +294,14 @@ router.post(
       after: { rental, decision },
     });
 
+    await notifyUser(
+      renterId,
+      "rental_created",
+      `Your rental ${reference} has been created. Please review and sign the legal commitment.`,
+      "Rental Created",
+      { rentalId: rental.id, reference }
+    );
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -401,6 +423,14 @@ router.post(
       after: updated,
     });
 
+    await notifyUser(
+      rental.renterId,
+      "rental_confirmed",
+      `Your rental ${rental.reference} is being prepared for delivery.`,
+      "Rental Fulfillment",
+      { rentalId: rental.id }
+    );
+
     res.json(updated);
   })
 );
@@ -440,6 +470,14 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    await notifyUser(
+      rental.renterId,
+      "rental_delivered",
+      `Your rental ${rental.reference} has been delivered. Enjoy your luxury item!`,
+      "Delivery Confirmed",
+      { rentalId: rental.id }
+    );
 
     res.json(updated);
   })
@@ -516,6 +554,20 @@ router.post(
         entityId: id,
         after: updated,
       });
+      await notifyUser(
+        rental.renterId,
+        "rental_closed",
+        `Your rental ${rental.reference} has been closed. Thank you for using MLR!`,
+        "Rental Completed",
+        { rentalId: rental.id }
+      );
+      await notifyUser(
+        rental.ownerId,
+        "rental_closed",
+        `Rental ${rental.reference} for your asset has been completed. Your payout will be processed shortly.`,
+        "Rental Completed",
+        { rentalId: rental.id }
+      );
       return res.json(updated);
     }
 
