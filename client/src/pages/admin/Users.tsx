@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users as UsersIcon, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Users as UsersIcon, ShieldAlert, ShieldCheck, Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -23,11 +24,18 @@ function riskColor(c: string): string {
 export default function UsersPage() {
   const qc = useQueryClient();
   const [role, setRole] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users", role],
     queryFn: () => adminApi.users(role === "all" ? undefined : role),
   });
+
+  const filtered = (data ?? []).filter((u) =>
+    searchTerm
+      ? `${u.fullName} ${u.email}`.toLowerCase().includes(searchTerm.toLowerCase())
+      : true
+  );
 
   async function toggleBlock(u: User) {
     const block = !u.isBlocked;
@@ -46,7 +54,16 @@ export default function UsersPage() {
         All accounts across the platform.
       </p>
 
-      <div className="flex items-center gap-3 mb-5">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-5">
+        <div className="relative flex-1 w-full sm:max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+          <Input
+            placeholder="Search by name or email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9"
+          />
+        </div>
         <Select value={role} onValueChange={setRole}>
           <SelectTrigger className="w-48">
             <SelectValue />
@@ -64,7 +81,7 @@ export default function UsersPage() {
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>
-      ) : !data || data.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">
             <UsersIcon className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
@@ -87,7 +104,7 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.map((u) => (
+                {filtered.map((u) => (
                   <tr key={u.id} className="border-b last:border-0">
                     <td className="p-4 font-medium">{u.fullName}</td>
                     <td className="p-4 text-neutral-600">{u.email}</td>

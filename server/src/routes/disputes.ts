@@ -12,6 +12,7 @@ import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify, notifyMany } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -58,6 +59,17 @@ router.post(
       entityType: "dispute",
       entityId: dispute.id,
       after: dispute,
+    });
+
+    const otherPartyId = rental.renterId === actorId ? rental.ownerId : rental.renterId;
+    await notify({
+      userId: otherPartyId,
+      type: "dispute.opened",
+      title: "Dispute Opened",
+      body: `A dispute has been opened on rental #${rental.reference}: ${input.summary}`,
+      entityType: "dispute",
+      entityId: dispute.id,
+      link: `/my-rentals`,
     });
 
     res.status(201).json(dispute);
@@ -149,6 +161,34 @@ router.post(
       entityId: input.disputeId,
       after: updated,
     });
+
+    const [rental] = await db
+      .select()
+      .from(rentals)
+      .where(eq(rentals.id, dispute.rentalId))
+      .limit(1);
+    if (rental) {
+      await notifyMany([
+        {
+          userId: rental.renterId,
+          type: "dispute.resolved",
+          title: "Dispute Resolved",
+          body: `Dispute #${dispute.id} has been resolved: ${input.resolution.replace(/_/g, " ")}`,
+          entityType: "dispute",
+          entityId: dispute.id,
+          link: `/my-rentals`,
+        },
+        {
+          userId: rental.ownerId,
+          type: "dispute.resolved",
+          title: "Dispute Resolved",
+          body: `Dispute #${dispute.id} has been resolved: ${input.resolution.replace(/_/g, " ")}`,
+          entityType: "dispute",
+          entityId: dispute.id,
+          link: `/owner`,
+        },
+      ]);
+    }
 
     res.json(updated);
   })

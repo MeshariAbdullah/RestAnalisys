@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Diamond, Watch, Shirt, Gem } from "lucide-react";
@@ -19,19 +19,24 @@ const CATEGORIES = [
 export default function Browse() {
   const [category, setCategory] = useState<string | undefined>(undefined);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["listings", category],
-    queryFn: () => assetsApi.listings({ category }),
+    queryKey: ["listings", category, debouncedSearch],
+    queryFn: () =>
+      assetsApi.listings({
+        category,
+        search: debouncedSearch || undefined,
+        limit: 50,
+      }),
   });
 
-  const filtered = (data?.items ?? []).filter((a: Asset) =>
-    search
-      ? `${a.brand} ${a.title} ${a.model ?? ""}`
-          .toLowerCase()
-          .includes(search.toLowerCase())
-      : true
-  );
+  const filtered = data?.items ?? [];
 
   return (
     <div className="p-8 max-w-7xl mx-auto">

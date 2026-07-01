@@ -27,6 +27,8 @@ import {
 import { requestNafathSignature } from "../services/nafathService.js";
 import { issueSanad, signSanad, dischargeSanad, executeSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
+import { formatHalalas } from "../utils/money.js";
 
 const router = Router();
 
@@ -160,6 +162,16 @@ router.post(
       after: { signed, sanad },
     });
 
+    await notify({
+      userId: userId,
+      type: "legal.commitment_signed",
+      title: "Commitment Signed",
+      body: `Your legal commitment of ${formatHalalas(commitment.commitmentHalalas)} for rental ${rental!.reference} has been signed. Proceed to payment.`,
+      entityType: "rental",
+      entityId: rental!.id,
+      link: `/my-rentals`,
+    });
+
     res.json({ commitment: signed, sanad });
   })
 );
@@ -265,6 +277,15 @@ router.post(
       entityType: "sanad_record",
       entityId: sanadId,
       after: { updated, reason },
+    });
+
+    await notify({
+      userId: sanad.renterId,
+      type: "legal.enforcement",
+      title: "Legal Enforcement Initiated",
+      body: `Sanad #${sanad.nafithReference} has been sent to Najiz for execution. Reason: ${reason}`,
+      entityType: "sanad_record",
+      entityId: sanadId,
     });
 
     res.json(updated);

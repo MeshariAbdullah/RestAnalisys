@@ -21,6 +21,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -137,6 +138,29 @@ router.patch(
       entityId: id,
       after: updated,
     });
+
+    if (input.status === "delivered" && updated.rentalId) {
+      const [rental] = await db
+        .select()
+        .from(rentals)
+        .where(eq(rentals.id, updated.rentalId))
+        .limit(1);
+      if (rental) {
+        const recipientId =
+          updated.direction === "platform_to_renter"
+            ? rental.renterId
+            : rental.ownerId;
+        await notify({
+          userId: recipientId,
+          type: "shipment.delivered",
+          title: "Shipment Delivered",
+          body: `Your shipment${input.trackingNumber ? ` (${input.trackingNumber})` : ""} has been delivered.`,
+          entityType: "shipment",
+          entityId: id,
+        });
+      }
+    }
+
     res.json(updated);
   })
 );

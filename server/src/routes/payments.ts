@@ -17,8 +17,9 @@ import {
   ForbiddenError,
 } from "../utils/errors.js";
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
-import { computeOwnerPayout } from "../utils/money.js";
+import { computeOwnerPayout, formatHalalas } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -110,6 +111,16 @@ router.post(
           updatedAt: new Date(),
         })
         .where(eq(rentals.id, rental.id));
+
+      await notify({
+        userId: rental.ownerId,
+        type: "payment.captured",
+        title: "Payment Received",
+        body: `Payment of ${formatHalalas(rental.totalPayableHalalas)} captured for rental ${rental.reference}. Rental is now confirmed.`,
+        entityType: "rental",
+        entityId: rental.id,
+        link: `/owner`,
+      });
     }
 
     await recordAudit({
@@ -162,6 +173,15 @@ router.post(
       entityType: "payment",
       entityId: input.paymentId,
       after: { updated, result },
+    });
+
+    await notify({
+      userId: payment.userId,
+      type: "payment.refunded",
+      title: "Payment Refunded",
+      body: `A refund of ${formatHalalas(input.amountHalalas ?? payment.amountHalalas)} has been issued${input.reason ? `: ${input.reason}` : ""}.`,
+      entityType: "payment",
+      entityId: payment.id,
     });
 
     res.json(updated);
@@ -219,6 +239,16 @@ router.post(
       entityType: "payout",
       entityId: payout.id,
       after: payout,
+    });
+
+    await notify({
+      userId: rental.ownerId,
+      type: "payout.released",
+      title: "Payout Released",
+      body: `Your payout of ${formatHalalas(payoutCalc.netHalalas)} (after ${payoutCalc.commissionHalalas > 0 ? formatHalalas(payoutCalc.commissionHalalas) + " commission" : "commission"}) is being processed.`,
+      entityType: "payout",
+      entityId: payout.id,
+      link: `/owner/payouts`,
     });
 
     res.json(payout);

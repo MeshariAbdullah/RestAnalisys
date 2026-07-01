@@ -19,6 +19,7 @@ import { InspectionReportSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -91,6 +92,16 @@ router.post(
       after: inspection,
     });
 
+    await notify({
+      userId: asset.ownerId,
+      type: "inspection.intake_completed",
+      title: "Intake Inspection Complete",
+      body: `Your asset "${asset.title}" has been inspected. Condition grade: ${input.conditionGrade}. Awaiting admin approval.`,
+      entityType: "asset",
+      entityId: asset.id,
+      link: `/owner/assets/${asset.id}`,
+    });
+
     res.status(201).json(inspection);
   })
 );
@@ -145,8 +156,16 @@ router.post(
       after: inspection,
     });
 
-    // Interpret outcome by condition grade — the actual rental closing is done
-    // via POST /rentals/:id/close which reads this inspection.
+    await notify({
+      userId: rental.renterId,
+      type: "inspection.return_completed",
+      title: "Return Inspection Complete",
+      body: `Your returned item has been inspected. Condition grade: ${input.conditionGrade}. The rental will be closed shortly.`,
+      entityType: "rental",
+      entityId: rental.id,
+      link: `/my-rentals`,
+    });
+
     res.status(201).json({
       inspection,
       hint: "Call POST /rentals/:id/close with outcome=clean|penalty|major_damage",
