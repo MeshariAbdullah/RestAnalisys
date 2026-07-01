@@ -9,14 +9,35 @@ import {
   FileSignature,
   AlertOctagon,
   TrendingUp,
+  Activity,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { adminApi, formatSar } from "@/lib/api";
+
+function actionLabel(action: string): string {
+  return action.replace(/\./g, " ").replace(/_/g, " ");
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
 export default function AdminDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["admin-kpis"],
     queryFn: () => adminApi.kpis(),
+  });
+
+  const activityQuery = useQuery({
+    queryKey: ["admin-activity"],
+    queryFn: () => adminApi.activity(),
   });
 
   return (
@@ -123,6 +144,39 @@ export default function AdminDashboard() {
           </a>
         </Link>
       </div>
+
+      <h2 className="text-lg font-semibold mt-8 mb-3 flex items-center gap-2">
+        <Activity className="w-5 h-5" /> Recent Activity
+      </h2>
+      <Card>
+        <CardContent className="p-0">
+          {activityQuery.isLoading ? (
+            <div className="p-6 text-neutral-500 text-sm">Loading...</div>
+          ) : !activityQuery.data?.length ? (
+            <div className="p-6 text-neutral-500 text-sm">No recent activity.</div>
+          ) : (
+            <div className="divide-y divide-neutral-100">
+              {activityQuery.data.slice(0, 10).map((a) => (
+                <div key={a.id} className="px-4 py-3 flex items-center gap-3 text-sm">
+                  <Badge variant="secondary" className="shrink-0">
+                    {a.entityType}
+                  </Badge>
+                  <span className="flex-1 text-neutral-700 truncate">
+                    {actionLabel(a.action)}
+                    {a.entityId ? ` #${a.entityId}` : ""}
+                  </span>
+                  {a.actorRole && (
+                    <span className="text-xs text-neutral-400">{a.actorRole}</span>
+                  )}
+                  <span className="text-xs text-neutral-400 whitespace-nowrap">
+                    {timeAgo(a.createdAt)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

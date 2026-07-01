@@ -20,6 +20,7 @@ import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -169,6 +170,18 @@ router.post(
       before: user,
       after: updated,
     });
+
+    await notify({
+      userId: id,
+      type: block ? "account.blocked" : "account.unblocked",
+      title: block ? "Account Blocked" : "Account Unblocked",
+      body: block
+        ? `Your account has been blocked. Reason: ${reason ?? "Policy violation"}`
+        : "Your account has been unblocked. You may resume normal activity.",
+      entityType: "user",
+      entityId: id,
+    });
+
     res.json(updated);
   })
 );
@@ -218,6 +231,59 @@ router.get(
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
+    res.json(rows);
+  })
+);
+
+// ── Platform config (read-only summary of integration status) ─────────────
+router.get(
+  "/settings",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (_req, res) => {
+    res.json({
+      platform: {
+        name: "MLR — Managed Luxury Rental",
+        version: "1.0.0",
+        vatRate: 0.15,
+        platformFeePct: 20,
+        commissionPct: 20,
+      },
+      integrations: {
+        nafath: { status: "stub", description: "National identity verification" },
+        nafith: { status: "stub", description: "Sanad / promissory note issuance" },
+        zatca: { status: "stub", description: "E-invoicing and tax compliance" },
+        paymentGateway: { status: "stub", description: "Card payment processing" },
+      },
+      limits: {
+        authRateLimit: "20 requests / 15 minutes",
+        apiRateLimit: "120 requests / minute",
+        maxUploadImages: 20,
+        maxAssetListingPage: 50,
+      },
+    });
+  })
+);
+
+// ── Recent activity feed ──────────────────────────────────────────────────
+router.get(
+  "/activity",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select({
+        id: auditLogs.id,
+        action: auditLogs.action,
+        entityType: auditLogs.entityType,
+        entityId: auditLogs.entityId,
+        actorUserId: auditLogs.actorUserId,
+        actorRole: auditLogs.actorRole,
+        createdAt: auditLogs.createdAt,
+      })
+      .from(auditLogs)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(20);
     res.json(rows);
   })
 );

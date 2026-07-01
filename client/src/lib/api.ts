@@ -606,6 +606,22 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  settings: () =>
+    request<{
+      platform: { name: string; version: string; vatRate: number; platformFeePct: number; commissionPct: number };
+      integrations: Record<string, { status: string; description: string }>;
+      limits: Record<string, string | number>;
+    }>("/admin/settings"),
+  activity: () =>
+    request<Array<{
+      id: number;
+      action: string;
+      entityType: string;
+      entityId?: number;
+      actorUserId?: number;
+      actorRole?: string;
+      createdAt: string;
+    }>>("/admin/activity"),
   auditLogs: (params?: { limit?: number; offset?: number; entityType?: string; action?: string }) => {
     const qs = new URLSearchParams();
     if (params?.limit) qs.set("limit", String(params.limit));

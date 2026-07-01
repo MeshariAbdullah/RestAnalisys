@@ -63,6 +63,7 @@ const NAV: NavItem[] = [
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
   { href: "/admin/audit-logs", label: "Audit Logs", icon: ScrollText, roles: ["admin", "super_admin"] },
+  { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
