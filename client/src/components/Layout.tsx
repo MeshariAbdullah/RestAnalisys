@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -19,8 +20,13 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  User as UserIcon,
+  ScrollText,
+  Settings,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
+import { notificationsApi } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
 
 interface NavItem {
@@ -56,6 +62,7 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit-logs", label: "Audit Logs", icon: ScrollText, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
@@ -67,6 +74,46 @@ function roleLabel(role: Role): string {
     admin: "Admin",
     super_admin: "Super Admin",
   }[role];
+}
+
+function TopBar({ user, sidebarOpen }: { user: User | null; sidebarOpen: boolean }) {
+  const [, navigate] = useLocation();
+  const { data: unread } = useQuery({
+    queryKey: ["notifications-unread"],
+    queryFn: () => notificationsApi.unreadCount(),
+    refetchInterval: 30_000,
+    enabled: !!user,
+  });
+  const count = unread?.count ?? 0;
+
+  return (
+    <header className="h-12 border-b border-neutral-200 bg-white flex items-center justify-end px-6 gap-3 shrink-0">
+      <button
+        onClick={() => navigate("/notifications")}
+        className="relative p-2 rounded-lg hover:bg-neutral-100 transition-colors text-neutral-600"
+        title="Notifications"
+      >
+        <Bell className="w-5 h-5" />
+        {count > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+            {count > 99 ? "99+" : count}
+          </span>
+        )}
+      </button>
+      <button
+        onClick={() => navigate("/profile")}
+        className="p-2 rounded-lg hover:bg-neutral-100 transition-colors text-neutral-600"
+        title="Profile"
+      >
+        <Settings className="w-5 h-5" />
+      </button>
+      {user && (
+        <span className="text-sm text-neutral-500 hidden sm:inline">
+          {user.fullName}
+        </span>
+      )}
+    </header>
+  );
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -162,7 +209,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <TopBar user={user} sidebarOpen={sidebarOpen} />
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
     </div>
   );
 }

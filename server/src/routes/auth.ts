@@ -9,16 +9,29 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
-import { LoginSchema, RegisterSchema, NafathVerifySchema } from "../utils/schemas.js";
+import {
+  LoginSchema,
+  RegisterSchema,
+  NafathVerifySchema,
+  ProfileUpdateSchema,
+  PasswordChangeSchema,
+  PasswordResetRequestSchema,
+  PasswordResetConfirmSchema,
+} from "../utils/schemas.js";
 import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
+import { authLimiter } from "../middleware/rateLimiter.js";
+import { v4 as uuidv4 } from "uuid";
+import { passwordResetTokens } from "../db/schema.js";
+import { and, gt } from "drizzle-orm";
 
 const router = Router();
 
 router.post(
   "/register",
+  authLimiter,
   asyncHandler(async (req, res) => {
     const input = RegisterSchema.parse(req.body);
 
@@ -77,6 +90,7 @@ router.post(
 
 router.post(
   "/login",
+  authLimiter,
   asyncHandler(async (req, res) => {
     const { email, password } = LoginSchema.parse(req.body);
     const [user] = await db
@@ -186,6 +200,164 @@ router.get(
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
     });
+  })
+);
+
+// ── Profile update ────────────────────────────────────────────────────────
+router.put(
+  "/profile",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const input = ProfileUpdateSchema.parse(req.body);
+    const userId = req.user!.userId;
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (input.fullName) updates.fullName = input.fullName;
+    if (input.phone) updates.phoneE164 = input.phone;
+    if (input.nationalAddressJson) updates.nationalAddressJson = input.nationalAddressJson;
+
+    const [updated] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning();
+
+    await recordAudit({
+      req,
+      action: "auth.profile_update",
+      entityType: "user",
+      entityId: userId,
+      after: updates,
+    });
+
+    return res.json({
+      id: updated.id,
+      email: updated.email,
+      fullName: updated.fullName,
+      role: updated.role,
+      phoneE164: updated.phoneE164,
+      nationalId: updated.nationalId,
+      nafathVerified: updated.nafathVerified,
+      kycStatus: updated.kycStatus,
+      trustScore: updated.trustScore,
+      riskCategory: updated.riskCategory,
+    });
+  })
+);
+
+// ── Change password ───────────────────────────────────────────────────────
+router.post(
+  "/change-password",
+  authenticate,
+  authLimiter,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const { currentPassword, newPassword } = PasswordChangeSchema.parse(req.body);
+    const userId = req.user!.userId;
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) throw new UnauthorizedError("Current password is incorrect");
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await db
+      .update(users)
+      .set({ passwordHash: newHash, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+
+    await recordAudit({
+      req,
+      action: "auth.password_change",
+      entityType: "user",
+      entityId: userId,
+    });
+
+    return res.json({ ok: true });
+  })
+);
+
+// ── Password reset: request token ─────────────────────────────────────────
+router.post(
+  "/reset-password/request",
+  authLimiter,
+  asyncHandler(async (req, res) => {
+    const { email } = PasswordResetRequestSchema.parse(req.body);
+
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    // Always respond 200 to prevent email enumeration
+    if (!user) {
+      return res.json({ ok: true, message: "If the email exists, a reset link has been sent" });
+    }
+
+    const token = uuidv4();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await db.insert(passwordResetTokens).values({
+      userId: user.id,
+      token,
+      expiresAt,
+    });
+
+    // In production, send email with reset link containing the token.
+    // For dev mode, log the token.
+    console.log(`[reset] token=${token} for user=${user.id} (expires ${expiresAt.toISOString()})`);
+
+    return res.json({ ok: true, message: "If the email exists, a reset link has been sent" });
+  })
+);
+
+// ── Password reset: confirm ───────────────────────────────────────────────
+router.post(
+  "/reset-password/confirm",
+  authLimiter,
+  asyncHandler(async (req, res) => {
+    const { token, newPassword } = PasswordResetConfirmSchema.parse(req.body);
+
+    const [resetRecord] = await db
+      .select()
+      .from(passwordResetTokens)
+      .where(
+        and(
+          eq(passwordResetTokens.token, token),
+          gt(passwordResetTokens.expiresAt, new Date())
+        )
+      )
+      .limit(1);
+
+    if (!resetRecord || resetRecord.usedAt) {
+      throw new UnauthorizedError("Invalid or expired reset token");
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await db
+      .update(users)
+      .set({ passwordHash: newHash, updatedAt: new Date() })
+      .where(eq(users.id, resetRecord.userId));
+
+    await db
+      .update(passwordResetTokens)
+      .set({ usedAt: new Date() })
+      .where(eq(passwordResetTokens.id, resetRecord.id));
+
+    await recordAudit({
+      req,
+      actorUserId: resetRecord.userId,
+      action: "auth.password_reset",
+      entityType: "user",
+      entityId: resetRecord.userId,
+    });
+
+    return res.json({ ok: true });
   })
 );
 

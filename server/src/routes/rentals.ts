@@ -56,6 +56,8 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
+import { formatHalalas } from "../utils/money.js";
 
 const router = Router();
 
@@ -280,6 +282,16 @@ router.post(
       after: { rental, decision },
     });
 
+    notify({
+      userId: asset.ownerId,
+      type: "rental.created",
+      title: "New Rental Request",
+      body: `Your asset "${asset.title}" has a new rental request (${rental.reference}).`,
+      entityType: "rental",
+      entityId: rental.id,
+      link: `/owner/assets/${asset.id}`,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -441,6 +453,16 @@ router.post(
       after: updated,
     });
 
+    notify({
+      userId: rental.renterId,
+      type: "rental.delivered",
+      title: "Asset Delivered",
+      body: `Your rental ${rental.reference} has been delivered. Enjoy your item!`,
+      entityType: "rental",
+      entityId: id,
+      link: `/my-rentals`,
+    });
+
     res.json(updated);
   })
 );
@@ -515,6 +537,24 @@ router.post(
         entityType: "rental",
         entityId: id,
         after: updated,
+      });
+      notify({
+        userId: rental.ownerId,
+        type: "rental.closed",
+        title: "Rental Completed",
+        body: `Rental ${rental.reference} closed successfully. Your asset is back in inventory.`,
+        entityType: "rental",
+        entityId: id,
+        link: `/owner`,
+      });
+      notify({
+        userId: rental.renterId,
+        type: "rental.closed",
+        title: "Rental Completed",
+        body: `Your rental ${rental.reference} has been closed. Thank you for using MLR!`,
+        entityType: "rental",
+        entityId: id,
+        link: `/my-rentals`,
       });
       return res.json(updated);
     }

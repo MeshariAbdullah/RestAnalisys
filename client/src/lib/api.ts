@@ -223,6 +223,33 @@ export interface RentalQuote {
   totalPayableHalalas: number;
 }
 
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  entityType?: string;
+  entityId?: number;
+  link?: string;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export interface AuditLogEntry {
+  id: number;
+  actorUserId?: number;
+  actorRole?: string;
+  action: string;
+  entityType: string;
+  entityId?: number;
+  beforeJson?: Record<string, unknown>;
+  afterJson?: Record<string, unknown>;
+  ip?: string;
+  createdAt: string;
+}
+
 export interface AdminKPIs {
   users: number;
   listedAssets: number;
@@ -578,6 +605,58 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: { limit?: number; offset?: number; entityType?: string; action?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    return request<{ items: AuditLogEntry[]; total: number; limit: number; offset: number }>(
+      `/admin/audit-logs?${qs}`
+    );
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notificationsApi = {
+  list: (limit = 50, offset = 0) =>
+    request<AppNotification[]>(`/notifications?limit=${limit}&offset=${offset}`),
+  unreadCount: () =>
+    request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const profileApi = {
+  update: (data: { fullName?: string; phone?: string; nationalAddressJson?: Record<string, unknown> }) =>
+    request<User>("/auth/profile", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+  requestReset: (email: string) =>
+    request<{ ok: boolean; message: string }>("/auth/reset-password/request", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  confirmReset: (token: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/reset-password/confirm", {
+      method: "POST",
+      body: JSON.stringify({ token, newPassword }),
+    }),
 };
 
 export const healthApi = {
