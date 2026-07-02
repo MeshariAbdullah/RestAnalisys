@@ -5,9 +5,9 @@
 
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { desc, eq, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { users } from "../db/schema.js";
+import { users, auditLogs, rentals } from "../db/schema.js";
 import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
 import { LoginSchema, RegisterSchema, NafathVerifySchema } from "../utils/schemas.js";
 import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors.js";
@@ -186,6 +186,70 @@ router.get(
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
     });
+  })
+);
+
+// ── Notifications: relevant audit events for the current user ─────────────
+router.get(
+  "/notifications",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const role = req.user!.role;
+
+    // For renters/owners: show events about their rentals and assets
+    // For staff: show events they performed or system alerts
+    const isStaff = ["admin", "super_admin", "operations", "inspector"].includes(role);
+
+    let rows;
+    if (isStaff) {
+      rows = await db
+        .select({
+          id: auditLogs.id,
+          action: auditLogs.action,
+          entityType: auditLogs.entityType,
+          entityId: auditLogs.entityId,
+          actorRole: auditLogs.actorRole,
+          createdAt: auditLogs.createdAt,
+        })
+        .from(auditLogs)
+        .orderBy(desc(auditLogs.createdAt))
+        .limit(50);
+    } else {
+      // Get the user's rental IDs
+      const userRentals = await db
+        .select({ id: rentals.id })
+        .from(rentals)
+        .where(
+          role === "owner"
+            ? eq(rentals.ownerId, userId)
+            : eq(rentals.renterId, userId)
+        );
+      const rentalIds = userRentals.map((r) => r.id);
+
+      rows = await db
+        .select({
+          id: auditLogs.id,
+          action: auditLogs.action,
+          entityType: auditLogs.entityType,
+          entityId: auditLogs.entityId,
+          actorRole: auditLogs.actorRole,
+          createdAt: auditLogs.createdAt,
+        })
+        .from(auditLogs)
+        .where(
+          or(
+            eq(auditLogs.actorUserId, userId),
+            rentalIds.length > 0
+              ? sql`${auditLogs.entityType} = 'rental' AND ${auditLogs.entityId} = ANY(${rentalIds})`
+              : sql`false`
+          )
+        )
+        .orderBy(desc(auditLogs.createdAt))
+        .limit(50);
+    }
+
+    res.json(rows);
   })
 );
 

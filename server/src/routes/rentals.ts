@@ -157,6 +157,23 @@ router.post(
     if (asset.ownerId === renterId)
       throw new LegalStateError("Cannot rent your own asset");
 
+    // Check for overlapping rentals on the same asset
+    const overlapping = await db
+      .select({ id: rentals.id })
+      .from(rentals)
+      .where(
+        and(
+          eq(rentals.assetId, input.assetId),
+          sql`status NOT IN ('cancelled', 'closed', 'closed_with_penalty')`,
+          sql`start_date < ${input.endDate}`,
+          sql`end_date > ${input.startDate}`
+        )
+      )
+      .limit(1);
+    if (overlapping.length > 0) {
+      throw new LegalStateError("Asset already has an active or pending rental for the requested dates");
+    }
+
     // Risk engine ----------------------------------------------------------
     const features = await buildRiskFeatures(renterId, asset.evaluatedValueHalalas ?? 0);
     const decision = computeRiskDecision(features);
@@ -509,6 +526,17 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      // Auto-discharge Sanad and legal commitment on clean close
+      await db
+        .update(legalCommitments)
+        .set({ status: "discharged", dischargedAt: new Date(), updatedAt: new Date() })
+        .where(eq(legalCommitments.rentalId, id));
+      await db
+        .update(sanadRecords)
+        .set({ status: "discharged", updatedAt: new Date() })
+        .where(eq(sanadRecords.rentalId, id));
+
       await recordAudit({
         req,
         action: "rental.close_clean",

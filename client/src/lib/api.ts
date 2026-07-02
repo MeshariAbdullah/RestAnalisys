@@ -259,6 +259,15 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ nationalId }),
     }),
+  notifications: () =>
+    request<Array<{
+      id: number;
+      action: string;
+      entityType: string;
+      entityId: number | null;
+      actorRole: string | null;
+      createdAt: string;
+    }>>("/auth/notifications"),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
