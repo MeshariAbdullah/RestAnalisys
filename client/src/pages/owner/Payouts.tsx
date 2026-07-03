@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { paymentsApi, formatSar } from "@/lib/api";
 
 export default function Payouts() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["my-payouts"],
     queryFn: () => paymentsApi.myPayouts(),
   });
@@ -35,6 +35,12 @@ export default function Payouts() {
           </p>
         </CardContent>
       </Card>
+
+      {isError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-4 mb-4">
+          Failed to load data. Please try again.
+        </div>
+      )}
 
       <h2 className="text-lg font-semibold mb-3">History</h2>
       {isLoading ? (

@@ -10,7 +10,7 @@ import { assetsApi, formatSar, type Asset } from "@/lib/api";
 
 const CATEGORIES = [
   { id: undefined, label: "All", icon: Diamond },
-  { id: "bag", label: "Bags", icon: Diamond },
+  { id: "handbag", label: "Bags", icon: Diamond },
   { id: "watch", label: "Watches", icon: Watch },
   { id: "dress", label: "Dresses", icon: Shirt },
   { id: "jewelry", label: "Jewelry", icon: Gem },
@@ -20,7 +20,7 @@ export default function Browse() {
   const [category, setCategory] = useState<string | undefined>(undefined);
   const [search, setSearch] = useState("");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["listings", category],
     queryFn: () => assetsApi.listings({ category }),
   });
@@ -69,6 +69,12 @@ export default function Browse() {
           ))}
         </div>
       </div>
+
+      {isError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-4 mb-4">
+          Failed to load data. Please try again.
+        </div>
+      )}
 
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

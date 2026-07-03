@@ -1,10 +1,11 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Truck } from "lucide-react";
+import { Truck, Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -20,7 +21,14 @@ const STATUSES = [
   "in_transit",
   "delivered",
   "failed",
-  "returned_to_warehouse",
+  "returned",
+] as const;
+
+const DIRECTIONS = [
+  { value: "owner_to_platform", label: "Owner to platform" },
+  { value: "platform_to_renter", label: "Platform to renter" },
+  { value: "renter_to_platform", label: "Renter to platform" },
+  { value: "platform_to_owner", label: "Platform to owner" },
 ] as const;
 
 export default function Shipments() {
@@ -29,27 +37,201 @@ export default function Shipments() {
   const [editStatus, setEditStatus] = useState<string>("in_transit");
   const [editTracking, setEditTracking] = useState("");
 
-  const { data, isLoading } = useQuery({
+  // Schedule shipment form state
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [scheduleAssetId, setScheduleAssetId] = useState("");
+  const [scheduleRentalId, setScheduleRentalId] = useState("");
+  const [scheduleDirection, setScheduleDirection] = useState<string>("owner_to_platform");
+  const [scheduleCourier, setScheduleCourier] = useState("");
+  const [scheduleAt, setScheduleAt] = useState("");
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [scheduleSuccess, setScheduleSuccess] = useState(false);
+
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["shipments"],
     queryFn: () => operationsApi.shipments(),
   });
 
   async function handleUpdate(id: number) {
-    await operationsApi.updateShipment(id, {
-      status: editStatus,
-      trackingNumber: editTracking || undefined,
-    });
-    setEditingId(null);
-    setEditTracking("");
-    await qc.invalidateQueries({ queryKey: ["shipments"] });
+    try {
+      setActionError(null);
+      await operationsApi.updateShipment(id, {
+        status: editStatus,
+        trackingNumber: editTracking || undefined,
+      });
+      setEditingId(null);
+      setEditTracking("");
+      await qc.invalidateQueries({ queryKey: ["shipments"] });
+    } catch (err) {
+      setActionError((err as Error).message);
+    }
+  }
+
+  async function handleSchedule(e: React.FormEvent) {
+    e.preventDefault();
+    setScheduling(true);
+    setScheduleError(null);
+    setScheduleSuccess(false);
+    try {
+      const assetId = Number(scheduleAssetId);
+      if (!assetId || assetId <= 0) {
+        throw new Error("Asset ID is required");
+      }
+      await operationsApi.scheduleShipment({
+        assetId,
+        rentalId: scheduleRentalId ? Number(scheduleRentalId) : undefined,
+        direction: scheduleDirection,
+        courier: scheduleCourier || undefined,
+        scheduledAt: scheduleAt || undefined,
+      });
+      await qc.invalidateQueries({ queryKey: ["shipments"] });
+      setScheduleSuccess(true);
+      setScheduleAssetId("");
+      setScheduleRentalId("");
+      setScheduleDirection("owner_to_platform");
+      setScheduleCourier("");
+      setScheduleAt("");
+      setTimeout(() => {
+        setScheduleSuccess(false);
+        setShowScheduleForm(false);
+      }, 1500);
+    } catch (err) {
+      setScheduleError((err as Error).message ?? "Failed to schedule shipment");
+    } finally {
+      setScheduling(false);
+    }
   }
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
-      <h1 className="text-3xl font-bold mb-2">Shipments</h1>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-3xl font-bold">Shipments</h1>
+        <Button
+          onClick={() => {
+            setShowScheduleForm(!showScheduleForm);
+            setScheduleError(null);
+            setScheduleSuccess(false);
+          }}
+          className="bg-amber-500 text-neutral-950 hover:bg-amber-400"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Schedule Shipment
+        </Button>
+      </div>
       <p className="text-neutral-500 mb-8">
         Outbound deliveries to renters and returns to warehouse.
       </p>
+
+      {showScheduleForm && (
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <h2 className="font-semibold mb-4">Schedule a new shipment</h2>
+            <form onSubmit={handleSchedule}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Asset ID *</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={scheduleAssetId}
+                    onChange={(e) => setScheduleAssetId(e.target.value)}
+                    placeholder="e.g. 42"
+                    className="mt-1"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label>Rental ID (optional)</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={scheduleRentalId}
+                    onChange={(e) => setScheduleRentalId(e.target.value)}
+                    placeholder="e.g. 7"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Direction *</Label>
+                  <Select value={scheduleDirection} onValueChange={setScheduleDirection}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DIRECTIONS.map((d) => (
+                        <SelectItem key={d.value} value={d.value}>
+                          {d.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Courier (optional)</Label>
+                  <Input
+                    value={scheduleCourier}
+                    onChange={(e) => setScheduleCourier(e.target.value)}
+                    placeholder="e.g. SMSA, Aramex"
+                    className="mt-1"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Scheduled at (optional)</Label>
+                  <Input
+                    type="datetime-local"
+                    value={scheduleAt}
+                    onChange={(e) => setScheduleAt(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+
+              {scheduleError && (
+                <div className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
+                  {scheduleError}
+                </div>
+              )}
+              {scheduleSuccess && (
+                <div className="mt-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded p-3">
+                  Shipment scheduled successfully.
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-5">
+                <Button
+                  type="submit"
+                  disabled={scheduling}
+                  className="bg-amber-500 text-neutral-950 hover:bg-amber-400"
+                >
+                  {scheduling ? "Scheduling..." : "Schedule"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowScheduleForm(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {isError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-4 mb-4">
+          Failed to load data. Please try again.
+        </div>
+      )}
+
+      {actionError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-4 mb-4">
+          {actionError}
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>

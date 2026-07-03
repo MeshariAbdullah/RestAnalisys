@@ -19,7 +19,7 @@ import { assetsApi, inspectionsApi } from "@/lib/api";
 type Grade = "A" | "B" | "C" | "D";
 type Risk = "low" | "medium" | "high" | "ultra_high";
 
-export default function InspectionForm({ assetId }: { assetId: number }) {
+export default function InspectionForm({ assetId, rentalId }: { assetId: number; rentalId?: number }) {
   const [, navigate] = useLocation();
   const [authenticityVerified, setAuthenticityVerified] = useState(true);
   const [authenticityNotes, setAuthenticityNotes] = useState("");
@@ -49,17 +49,31 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
       if (!marketValueHalalas || !recommendedDailyPriceHalalas) {
         throw new Error("Market value and daily price are required");
       }
-      await inspectionsApi.createIntake({
-        assetId,
-        authenticityVerified,
-        authenticityNotes: authenticityNotes || undefined,
-        conditionScore,
-        conditionGrade,
-        conditionNotes: conditionNotes || undefined,
-        marketValueHalalas,
-        recommendedDailyPriceHalalas,
-        riskCategory,
-      });
+      if (rentalId) {
+        await inspectionsApi.createReturn({
+          assetId,
+          rentalId,
+          authenticityVerified,
+          conditionScore,
+          conditionGrade,
+          conditionNotes: conditionNotes || undefined,
+          marketValueHalalas,
+          recommendedDailyPriceHalalas,
+          riskCategory,
+        });
+      } else {
+        await inspectionsApi.createIntake({
+          assetId,
+          authenticityVerified,
+          authenticityNotes: authenticityNotes || undefined,
+          conditionScore,
+          conditionGrade,
+          conditionNotes: conditionNotes || undefined,
+          marketValueHalalas,
+          recommendedDailyPriceHalalas,
+          riskCategory,
+        });
+      }
       navigate("/inspector");
     } catch (err) {
       setError((err as Error).message ?? "Submission failed");
@@ -72,7 +86,7 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
     <div className="p-8 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-2 text-sm text-neutral-500">
         <ClipboardCheck className="w-4 h-4" />
-        Intake inspection
+        {rentalId ? "Return inspection" : "Intake inspection"}
       </div>
       <h1 className="text-3xl font-bold mb-1">
         {asset ? `${asset.brand} — ${asset.title}` : "Inspection report"}

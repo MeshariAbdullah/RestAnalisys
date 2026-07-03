@@ -74,6 +74,21 @@ function generateRentalReference(): string {
   return `MLR-${year}-${rand}`;
 }
 
+async function countLateReturns(userId: number): Promise<number> {
+  const result = await db
+    .select({
+      count: sql<number>`count(*) filter (where ${rentals.returnedAt} > (${rentals.endDate}::date + interval '1 day'))`,
+    })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`${rentals.returnedAt} is not null`
+      )
+    );
+  return Number(result[0]?.count ?? 0);
+}
+
 async function buildRiskFeatures(userId: number, assetValueHalalas: number): Promise<RiskFeatures> {
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) throw new NotFoundError("User");
@@ -99,7 +114,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await countLateReturns(userId),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,

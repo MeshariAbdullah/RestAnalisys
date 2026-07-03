@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { adminApi, formatSar } from "@/lib/api";
 
 export default function AdminDashboard() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["admin-kpis"],
     queryFn: () => adminApi.kpis(),
   });
@@ -25,6 +25,12 @@ export default function AdminDashboard() {
       <p className="text-neutral-500 mb-8">
         Platform-wide metrics and moderation queues.
       </p>
+
+      {isError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-4 mb-4">
+          Failed to load data. Please try again.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <Kpi

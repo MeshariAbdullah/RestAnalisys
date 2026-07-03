@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { inspectionsApi, formatSar, type Asset } from "@/lib/api";
 
 export default function InspectorDashboard() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["inspection-queue"],
     queryFn: () => inspectionsApi.queue(),
   });
@@ -23,6 +23,12 @@ export default function InspectorDashboard() {
       <p className="text-neutral-500 mb-8">
         Assets awaiting authentication, valuation or return inspection.
       </p>
+
+      {isError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-4 mb-4">
+          Failed to load data. Please try again.
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>

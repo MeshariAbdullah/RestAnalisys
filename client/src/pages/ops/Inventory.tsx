@@ -14,7 +14,7 @@ function statusColor(s: string): string {
 }
 
 export default function Inventory() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["inventory"],
     queryFn: () => operationsApi.inventory(),
   });
@@ -25,6 +25,12 @@ export default function Inventory() {
       <p className="text-neutral-500 mb-8">
         All assets tracked by the MLR warehouse.
       </p>
+
+      {isError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-4 mb-4">
+          Failed to load data. Please try again.
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>

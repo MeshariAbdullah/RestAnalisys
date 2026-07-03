@@ -24,19 +24,26 @@ export default function UsersPage() {
   const qc = useQueryClient();
   const [role, setRole] = useState<string>("all");
 
-  const { data, isLoading } = useQuery({
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["admin-users", role],
     queryFn: () => adminApi.users(role === "all" ? undefined : role),
   });
 
   async function toggleBlock(u: User) {
-    const block = !u.isBlocked;
-    const reason = block
-      ? prompt("Reason for blocking?") ?? undefined
-      : undefined;
-    if (block && !reason) return;
-    await adminApi.blockUser(u.id, block, reason);
-    await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    try {
+      setActionError(null);
+      const block = !u.isBlocked;
+      const reason = block
+        ? prompt("Reason for blocking?") ?? undefined
+        : undefined;
+      if (block && !reason) return;
+      await adminApi.blockUser(u.id, block, reason);
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (err) {
+      setActionError((err as Error).message);
+    }
   }
 
   return (
@@ -61,6 +68,18 @@ export default function UsersPage() {
           </SelectContent>
         </Select>
       </div>
+
+      {isError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-4 mb-4">
+          Failed to load data. Please try again.
+        </div>
+      )}
+
+      {actionError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-4 mb-4">
+          {actionError}
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>

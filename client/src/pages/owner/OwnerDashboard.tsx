@@ -94,6 +94,12 @@ export default function OwnerDashboard() {
         </Card>
       </div>
 
+      {(assetsQuery.isError || payoutsQuery.isError) && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-4 mb-4">
+          Failed to load data. Please try again.
+        </div>
+      )}
+
       <h2 className="text-xl font-bold mb-4">My assets</h2>
       {assetsQuery.isLoading ? (
         <p className="text-neutral-500">Loading…</p>

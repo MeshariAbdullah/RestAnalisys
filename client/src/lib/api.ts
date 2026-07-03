@@ -578,6 +578,10 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: { entityType?: string; limit?: number }) =>
+    request<any[]>(`/admin/audit-logs?${new URLSearchParams(
+      Object.entries(params ?? {}).filter(([_, v]) => v != null).map(([k, v]) => [k, String(v)])
+    ).toString()}`),
 };
 
 export const healthApi = {

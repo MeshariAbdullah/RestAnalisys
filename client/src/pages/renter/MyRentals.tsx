@@ -37,7 +37,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function MyRentals() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["rentals-mine"],
     queryFn: () => rentalsApi.mine(),
   });
@@ -48,6 +48,12 @@ export default function MyRentals() {
       <p className="text-neutral-500 mb-8">
         Track contracts, shipments and returns.
       </p>
+
+      {isError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-4 mb-4">
+          Failed to load data. Please try again.
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-4">

@@ -2,7 +2,16 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Receipt, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { adminApi, formatSar } from "@/lib/api";
+import { adminApi, formatSar, halalasToSar } from "@/lib/api";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
 
 export default function FinancialOverview() {
   const kpisQuery = useQuery({
@@ -15,12 +24,19 @@ export default function FinancialOverview() {
     queryFn: () => adminApi.revenueTrend(),
   });
 
+  const isError = kpisQuery.isError || trendQuery.isError;
+
   const kpis = kpisQuery.data;
   const trend = trendQuery.data ?? [];
-  const maxTotal = Math.max(
-    ...trend.map((t) => Number(t.total_halalas ?? 0)),
-    1
-  );
+
+  const chartData = trend.map((t) => ({
+    date: new Date(t.day).toLocaleDateString("en-SA", {
+      month: "short",
+      day: "numeric",
+    }),
+    revenue: halalasToSar(Number(t.total_halalas ?? 0)),
+    rentals: Number(t.rentals ?? 0),
+  }));
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -28,6 +44,12 @@ export default function FinancialOverview() {
       <p className="text-neutral-500 mb-8">
         Revenue, fees and VAT across all confirmed rentals.
       </p>
+
+      {isError && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-4 mb-4">
+          Failed to load data. Please try again.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <Card className="bg-gradient-to-br from-amber-500/10 to-neutral-50">
@@ -37,7 +59,11 @@ export default function FinancialOverview() {
               Gross revenue
             </div>
             <p className="text-3xl font-bold">
-              {formatSar(kpis?.revenue.rentalSubtotalHalalas)}
+              {kpisQuery.isLoading ? (
+                <span className="text-neutral-400 text-lg">Loading...</span>
+              ) : (
+                formatSar(kpis?.revenue.rentalSubtotalHalalas)
+              )}
             </p>
           </CardContent>
         </Card>
@@ -48,7 +74,11 @@ export default function FinancialOverview() {
               Platform fees
             </div>
             <p className="text-3xl font-bold text-amber-600">
-              {formatSar(kpis?.revenue.platformFeeHalalas)}
+              {kpisQuery.isLoading ? (
+                <span className="text-neutral-400 text-lg">Loading...</span>
+              ) : (
+                formatSar(kpis?.revenue.platformFeeHalalas)
+              )}
             </p>
           </CardContent>
         </Card>
@@ -59,7 +89,11 @@ export default function FinancialOverview() {
               VAT collected (15%)
             </div>
             <p className="text-3xl font-bold">
-              {formatSar(kpis?.revenue.vatHalalas)}
+              {kpisQuery.isLoading ? (
+                <span className="text-neutral-400 text-lg">Loading...</span>
+              ) : (
+                formatSar(kpis?.revenue.vatHalalas)
+              )}
             </p>
           </CardContent>
         </Card>
@@ -68,36 +102,58 @@ export default function FinancialOverview() {
       <h2 className="text-lg font-semibold mb-3">Last 30 days</h2>
       <Card>
         <CardContent className="p-6">
-          {trend.length === 0 ? (
+          {trendQuery.isLoading ? (
+            <p className="text-neutral-500 text-sm">Loading...</p>
+          ) : trend.length === 0 ? (
             <p className="text-neutral-500 text-sm">No recent rentals.</p>
           ) : (
-            <div className="space-y-2">
-              {trend.map((t) => {
-                const pct = (Number(t.total_halalas) / maxTotal) * 100;
-                return (
-                  <div
-                    key={t.day}
-                    className="flex items-center gap-3 text-sm"
-                  >
-                    <span className="w-24 text-neutral-500 shrink-0">
-                      {new Date(t.day).toLocaleDateString()}
-                    </span>
-                    <div className="flex-1 h-6 bg-neutral-100 rounded">
-                      <div
-                        className="h-full bg-amber-500 rounded"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="w-24 text-right font-mono">
-                      {formatSar(Number(t.total_halalas))}
-                    </span>
-                    <span className="w-16 text-right text-xs text-neutral-500">
-                      {t.rentals} rentals
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+            <ResponsiveContainer width="100%" height={350}>
+              <BarChart
+                data={chartData}
+                margin={{ top: 8, right: 8, left: 8, bottom: 8 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 12 }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 12 }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v: number) => `${v} SAR`}
+                />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload as (typeof chartData)[number];
+                    return (
+                      <div className="rounded-lg border bg-white px-3 py-2 text-sm shadow-md">
+                        <p className="font-medium">{d.date}</p>
+                        <p className="text-amber-600">
+                          {d.revenue.toLocaleString("en-SA", {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                          SAR
+                        </p>
+                        <p className="text-neutral-500">
+                          {d.rentals} {d.rentals === 1 ? "rental" : "rentals"}
+                        </p>
+                      </div>
+                    );
+                  }}
+                />
+                <Bar
+                  dataKey="revenue"
+                  fill="#f59e0b"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={40}
+                />
+              </BarChart>
+            </ResponsiveContainer>
           )}
         </CardContent>
       </Card>
