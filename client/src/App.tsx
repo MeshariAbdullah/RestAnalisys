@@ -11,6 +11,7 @@ import Browse from "./pages/renter/Browse";
 import ItemDetail from "./pages/renter/ItemDetail";
 import LegalCommitmentPage from "./pages/renter/LegalCommitment";
 import MyRentals from "./pages/renter/MyRentals";
+import OpenDispute from "./pages/renter/OpenDispute";
 
 // Owner
 import OwnerDashboard from "./pages/owner/OwnerDashboard";
@@ -21,9 +22,11 @@ import Payouts from "./pages/owner/Payouts";
 // Inspector
 import InspectorDashboard from "./pages/inspector/InspectorDashboard";
 import InspectionForm from "./pages/inspector/InspectionForm";
+import ReturnInspectionForm from "./pages/inspector/ReturnInspectionForm";
 
 // Ops
 import OpsDashboard from "./pages/ops/OpsDashboard";
+import OpsRentals from "./pages/ops/Rentals";
 import Shipments from "./pages/ops/Shipments";
 import Inventory from "./pages/ops/Inventory";
 import AlertsPage from "./pages/ops/Alerts";
@@ -65,6 +68,13 @@ export default function App() {
       <Route path="/my-rentals">
         <ProtectedRoute roles={["renter"]}><MyRentals /></ProtectedRoute>
       </Route>
+      <Route path="/dispute/:rentalId">
+        {(params) => (
+          <ProtectedRoute roles={["renter"]}>
+            <OpenDispute rentalId={Number(params.rentalId)} />
+          </ProtectedRoute>
+        )}
+      </Route>
 
       {/* Owner */}
       <Route path="/owner">
@@ -95,10 +105,23 @@ export default function App() {
           </ProtectedRoute>
         )}
       </Route>
+      <Route path="/inspector/return/:assetId/:rentalId">
+        {(params) => (
+          <ProtectedRoute roles={["inspector"]}>
+            <ReturnInspectionForm
+              assetId={Number(params.assetId)}
+              rentalId={Number(params.rentalId)}
+            />
+          </ProtectedRoute>
+        )}
+      </Route>
 
       {/* Operations */}
       <Route path="/ops">
         <ProtectedRoute roles={["operations"]}><OpsDashboard /></ProtectedRoute>
+      </Route>
+      <Route path="/ops/rentals">
+        <ProtectedRoute roles={["operations"]}><OpsRentals /></ProtectedRoute>
       </Route>
       <Route path="/ops/shipments">
         <ProtectedRoute roles={["operations"]}><Shipments /></ProtectedRoute>

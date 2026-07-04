@@ -1,32 +1,37 @@
 import React from "react";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Package, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { Package, CheckCircle, Clock, AlertCircle, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { rentalsApi, formatSar, type Rental } from "@/lib/api";
 
 const STATUS_META: Record<string, { color: string; icon: typeof Clock }> = {
-  draft: { color: "bg-neutral-200 text-neutral-700", icon: Clock },
+  pending_legal_signing: { color: "bg-amber-100 text-amber-800", icon: Clock },
   pending_payment: { color: "bg-amber-100 text-amber-800", icon: Clock },
   confirmed: { color: "bg-blue-100 text-blue-700", icon: CheckCircle },
-  in_fulfillment: { color: "bg-blue-100 text-blue-700", icon: Package },
   out_for_delivery: { color: "bg-blue-100 text-blue-700", icon: Package },
-  delivered: { color: "bg-green-100 text-green-700", icon: CheckCircle },
-  in_use: { color: "bg-green-100 text-green-700", icon: CheckCircle },
-  awaiting_return: { color: "bg-amber-100 text-amber-800", icon: Clock },
-  returned: { color: "bg-green-100 text-green-700", icon: CheckCircle },
-  inspection_post_return: {
-    color: "bg-amber-100 text-amber-800",
-    icon: Clock,
-  },
-  closed_clean: { color: "bg-green-100 text-green-700", icon: CheckCircle },
+  active: { color: "bg-green-100 text-green-700", icon: CheckCircle },
+  return_in_transit: { color: "bg-amber-100 text-amber-800", icon: Clock },
+  under_inspection: { color: "bg-amber-100 text-amber-800", icon: Clock },
+  closed: { color: "bg-green-100 text-green-700", icon: CheckCircle },
   closed_with_penalty: { color: "bg-red-100 text-red-700", icon: AlertCircle },
-  disputed: { color: "bg-red-100 text-red-700", icon: AlertCircle },
+  in_dispute: { color: "bg-red-100 text-red-700", icon: AlertCircle },
+  enforcement: { color: "bg-red-100 text-red-700", icon: AlertCircle },
   cancelled: { color: "bg-neutral-200 text-neutral-600", icon: AlertCircle },
 };
 
+const DISPUTE_ELIGIBLE = [
+  "active",
+  "return_in_transit",
+  "under_inspection",
+  "closed",
+  "closed_with_penalty",
+];
+
 function StatusBadge({ status }: { status: string }) {
-  const meta = STATUS_META[status] ?? STATUS_META.draft;
+  const meta = STATUS_META[status] ?? STATUS_META.pending_legal_signing;
   const Icon = meta.icon;
   return (
     <Badge className={`${meta.color} hover:${meta.color} border-0`}>
@@ -87,19 +92,38 @@ export default function MyRentals() {
                         ({r.durationDays} days)
                       </span>
                     </p>
-                    <div className="mt-3">
+                    <div className="flex items-center gap-2 mt-3">
                       <StatusBadge status={r.status} />
+                      {r.status === "pending_legal_signing" && (
+                        <Link href={`/legal/${r.id}`}>
+                          <Button size="sm" variant="outline" className="text-xs">
+                            Sign contract →
+                          </Button>
+                        </Link>
+                      )}
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right space-y-2">
                     <p className="text-xs text-neutral-500 uppercase">Total paid</p>
                     <p className="font-bold text-lg">
                       {formatSar(r.totalPayableHalalas)}
                     </p>
-                    <p className="text-[11px] text-neutral-500 mt-1">
+                    <p className="text-[11px] text-neutral-500">
                       Commitment {formatSar(r.legalCommitmentHalalas)} (
                       {r.legalCommitmentPct}%)
                     </p>
+                    {DISPUTE_ELIGIBLE.includes(r.status) && (
+                      <Link href={`/dispute/${r.id}`}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs text-red-600 border-red-200 hover:bg-red-50 mt-1"
+                        >
+                          <AlertTriangle className="w-3 h-3 mr-1" />
+                          Report issue
+                        </Button>
+                      </Link>
+                    )}
                   </div>
                 </div>
               </CardContent>

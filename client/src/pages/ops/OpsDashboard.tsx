@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Truck, AlertTriangle, PackageSearch, Activity } from "lucide-react";
+import { Truck, AlertTriangle, PackageSearch, Activity, FileText } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { operationsApi } from "@/lib/api";
@@ -66,7 +66,13 @@ export default function OpsDashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <QuickLink
+          href="/ops/rentals"
+          icon={FileText}
+          title="Rental Lifecycle"
+          desc="Fulfill, deliver, return, close rentals"
+        />
         <QuickLink
           href="/ops/shipments"
           icon={Truck}

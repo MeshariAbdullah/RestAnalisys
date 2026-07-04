@@ -1,17 +1,31 @@
 import React from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardCheck, Diamond } from "lucide-react";
+import { ClipboardCheck, Diamond, RotateCcw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { inspectionsApi, formatSar, type Asset } from "@/lib/api";
+import { inspectionsApi, rentalsApi, formatSar, type Asset } from "@/lib/api";
 
 export default function InspectorDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["inspection-queue"],
     queryFn: () => inspectionsApi.queue(),
   });
+
+  const { data: allRentals } = useQuery({
+    queryKey: ["all-rentals-inspector"],
+    queryFn: () => rentalsApi.list(),
+  });
+
+  const rentalsByAsset = new Map<number, { id: number; reference: string }>();
+  if (allRentals) {
+    for (const r of allRentals) {
+      if (r.status === "under_inspection") {
+        rentalsByAsset.set(r.assetId, { id: r.id, reference: r.reference });
+      }
+    }
+  }
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -34,42 +48,66 @@ export default function InspectorDashboard() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {data.map((asset: Asset) => (
-            <Card key={asset.id}>
-              <CardContent className="p-5 flex items-center gap-4">
-                <div className="w-16 h-16 bg-neutral-100 rounded-md flex items-center justify-center shrink-0 overflow-hidden">
-                  {asset.submissionImagesJson?.[0] ? (
-                    <img
-                      src={asset.submissionImagesJson[0]}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <Diamond className="w-8 h-8 text-neutral-300" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs uppercase tracking-wider text-neutral-500">
-                    {asset.brand}
-                  </p>
-                  <p className="font-semibold truncate">{asset.title}</p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Badge variant="outline">
-                      {asset.status.replace(/_/g, " ")}
-                    </Badge>
-                    <span className="text-xs text-neutral-500">
-                      Declared: {formatSar(asset.ownerDeclaredValueHalalas)}
-                    </span>
+          {data.map((asset: Asset) => {
+            const isReturn = asset.status === "returned_under_inspection";
+            const rental = rentalsByAsset.get(asset.id);
+            const href = isReturn && rental
+              ? `/inspector/return/${asset.id}/${rental.id}`
+              : `/inspector/report/${asset.id}`;
+
+            return (
+              <Card key={asset.id}>
+                <CardContent className="p-5 flex items-center gap-4">
+                  <div className="w-16 h-16 bg-neutral-100 rounded-md flex items-center justify-center shrink-0 overflow-hidden">
+                    {asset.submissionImagesJson?.[0] ? (
+                      <img
+                        src={asset.submissionImagesJson[0]}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Diamond className="w-8 h-8 text-neutral-300" />
+                    )}
                   </div>
-                </div>
-                <Link href={`/inspector/report/${asset.id}`}>
-                  <Button className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
-                    Inspect
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          ))}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs uppercase tracking-wider text-neutral-500">
+                      {asset.brand}
+                    </p>
+                    <p className="font-semibold truncate">{asset.title}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Badge
+                        variant="outline"
+                        className={
+                          isReturn
+                            ? "border-amber-300 text-amber-700 bg-amber-50"
+                            : ""
+                        }
+                      >
+                        {isReturn ? (
+                          <><RotateCcw className="w-3 h-3 mr-1" />return inspection</>
+                        ) : (
+                          asset.status.replace(/_/g, " ")
+                        )}
+                      </Badge>
+                      {rental && (
+                        <span className="text-xs text-neutral-500 font-mono">
+                          {rental.reference}
+                        </span>
+                      )}
+                      <span className="text-xs text-neutral-500">
+                        Declared: {formatSar(asset.ownerDeclaredValueHalalas)}
+                      </span>
+                    </div>
+                  </div>
+                  <Link href={href}>
+                    <Button className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
+                      {isReturn ? "Return inspect" : "Inspect"}
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>
