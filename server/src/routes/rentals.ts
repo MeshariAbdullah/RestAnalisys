@@ -55,7 +55,10 @@ import {
 import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
+import { dischargeSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { trustScoreToCategory } from "../services/riskEngine.js";
+import { createNotification } from "./notifications.js";
 
 const router = Router();
 
@@ -78,7 +81,6 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) throw new NotFoundError("User");
 
-  // Aggregate rental history.
   const stats = await db
     .select({
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
@@ -88,6 +90,19 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     .from(rentals)
     .where(eq(rentals.renterId, userId));
   const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+
+  const lateStats = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`returned_at IS NOT NULL AND returned_at::date > end_date::date`
+      )
+    );
+  const lateReturnCount = lateStats[0]?.count ?? 0;
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +114,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateReturnCount ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +295,14 @@ router.post(
       after: { rental, decision },
     });
 
+    await createNotification({
+      userId: asset.ownerId,
+      type: "rental_created",
+      title: "New rental request",
+      body: `Your asset "${asset.title}" has a new rental booking (${rental.reference}).`,
+      linkUrl: `/owner/assets/${asset.id}`,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -433,6 +456,14 @@ router.post(
       .set({ status: "rented_out", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
 
+    await createNotification({
+      userId: rental.renterId,
+      type: "rental_delivered",
+      title: "Item delivered",
+      body: `Your rental ${rental.reference} has been delivered. Enjoy!`,
+      linkUrl: `/my-rentals/${rental.id}`,
+    });
+
     await recordAudit({
       req,
       action: "rental.delivered",
@@ -499,50 +530,79 @@ router.post(
       throw new LegalStateError(`Expected under_inspection, got ${rental.status}`);
     }
 
-    if (outcome === "clean") {
+    if (outcome === "clean" || outcome === "penalty") {
+      const newStatus = outcome === "clean" ? "closed" : "closed_with_penalty";
       const [updated] = await db
         .update(rentals)
-        .set({ status: "closed", closedAt: new Date(), updatedAt: new Date() })
+        .set({ status: newStatus, closedAt: new Date(), updatedAt: new Date() })
         .where(eq(rentals.id, id))
         .returning();
-      await db
-        .update(assets)
-        .set({ status: "listed", updatedAt: new Date() })
-        .where(eq(assets.id, rental.assetId));
-      await recordAudit({
-        req,
-        action: "rental.close_clean",
-        entityType: "rental",
-        entityId: id,
-        after: updated,
-      });
-      return res.json(updated);
-    }
 
-    if (outcome === "penalty") {
-      const [updated] = await db
-        .update(rentals)
-        .set({
-          status: "closed_with_penalty",
-          closedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(rentals.id, id))
-        .returning();
-      await db.insert(payments).values({
-        rentalId: id,
-        userId: rental.renterId,
-        type: "penalty",
-        status: "pending",
-        amountHalalas: penaltyHalalas ?? 0,
-      });
+      if (outcome === "penalty") {
+        await db.insert(payments).values({
+          rentalId: id,
+          userId: rental.renterId,
+          type: "penalty",
+          status: "pending",
+          amountHalalas: penaltyHalalas ?? 0,
+        });
+      }
+
       await db
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      // Auto-discharge the associated Sanad
+      const [sanad] = await db
+        .select()
+        .from(sanadRecords)
+        .where(
+          and(
+            eq(sanadRecords.rentalId, id),
+            sql`status NOT IN ('discharged', 'cancelled')`
+          )
+        )
+        .limit(1);
+      if (sanad?.nafithReference) {
+        const result = await dischargeSanad(sanad.nafithReference);
+        await db
+          .update(sanadRecords)
+          .set({
+            status: "discharged",
+            updatedAt: new Date(),
+            rawResponseJson: result as unknown as object,
+          })
+          .where(eq(sanadRecords.id, sanad.id));
+        await db
+          .update(legalCommitments)
+          .set({ status: "discharged", dischargedAt: new Date(), updatedAt: new Date() })
+          .where(eq(legalCommitments.rentalId, id));
+      }
+
+      // Update renter trust score based on rental history
+      await updateUserTrustScore(rental.renterId);
+
+      await createNotification({
+        userId: rental.renterId,
+        type: "rental_closed",
+        title: outcome === "clean" ? "Rental completed" : "Rental closed with penalty",
+        body: outcome === "clean"
+          ? `Your rental ${rental.reference} is closed. Sanad has been discharged.`
+          : `Your rental ${rental.reference} closed with a penalty. Check details.`,
+        linkUrl: `/my-rentals/${rental.id}`,
+      });
+      await createNotification({
+        userId: rental.ownerId,
+        type: "rental_closed",
+        title: "Rental closed",
+        body: `Rental ${rental.reference} for your asset has been closed (${outcome}).`,
+        linkUrl: `/owner/assets/${rental.assetId}`,
+      });
+
       await recordAudit({
         req,
-        action: "rental.close_penalty",
+        action: `rental.close_${outcome}`,
         entityType: "rental",
         entityId: id,
         after: { updated, penaltyHalalas },
@@ -573,6 +633,8 @@ router.post(
       message: `Rental ${rental.reference} requires Sanad execution for ${outcome}.`,
       payloadJson: { outcome, rentalId: id },
     });
+
+    await updateUserTrustScore(rental.renterId);
 
     await recordAudit({
       req,
@@ -631,5 +693,34 @@ router.post(
     res.json(updated);
   })
 );
+
+async function updateUserTrustScore(userId: number) {
+  const stats = await db
+    .select({
+      completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
+      disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
+      cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      late: sql<number>`count(*) filter (where returned_at is not null and returned_at::date > end_date::date)`,
+    })
+    .from(rentals)
+    .where(eq(rentals.renterId, userId));
+  const s = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, late: 0 };
+
+  let score = 50;
+  score += Math.min(Number(s.completed) * 3, 30);
+  score -= Number(s.disputed) * 10;
+  score -= Number(s.cancelled) >= 3 ? 8 : 0;
+  score -= Number(s.late) * 5;
+  score = Math.max(0, Math.min(100, score));
+
+  await db
+    .update(users)
+    .set({
+      trustScore: score,
+      riskCategory: trustScoreToCategory(score),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId));
+}
 
 export default router;

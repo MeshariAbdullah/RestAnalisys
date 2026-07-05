@@ -13,6 +13,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -218,6 +219,75 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Number(req.query.offset) || 0;
+    const action = req.query.action as string | undefined;
+
+    const baseQuery = db.select().from(auditLogs);
+    const rows = action
+      ? await baseQuery
+          .where(sql`action LIKE ${`%${action}%`}`)
+          .orderBy(desc(auditLogs.createdAt))
+          .limit(limit)
+          .offset(offset)
+      : await baseQuery
+          .orderBy(desc(auditLogs.createdAt))
+          .limit(limit)
+          .offset(offset);
+
+    const [totalRow] = action
+      ? await db
+          .select({ count: sql<number>`count(*)` })
+          .from(auditLogs)
+          .where(sql`action LIKE ${`%${action}%`}`)
+      : await db
+          .select({ count: sql<number>`count(*)` })
+          .from(auditLogs);
+    res.json({ logs: rows, total: Number(totalRow?.count ?? 0) });
+  })
+);
+
+// ── All rentals list for admin/ops management ─────────────────────────────
+router.get(
+  "/rentals",
+  authenticate,
+  requirePermission("rental.read.any"),
+  asyncHandler(async (req, res) => {
+    const status = req.query.status as string | undefined;
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Number(req.query.offset) || 0;
+
+    let rows;
+    if (status) {
+      rows = await db
+        .select()
+        .from(rentals)
+        .where(eq(rentals.status, status as any))
+        .orderBy(desc(rentals.createdAt))
+        .limit(limit)
+        .offset(offset);
+    } else {
+      rows = await db
+        .select()
+        .from(rentals)
+        .orderBy(desc(rentals.createdAt))
+        .limit(limit)
+        .offset(offset);
+    }
+
+    const [total] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(rentals);
+    res.json({ rentals: rows, total: Number(total?.count ?? 0) });
   })
 );
 

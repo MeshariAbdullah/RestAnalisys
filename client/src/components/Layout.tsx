@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -19,8 +20,13 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  User as UserIcon,
+  ScrollText,
+  Package,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
+import { notificationsApi } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
 
 interface NavItem {
@@ -54,8 +60,10 @@ const NAV: NavItem[] = [
   { href: "/admin/approvals", label: "Asset Approvals", icon: ClipboardCheck, roles: ["admin", "super_admin"] },
   { href: "/admin/users", label: "Users", icon: UsersIcon, roles: ["admin", "super_admin"] },
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
+  { href: "/admin/rentals", label: "Rental Management", icon: Package, roles: ["admin", "super_admin", "operations"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit", label: "Audit Logs", icon: ScrollText, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
@@ -80,6 +88,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     clearSession();
     window.location.href = "/";
   }
+
+  const [, navigate] = useLocation();
 
   return (
     <div className="flex h-screen bg-neutral-50 text-neutral-900 overflow-hidden">
@@ -162,7 +172,99 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="flex-1 overflow-auto">
+        <TopBar user={user} />
+        {children}
+      </main>
+    </div>
+  );
+}
+
+function TopBar({ user }: { user: User | null }) {
+  const [showNotifs, setShowNotifs] = useState(false);
+
+  const { data: unread } = useQuery({
+    queryKey: ["notif-count"],
+    queryFn: () => notificationsApi.unreadCount(),
+    refetchInterval: 30_000,
+    enabled: !!user,
+  });
+
+  const { data: notifList } = useQuery({
+    queryKey: ["notif-list"],
+    queryFn: () => notificationsApi.list(),
+    enabled: showNotifs && !!user,
+  });
+
+  const qc = useQueryClient();
+
+  async function markAllRead() {
+    await notificationsApi.markAllRead();
+    qc.invalidateQueries({ queryKey: ["notif-count"] });
+    qc.invalidateQueries({ queryKey: ["notif-list"] });
+  }
+
+  const count = unread?.count ?? 0;
+
+  return (
+    <div className="flex items-center justify-end gap-3 px-6 py-3 border-b bg-white">
+      <Link href="/profile">
+        <a className="flex items-center gap-2 text-sm text-neutral-600 hover:text-neutral-900 transition-colors">
+          <UserIcon className="w-4 h-4" />
+          Profile
+        </a>
+      </Link>
+
+      <div className="relative">
+        <button
+          onClick={() => setShowNotifs(!showNotifs)}
+          className="relative p-2 rounded-lg hover:bg-neutral-100 transition-colors"
+        >
+          <Bell className="w-5 h-5 text-neutral-600" />
+          {count > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+              {count > 9 ? "9+" : count}
+            </span>
+          )}
+        </button>
+
+        {showNotifs && (
+          <div className="absolute right-0 top-full mt-2 w-80 bg-white border rounded-xl shadow-lg z-50 max-h-96 overflow-y-auto">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <p className="font-semibold text-sm">Notifications</p>
+              {count > 0 && (
+                <button
+                  onClick={markAllRead}
+                  className="text-xs text-amber-600 hover:underline"
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
+            {(notifList ?? []).length === 0 ? (
+              <div className="p-6 text-center text-sm text-neutral-500">
+                No notifications
+              </div>
+            ) : (
+              (notifList ?? []).map((n) => (
+                <div
+                  key={n.id}
+                  className={cn(
+                    "px-4 py-3 border-b last:border-0 text-sm",
+                    !n.read && "bg-amber-50"
+                  )}
+                >
+                  <p className="font-medium">{n.title}</p>
+                  <p className="text-xs text-neutral-500 mt-0.5">{n.body}</p>
+                  <p className="text-[10px] text-neutral-400 mt-1">
+                    {new Date(n.createdAt).toLocaleString()}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

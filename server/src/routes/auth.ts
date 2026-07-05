@@ -185,6 +185,61 @@ router.get(
       trustScore: user.trustScore,
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
+      createdAt: user.createdAt,
+    });
+  })
+);
+
+router.patch(
+  "/profile",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const { fullName, phoneE164, currentPassword, newPassword } = req.body as {
+      fullName?: string;
+      phoneE164?: string;
+      currentPassword?: string;
+      newPassword?: string;
+    };
+
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (fullName) updates.fullName = fullName;
+    if (phoneE164) updates.phoneE164 = phoneE164;
+
+    if (currentPassword && newPassword) {
+      const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!valid) throw new UnauthorizedError("Current password is incorrect");
+      updates.passwordHash = await bcrypt.hash(newPassword, 10);
+    }
+
+    const [updated] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning();
+
+    await recordAudit({
+      req,
+      action: "auth.profile_update",
+      entityType: "user",
+      entityId: userId,
+      after: { fullName: updated.fullName, phoneE164: updated.phoneE164 },
+    });
+
+    return res.json({
+      id: updated.id,
+      email: updated.email,
+      fullName: updated.fullName,
+      role: updated.role,
+      phoneE164: updated.phoneE164,
+      nationalId: updated.nationalId,
+      nafathVerified: updated.nafathVerified,
+      kycStatus: updated.kycStatus,
+      trustScore: updated.trustScore,
+      riskCategory: updated.riskCategory,
     });
   })
 );
