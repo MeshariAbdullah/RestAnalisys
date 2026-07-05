@@ -4,6 +4,7 @@
 
 import { Router } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 import { db } from "../db/index.js";
 import {
   users,
@@ -20,6 +21,22 @@ import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+
+const USER_SAFE_FIELDS = {
+  id: users.id,
+  email: users.email,
+  fullName: users.fullName,
+  role: users.role,
+  phoneE164: users.phoneE164,
+  nafathVerified: users.nafathVerified,
+  kycStatus: users.kycStatus,
+  trustScore: users.trustScore,
+  riskCategory: users.riskCategory,
+  isBlocked: users.isBlocked,
+  blockedReason: users.blockedReason,
+  createdAt: users.createdAt,
+  updatedAt: users.updatedAt,
+};
 
 const router = Router();
 
@@ -134,7 +151,7 @@ router.get(
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
+    const query = db.select(USER_SAFE_FIELDS).from(users);
     const rows = role
       ? await query.where(eq(users.role, role as any)).limit(200)
       : await query.limit(200);
@@ -152,22 +169,22 @@ router.post(
     const { reason, block } = req.body as { reason?: string; block: boolean };
     const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
     if (!user) throw new NotFoundError("User");
-    const [updated] = await db
+    await db
       .update(users)
       .set({
         isBlocked: block,
         blockedReason: block ? reason ?? "blocked by admin" : null,
         updatedAt: new Date(),
       })
-      .where(eq(users.id, id))
-      .returning();
+      .where(eq(users.id, id));
+    const [updated] = await db.select(USER_SAFE_FIELDS).from(users).where(eq(users.id, id)).limit(1);
     await recordAudit({
       req,
       action: block ? "user.block" : "user.unblock",
       entityType: "user",
       entityId: id,
-      before: user,
-      after: updated,
+      before: { id: user.id, isBlocked: user.isBlocked },
+      after: { id: updated.id, isBlocked: updated.isBlocked },
     });
     res.json(updated);
   })
@@ -179,13 +196,18 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
+    const { email, fullName, role, password } = req.body as {
       email: string;
       fullName: string;
       role: "admin" | "operations" | "inspector";
-      passwordHash: string;
+      password: string;
     };
-    const [user] = await db
+    if (!password || password.length < 8) {
+      res.status(400).json({ error: "Password must be at least 8 characters" });
+      return;
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    const [created] = await db
       .insert(users)
       .values({
         email,
@@ -196,6 +218,7 @@ router.post(
         kycStatus: "verified",
       })
       .returning();
+    const [user] = await db.select(USER_SAFE_FIELDS).from(users).where(eq(users.id, created.id)).limit(1);
     await recordAudit({
       req,
       action: "user.create_staff",
@@ -284,10 +307,15 @@ router.get(
         .offset(offset);
     }
 
-    const [total] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(rentals);
-    res.json({ rentals: rows, total: Number(total?.count ?? 0) });
+    const [totalRow] = status
+      ? await db
+          .select({ count: sql<number>`count(*)` })
+          .from(rentals)
+          .where(eq(rentals.status, status as any))
+      : await db
+          .select({ count: sql<number>`count(*)` })
+          .from(rentals);
+    res.json({ rentals: rows, total: Number(totalRow?.count ?? 0) });
   })
 );
 

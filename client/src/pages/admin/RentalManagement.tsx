@@ -60,6 +60,7 @@ export default function RentalManagement() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(0);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-rentals", statusFilter, page],
@@ -77,6 +78,7 @@ export default function RentalManagement() {
 
   async function performAction(rental: Rental, action: string) {
     setActionLoading(rental.id);
+    setActionError(null);
     try {
       switch (action) {
         case "fulfill":
@@ -93,7 +95,8 @@ export default function RentalManagement() {
           break;
       }
       qc.invalidateQueries({ queryKey: ["admin-rentals"] });
-    } catch {
+    } catch (err) {
+      setActionError(`Action failed on ${rental.reference}: ${(err as Error).message}`);
     } finally {
       setActionLoading(null);
     }
@@ -105,6 +108,12 @@ export default function RentalManagement() {
       <p className="text-neutral-500 mb-6">
         Manage all platform rentals ({total} total)
       </p>
+
+      {actionError && (
+        <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
+          {actionError}
+        </div>
+      )}
 
       <div className="flex gap-3 mb-6">
         <Select

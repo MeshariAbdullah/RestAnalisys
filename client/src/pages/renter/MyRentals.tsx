@@ -7,27 +7,23 @@ import { Badge } from "@/components/ui/badge";
 import { rentalsApi, formatSar, type Rental } from "@/lib/api";
 
 const STATUS_META: Record<string, { color: string; icon: typeof Clock }> = {
-  draft: { color: "bg-neutral-200 text-neutral-700", icon: Clock },
+  pending_risk_review: { color: "bg-amber-100 text-amber-800", icon: Clock },
+  pending_legal_signing: { color: "bg-amber-100 text-amber-800", icon: Clock },
   pending_payment: { color: "bg-amber-100 text-amber-800", icon: Clock },
   confirmed: { color: "bg-blue-100 text-blue-700", icon: CheckCircle },
-  in_fulfillment: { color: "bg-blue-100 text-blue-700", icon: Package },
   out_for_delivery: { color: "bg-blue-100 text-blue-700", icon: Package },
-  delivered: { color: "bg-green-100 text-green-700", icon: CheckCircle },
-  in_use: { color: "bg-green-100 text-green-700", icon: CheckCircle },
-  awaiting_return: { color: "bg-amber-100 text-amber-800", icon: Clock },
-  returned: { color: "bg-green-100 text-green-700", icon: CheckCircle },
-  inspection_post_return: {
-    color: "bg-amber-100 text-amber-800",
-    icon: Clock,
-  },
-  closed_clean: { color: "bg-green-100 text-green-700", icon: CheckCircle },
+  active: { color: "bg-green-100 text-green-700", icon: CheckCircle },
+  return_in_transit: { color: "bg-blue-100 text-blue-700", icon: Package },
+  under_inspection: { color: "bg-amber-100 text-amber-800", icon: Clock },
+  closed: { color: "bg-green-100 text-green-700", icon: CheckCircle },
   closed_with_penalty: { color: "bg-red-100 text-red-700", icon: AlertCircle },
-  disputed: { color: "bg-red-100 text-red-700", icon: AlertCircle },
+  in_dispute: { color: "bg-red-100 text-red-700", icon: AlertCircle },
+  enforcement: { color: "bg-red-100 text-red-700", icon: AlertCircle },
   cancelled: { color: "bg-neutral-200 text-neutral-600", icon: AlertCircle },
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const meta = STATUS_META[status] ?? STATUS_META.draft;
+  const meta = STATUS_META[status] ?? { color: "bg-neutral-200 text-neutral-700", icon: Clock };
   const Icon = meta.icon;
   return (
     <Badge className={`${meta.color} hover:${meta.color} border-0`}>
@@ -64,12 +60,11 @@ export default function MyRentals() {
           <CardContent className="p-12 text-center text-neutral-500">
             <Package className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
             <p>You haven't rented anything yet.</p>
-            <a
-              href="/browse"
-              className="text-amber-600 hover:underline text-sm mt-2 inline-block"
-            >
-              Browse the collection →
-            </a>
+            <Link href="/browse">
+              <a className="text-amber-600 hover:underline text-sm mt-2 inline-block">
+                Browse the collection →
+              </a>
+            </Link>
           </CardContent>
         </Card>
       ) : (

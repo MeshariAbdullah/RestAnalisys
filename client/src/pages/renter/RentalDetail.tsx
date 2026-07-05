@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
@@ -38,11 +38,17 @@ export default function RentalDetail({ id }: { id: number }) {
     queryFn: () => rentalsApi.get(id),
   });
   const qc = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
 
   async function handleCancel() {
     if (!confirm("Cancel this rental?")) return;
-    await rentalsApi.cancel(id, "Cancelled by renter");
-    qc.invalidateQueries({ queryKey: ["rental", id] });
+    setError(null);
+    try {
+      await rentalsApi.cancel(id, "Cancelled by renter");
+      qc.invalidateQueries({ queryKey: ["rental", id] });
+    } catch (err) {
+      setError((err as Error).message);
+    }
   }
 
   if (isLoading || !data) return <div className="p-8">Loading...</div>;
@@ -56,6 +62,12 @@ export default function RentalDetail({ id }: { id: number }) {
           <ArrowLeft className="w-4 h-4" /> Back to my rentals
         </a>
       </Link>
+
+      {error && (
+        <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
+          {error}
+        </div>
+      )}
 
       <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
         <div>

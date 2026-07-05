@@ -112,6 +112,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="ml-auto p-1 rounded hover:bg-neutral-800 transition-colors"
+            aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
           >
             {sidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           </button>
@@ -219,6 +220,8 @@ function TopBar({ user }: { user: User | null }) {
         <button
           onClick={() => setShowNotifs(!showNotifs)}
           className="relative p-2 rounded-lg hover:bg-neutral-100 transition-colors"
+          aria-label={`Notifications${count > 0 ? ` (${count} unread)` : ""}`}
+          aria-expanded={showNotifs}
         >
           <Bell className="w-5 h-5 text-neutral-600" />
           {count > 0 && (
@@ -246,21 +249,29 @@ function TopBar({ user }: { user: User | null }) {
                 No notifications
               </div>
             ) : (
-              (notifList ?? []).map((n) => (
-                <div
-                  key={n.id}
-                  className={cn(
-                    "px-4 py-3 border-b last:border-0 text-sm",
-                    !n.read && "bg-amber-50"
-                  )}
-                >
-                  <p className="font-medium">{n.title}</p>
-                  <p className="text-xs text-neutral-500 mt-0.5">{n.body}</p>
-                  <p className="text-[10px] text-neutral-400 mt-1">
-                    {new Date(n.createdAt).toLocaleString()}
-                  </p>
-                </div>
-              ))
+              (notifList ?? []).map((n) => {
+                const content = (
+                  <div
+                    key={n.id}
+                    className={cn(
+                      "px-4 py-3 border-b last:border-0 text-sm",
+                      !n.read && "bg-amber-50",
+                      n.linkUrl && "cursor-pointer hover:bg-neutral-50"
+                    )}
+                  >
+                    <p className="font-medium">{n.title}</p>
+                    <p className="text-xs text-neutral-500 mt-0.5">{n.body}</p>
+                    <p className="text-[10px] text-neutral-400 mt-1">
+                      {new Date(n.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                );
+                return n.linkUrl ? (
+                  <Link key={n.id} href={n.linkUrl}>
+                    <a>{content}</a>
+                  </Link>
+                ) : content;
+              })
             )}
           </div>
         )}

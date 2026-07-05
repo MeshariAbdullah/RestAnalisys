@@ -23,6 +23,7 @@ function riskColor(c: string): string {
 export default function UsersPage() {
   const qc = useQueryClient();
   const [role, setRole] = useState<string>("all");
+  const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users", role],
@@ -35,8 +36,13 @@ export default function UsersPage() {
       ? prompt("Reason for blocking?") ?? undefined
       : undefined;
     if (block && !reason) return;
-    await adminApi.blockUser(u.id, block, reason);
-    await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    setError(null);
+    try {
+      await adminApi.blockUser(u.id, block, reason);
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (err) {
+      setError((err as Error).message);
+    }
   }
 
   return (
@@ -45,6 +51,12 @@ export default function UsersPage() {
       <p className="text-neutral-500 mb-6">
         All accounts across the platform.
       </p>
+
+      {error && (
+        <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
+          {error}
+        </div>
+      )}
 
       <div className="flex items-center gap-3 mb-5">
         <Select value={role} onValueChange={setRole}>
