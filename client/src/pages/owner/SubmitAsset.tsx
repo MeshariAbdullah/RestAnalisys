@@ -17,7 +17,7 @@ import { assetsApi } from "@/lib/api";
 
 export default function SubmitAsset() {
   const [, navigate] = useLocation();
-  const [category, setCategory] = useState("bag");
+  const [category, setCategory] = useState("handbag");
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [title, setTitle] = useState("");
@@ -68,7 +68,7 @@ export default function SubmitAsset() {
     <div className="p-8 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-2 text-sm text-neutral-500">
         <Diamond className="w-4 h-4" />
-        Submit asset · step 1 of 2
+        Submit asset
       </div>
       <h1 className="text-3xl font-bold mb-2">Submit a new asset</h1>
       <p className="text-neutral-500 mb-8">
@@ -87,7 +87,7 @@ export default function SubmitAsset() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="bag">Handbag</SelectItem>
+                    <SelectItem value="handbag">Handbag</SelectItem>
                     <SelectItem value="watch">Watch</SelectItem>
                     <SelectItem value="dress">Dress / couture</SelectItem>
                     <SelectItem value="jewelry">Jewelry</SelectItem>
