@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users as UsersIcon, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Users as UsersIcon, ShieldAlert, ShieldCheck, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,7 @@ function riskColor(c: string): string {
 export default function UsersPage() {
   const qc = useQueryClient();
   const [role, setRole] = useState<string>("all");
+  const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users", role],
@@ -35,8 +36,13 @@ export default function UsersPage() {
       ? prompt("Reason for blocking?") ?? undefined
       : undefined;
     if (block && !reason) return;
-    await adminApi.blockUser(u.id, block, reason);
-    await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    try {
+      setError(null);
+      await adminApi.blockUser(u.id, block, reason);
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (e: any) {
+      setError(e.message ?? "Failed to update user");
+    }
   }
 
   return (
@@ -61,6 +67,12 @@ export default function UsersPage() {
           </SelectContent>
         </Select>
       </div>
+
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 flex items-center gap-2 text-sm">
+          <AlertCircle className="w-4 h-4" /> {error}
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>

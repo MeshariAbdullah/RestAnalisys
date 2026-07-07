@@ -8,7 +8,7 @@ import { db } from "../db/index.js";
 import { disputes, rentals } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
-import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
+import { DisputeOpenSchema, DisputeResolveSchema, DisputeAssignSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
@@ -65,6 +65,20 @@ router.post(
 );
 
 router.get(
+  "/mine",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const rows = await db
+      .select()
+      .from(disputes)
+      .where(eq(disputes.openedByUserId, req.user!.userId))
+      .orderBy(desc(disputes.openedAt))
+      .limit(100);
+    res.json(rows);
+  })
+);
+
+router.get(
   "/",
   authenticate,
   requirePermission("dispute.assign"),
@@ -78,13 +92,26 @@ router.get(
   })
 );
 
+router.get(
+  "/:id",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const id = Number(req.params.id);
+    const [dispute] = await db.select().from(disputes).where(eq(disputes.id, id)).limit(1);
+    if (!dispute) throw new NotFoundError("Dispute");
+    const isAdmin = ["admin", "super_admin"].includes(req.user!.role);
+    if (!isAdmin && dispute.openedByUserId !== req.user!.userId) throw new ForbiddenError();
+    res.json(dispute);
+  })
+);
+
 router.post(
   "/:id/assign",
   authenticate,
   requirePermission("dispute.assign"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { assigneeUserId } = req.body as { assigneeUserId: number };
+    const { assigneeUserId } = DisputeAssignSchema.parse(req.body);
     const [updated] = await db
       .update(disputes)
       .set({

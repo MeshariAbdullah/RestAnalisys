@@ -15,14 +15,20 @@ function severityColor(s: string): string {
 
 export default function AlertsPage() {
   const qc = useQueryClient();
+  const [error, setError] = React.useState<string | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ["alerts"],
     queryFn: () => operationsApi.alerts(),
   });
 
   async function resolve(id: number) {
-    await operationsApi.resolveAlert(id);
-    await qc.invalidateQueries({ queryKey: ["alerts"] });
+    try {
+      setError(null);
+      await operationsApi.resolveAlert(id);
+      await qc.invalidateQueries({ queryKey: ["alerts"] });
+    } catch (e: any) {
+      setError(e.message ?? "Failed to resolve alert");
+    }
   }
 
   return (
@@ -31,6 +37,12 @@ export default function AlertsPage() {
       <p className="text-neutral-500 mb-8">
         Risk events detected by the platform that need human attention.
       </p>
+
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 flex items-center gap-2 text-sm">
+          <AlertTriangle className="w-4 h-4" /> {error}
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>

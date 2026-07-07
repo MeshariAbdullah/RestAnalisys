@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
-import { LoginSchema, RegisterSchema, NafathVerifySchema } from "../utils/schemas.js";
+import { LoginSchema, RegisterSchema, NafathVerifySchema, ProfileUpdateSchema } from "../utils/schemas.js";
 import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
@@ -156,6 +156,42 @@ router.post(
     return res.json({
       transactionId: result.transactionId,
       status: result.status,
+    });
+  })
+);
+
+router.patch(
+  "/me",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const input = ProfileUpdateSchema.parse(req.body);
+    const updates: Record<string, any> = { updatedAt: new Date() };
+    if (input.fullName) updates.fullName = input.fullName;
+    if (input.phone) updates.phoneE164 = input.phone;
+
+    const [updated] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, req.user!.userId))
+      .returning();
+
+    await recordAudit({
+      req,
+      action: "auth.profile.update",
+      entityType: "user",
+      entityId: req.user!.userId,
+      after: input,
+    });
+
+    return res.json({
+      id: updated.id,
+      email: updated.email,
+      fullName: updated.fullName,
+      role: updated.role,
+      phoneE164: updated.phoneE164,
+      nafathVerified: updated.nafathVerified,
+      kycStatus: updated.kycStatus,
+      trustScore: updated.trustScore,
     });
   })
 );

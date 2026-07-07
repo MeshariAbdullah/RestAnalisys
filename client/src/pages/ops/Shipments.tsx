@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertCircle } from "lucide-react";
 import { Truck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +21,7 @@ const STATUSES = [
   "in_transit",
   "delivered",
   "failed",
-  "returned_to_warehouse",
+  "returned",
 ] as const;
 
 export default function Shipments() {
@@ -28,6 +29,7 @@ export default function Shipments() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editStatus, setEditStatus] = useState<string>("in_transit");
   const [editTracking, setEditTracking] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["shipments"],
@@ -35,13 +37,18 @@ export default function Shipments() {
   });
 
   async function handleUpdate(id: number) {
-    await operationsApi.updateShipment(id, {
-      status: editStatus,
-      trackingNumber: editTracking || undefined,
-    });
-    setEditingId(null);
-    setEditTracking("");
-    await qc.invalidateQueries({ queryKey: ["shipments"] });
+    try {
+      setError(null);
+      await operationsApi.updateShipment(id, {
+        status: editStatus,
+        trackingNumber: editTracking || undefined,
+      });
+      setEditingId(null);
+      setEditTracking("");
+      await qc.invalidateQueries({ queryKey: ["shipments"] });
+    } catch (e: any) {
+      setError(e.message ?? "Failed to update shipment");
+    }
   }
 
   return (
@@ -50,6 +57,12 @@ export default function Shipments() {
       <p className="text-neutral-500 mb-8">
         Outbound deliveries to renters and returns to warehouse.
       </p>
+
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 flex items-center gap-2 text-sm">
+          <AlertCircle className="w-4 h-4" /> {error}
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>

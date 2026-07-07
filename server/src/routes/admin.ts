@@ -3,6 +3,7 @@
  */
 
 import { Router } from "express";
+import bcrypt from "bcryptjs";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
@@ -13,12 +14,19 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
+import { BlockUserSchema, CreateStaffSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+
+function stripSensitive(user: any) {
+  const { passwordHash, ...safe } = user;
+  return safe;
+}
 
 const router = Router();
 
@@ -137,7 +145,7 @@ router.get(
     const rows = role
       ? await query.where(eq(users.role, role as any)).limit(200)
       : await query.limit(200);
-    res.json(rows);
+    res.json(rows.map(stripSensitive));
   })
 );
 
@@ -148,7 +156,7 @@ router.post(
   requirePermission("user.block"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { reason, block } = req.body as { reason?: string; block: boolean };
+    const { reason, block } = BlockUserSchema.parse(req.body);
     const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
     if (!user) throw new NotFoundError("User");
     const [updated] = await db
@@ -168,7 +176,7 @@ router.post(
       before: user,
       after: updated,
     });
-    res.json(updated);
+    res.json(stripSensitive(updated));
   })
 );
 
@@ -178,19 +186,15 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
-      email: string;
-      fullName: string;
-      role: "admin" | "operations" | "inspector";
-      passwordHash: string;
-    };
+    const input = CreateStaffSchema.parse(req.body);
+    const hashedPw = await bcrypt.hash(input.password, 10);
     const [user] = await db
       .insert(users)
       .values({
-        email,
-        fullName,
-        role,
-        passwordHash,
+        email: input.email,
+        fullName: input.fullName,
+        role: input.role,
+        passwordHash: hashedPw,
         nafathVerified: true,
         kycStatus: "verified",
       })
@@ -200,9 +204,9 @@ router.post(
       action: "user.create_staff",
       entityType: "user",
       entityId: user.id,
-      after: { email, role },
+      after: { email: input.email, role: input.role },
     });
-    res.status(201).json(user);
+    res.status(201).json(stripSensitive(user));
   })
 );
 
@@ -217,6 +221,28 @@ router.get(
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
+    res.json(rows);
+  })
+);
+
+// ── Audit logs ────────────────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const entityType = req.query.entityType as string | undefined;
+    const entityId = req.query.entityId ? Number(req.query.entityId) : undefined;
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+
+    let query = db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(limit).$dynamic();
+    if (entityType && entityId) {
+      query = query.where(and(eq(auditLogs.entityType, entityType), eq(auditLogs.entityId, entityId)));
+    } else if (entityType) {
+      query = query.where(eq(auditLogs.entityType, entityType));
+    }
+
+    const rows = await query;
     res.json(rows);
   })
 );

@@ -47,6 +47,7 @@ const NAV: NavItem[] = [
   { href: "/ops", label: "Ops Dashboard", icon: LayoutDashboard, roles: ["operations"] },
   { href: "/ops/shipments", label: "Shipments", icon: Truck, roles: ["operations"] },
   { href: "/ops/inventory", label: "Inventory", icon: PackageSearch, roles: ["operations"] },
+  { href: "/ops/rentals", label: "Rental Lifecycle", icon: FileText, roles: ["operations"] },
   { href: "/ops/alerts", label: "Alerts", icon: AlertTriangle, roles: ["operations"] },
 
   // Admin

@@ -254,6 +254,11 @@ export const authApi = {
       body: JSON.stringify({ email, password, fullName, role }),
     }),
   me: () => request<User>("/auth/me"),
+  updateProfile: (data: { fullName?: string; phone?: string }) =>
+    request<User>("/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
   nafathVerify: (nationalId: string) =>
     request<{ transactionId: string; status: string }>("/auth/nafath/initiate", {
       method: "POST",
@@ -481,6 +486,8 @@ export const paymentsApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const disputesApi = {
+  mine: () => request<Dispute[]>("/disputes/mine"),
+  get: (id: number) => request<Dispute>(`/disputes/${id}`),
   open: (data: {
     rentalId: number;
     category: "damage" | "loss" | "fraud" | "service" | "billing";
