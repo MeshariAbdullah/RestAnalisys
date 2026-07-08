@@ -19,6 +19,7 @@ import {
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -110,6 +111,15 @@ router.post(
           updatedAt: new Date(),
         })
         .where(eq(rentals.id, rental.id));
+
+      await notify({
+        userId: rental.ownerId,
+        type: "rental_paid",
+        title: "Rental payment received",
+        body: `Payment for rental ${rental.reference} has been confirmed. Fulfillment will begin shortly.`,
+        entityType: "rental",
+        entityId: rental.id,
+      });
     }
 
     await recordAudit({
@@ -162,6 +172,15 @@ router.post(
       entityType: "payment",
       entityId: input.paymentId,
       after: { updated, result },
+    });
+
+    await notify({
+      userId: updated.userId,
+      type: "rental_paid",
+      title: "Payment refunded",
+      body: `A refund of ${(input.amountHalalas ?? payment.amountHalalas) / 100} SAR has been issued.`,
+      entityType: "payment",
+      entityId: updated.id,
     });
 
     res.json(updated);
@@ -219,6 +238,15 @@ router.post(
       entityType: "payout",
       entityId: payout.id,
       after: payout,
+    });
+
+    await notify({
+      userId: rental.ownerId,
+      type: "payout_released",
+      title: "Payout released",
+      body: `A payout of ${payoutCalc.netHalalas / 100} SAR has been released for rental ${rental.reference}.`,
+      entityType: "payout",
+      entityId: payout.id,
     });
 
     res.json(payout);

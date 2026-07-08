@@ -27,6 +27,7 @@ import {
 import { requestNafathSignature } from "../services/nafathService.js";
 import { issueSanad, signSanad, dischargeSanad, executeSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -160,6 +161,15 @@ router.post(
       after: { signed, sanad },
     });
 
+    await notify({
+      userId: userId,
+      type: "sanad_issued",
+      title: "Legal commitment signed",
+      body: `Your legal commitment for rental ${rental!.reference} has been signed and the Sanad has been issued.`,
+      entityType: "sanad_record",
+      entityId: sanad.id,
+    });
+
     res.json({ commitment: signed, sanad });
   })
 );
@@ -265,6 +275,15 @@ router.post(
       entityType: "sanad_record",
       entityId: sanadId,
       after: { updated, reason },
+    });
+
+    await notify({
+      userId: sanad.renterId,
+      type: "sanad_executed",
+      title: "Sanad under execution",
+      body: `Your Sanad has been submitted for legal execution. Case number: ${result.executionCaseNumber ?? "pending"}.`,
+      entityType: "sanad_record",
+      entityId: sanadId,
     });
 
     res.json(updated);

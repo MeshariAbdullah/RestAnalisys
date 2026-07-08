@@ -1,16 +1,23 @@
 import React, { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Diamond, Watch, Shirt, Gem } from "lucide-react";
+import { Search, Diamond, Watch, Shirt, Gem, SortAsc, SortDesc } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { assetsApi, formatSar, type Asset } from "@/lib/api";
 
 const CATEGORIES = [
   { id: undefined, label: "All", icon: Diamond },
-  { id: "bag", label: "Bags", icon: Diamond },
+  { id: "handbag", label: "Bags", icon: Diamond },
   { id: "watch", label: "Watches", icon: Watch },
   { id: "dress", label: "Dresses", icon: Shirt },
   { id: "jewelry", label: "Jewelry", icon: Gem },
@@ -19,19 +26,29 @@ const CATEGORIES = [
 export default function Browse() {
   const [category, setCategory] = useState<string | undefined>(undefined);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [sort, setSort] = useState("newest");
+  const [searchTimer, setSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleSearch(val: string) {
+    setSearch(val);
+    if (searchTimer) clearTimeout(searchTimer);
+    setSearchTimer(
+      setTimeout(() => setDebouncedSearch(val), 300)
+    );
+  }
 
   const { data, isLoading } = useQuery({
-    queryKey: ["listings", category],
-    queryFn: () => assetsApi.listings({ category }),
+    queryKey: ["listings", category, debouncedSearch, sort],
+    queryFn: () =>
+      assetsApi.listings({
+        category,
+        search: debouncedSearch || undefined,
+        sort,
+      }),
   });
 
-  const filtered = (data?.items ?? []).filter((a: Asset) =>
-    search
-      ? `${a.brand} ${a.title} ${a.model ?? ""}`
-          .toLowerCase()
-          .includes(search.toLowerCase())
-      : true
-  );
+  const items = data?.items ?? [];
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -48,26 +65,37 @@ export default function Browse() {
           <Input
             placeholder="Search brand, model, title…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearch(e.target.value)}
             className="pl-9"
           />
         </div>
-        <div className="flex gap-2 flex-wrap">
-          {CATEGORIES.map((c) => (
-            <Button
-              key={c.label}
-              variant={category === c.id ? "default" : "outline"}
-              onClick={() => setCategory(c.id)}
-              className={
-                category === c.id ? "bg-neutral-900 text-white" : ""
-              }
-              size="sm"
-            >
-              <c.icon className="w-4 h-4 mr-1.5" />
-              {c.label}
-            </Button>
-          ))}
-        </div>
+        <Select value={sort} onValueChange={setSort}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">Newest</SelectItem>
+            <SelectItem value="price_asc">Price: Low to High</SelectItem>
+            <SelectItem value="price_desc">Price: High to Low</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex gap-2 flex-wrap mb-8">
+        {CATEGORIES.map((c) => (
+          <Button
+            key={c.label}
+            variant={category === c.id ? "default" : "outline"}
+            onClick={() => setCategory(c.id)}
+            className={
+              category === c.id ? "bg-neutral-900 text-white" : ""
+            }
+            size="sm"
+          >
+            <c.icon className="w-4 h-4 mr-1.5" />
+            {c.label}
+          </Button>
+        ))}
       </div>
 
       {isLoading ? (
@@ -79,13 +107,13 @@ export default function Browse() {
             />
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : items.length === 0 ? (
         <div className="text-center py-20 text-neutral-500">
           No assets match your filters.
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((asset) => (
+          {items.map((asset) => (
             <Link key={asset.id} href={`/browse/${asset.id}`}>
               <a>
                 <Card className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer h-full">
@@ -93,8 +121,8 @@ export default function Browse() {
                     {asset.studioImagesJson?.[0] || asset.submissionImagesJson?.[0] ? (
                       <img
                         src={
-                          asset.studioImagesJson[0] ||
-                          asset.submissionImagesJson[0]
+                          (asset.studioImagesJson as string[])?.[0] ||
+                          (asset.submissionImagesJson as string[])?.[0]
                         }
                         alt={asset.title}
                         className="w-full h-full object-cover"

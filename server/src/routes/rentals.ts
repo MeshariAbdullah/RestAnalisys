@@ -20,7 +20,7 @@
  */
 
 import { Router } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   assets,
@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -89,6 +90,14 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     .where(eq(rentals.renterId, userId));
   const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
 
+  const lateReturnStats = await db
+    .select({
+      count: sql<number>`count(*) filter (where ${rentals.returnedAt} > (${rentals.endDate}::date + interval '1 day'))`,
+    })
+    .from(rentals)
+    .where(and(eq(rentals.renterId, userId), sql`${rentals.returnedAt} is not null`));
+  const lateReturnCount = Number(lateReturnStats[0]?.count ?? 0);
+
   const accountAgeDays = Math.max(
     0,
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
@@ -99,7 +108,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: lateReturnCount,
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +289,15 @@ router.post(
       after: { rental, decision },
     });
 
+    await notify({
+      userId: asset.ownerId,
+      type: "rental_created",
+      title: "New rental request",
+      body: `Your asset "${asset.title}" has a new rental booking (${rental.reference}).`,
+      entityType: "rental",
+      entityId: rental.id,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -401,6 +419,15 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: rental.renterId,
+      type: "rental_delivered",
+      title: "Your rental is on its way",
+      body: `Rental ${rental.reference} is out for delivery. Track your shipment in My Rentals.`,
+      entityType: "rental",
+      entityId: id,
+    });
+
     res.json(updated);
   })
 );
@@ -441,6 +468,15 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: rental.renterId,
+      type: "rental_delivered",
+      title: "Rental delivered",
+      body: `Rental ${rental.reference} has been delivered. Enjoy your luxury item!`,
+      entityType: "rental",
+      entityId: id,
+    });
+
     res.json(updated);
   })
 );
@@ -475,6 +511,23 @@ router.post(
       entityType: "rental",
       entityId: id,
       after: updated,
+    });
+
+    await notify({
+      userId: rental.renterId,
+      type: "rental_returned",
+      title: "Return received",
+      body: `Your rental ${rental.reference} has been received and is under inspection.`,
+      entityType: "rental",
+      entityId: id,
+    });
+    await notify({
+      userId: rental.ownerId,
+      type: "rental_returned",
+      title: "Asset returned",
+      body: `The rented asset for ${rental.reference} has been returned. Inspection in progress.`,
+      entityType: "rental",
+      entityId: id,
     });
 
     res.json(updated);
@@ -516,6 +569,22 @@ router.post(
         entityId: id,
         after: updated,
       });
+      await notify({
+        userId: rental.renterId,
+        type: "rental_closed",
+        title: "Rental closed",
+        body: `Your rental ${rental.reference} has been closed successfully. Thank you!`,
+        entityType: "rental",
+        entityId: id,
+      });
+      await notify({
+        userId: rental.ownerId,
+        type: "rental_closed",
+        title: "Rental completed",
+        body: `Rental ${rental.reference} for your asset has completed. Payout will be processed.`,
+        entityType: "rental",
+        entityId: id,
+      });
       return res.json(updated);
     }
 
@@ -546,6 +615,22 @@ router.post(
         entityType: "rental",
         entityId: id,
         after: { updated, penaltyHalalas },
+      });
+      await notify({
+        userId: rental.renterId,
+        type: "rental_closed",
+        title: "Rental closed with penalty",
+        body: `Your rental ${rental.reference} has been closed with a penalty of ${(penaltyHalalas ?? 0) / 100} SAR.`,
+        entityType: "rental",
+        entityId: id,
+      });
+      await notify({
+        userId: rental.ownerId,
+        type: "rental_closed",
+        title: "Rental closed with penalty",
+        body: `Rental ${rental.reference} has been closed with a damage penalty applied.`,
+        entityType: "rental",
+        entityId: id,
       });
       return res.json(updated);
     }
@@ -580,6 +665,23 @@ router.post(
       entityType: "rental",
       entityId: id,
       after: { updated, outcome },
+    });
+
+    await notify({
+      userId: rental.renterId,
+      type: "rental_closed",
+      title: "Rental escalated to enforcement",
+      body: `Your rental ${rental.reference} has been escalated due to ${outcome.replace(/_/g, " ")}. Legal enforcement may follow.`,
+      entityType: "rental",
+      entityId: id,
+    });
+    await notify({
+      userId: rental.ownerId,
+      type: "rental_closed",
+      title: "Rental escalated",
+      body: `Rental ${rental.reference} has been escalated to enforcement (${outcome.replace(/_/g, " ")}). We are pursuing resolution.`,
+      entityType: "rental",
+      entityId: id,
     });
 
     res.json(updated);
@@ -628,7 +730,126 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: rental.ownerId,
+      type: "rental_cancelled",
+      title: "Rental cancelled",
+      body: `Rental ${rental.reference} for your asset has been cancelled.`,
+      entityType: "rental",
+      entityId: id,
+    });
+
     res.json(updated);
+  })
+);
+
+// ── Owner: stats for dashboard ────────────────────────────────────────────
+router.get(
+  "/owner-stats",
+  authenticate,
+  requirePermission("asset.read.own"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const ownerId = req.user!.userId;
+
+    const [assetCounts] = await db
+      .select({
+        total: sql<number>`count(*)`,
+        listed: sql<number>`count(*) filter (where status = 'listed')`,
+        rented: sql<number>`count(*) filter (where status = 'rented_out')`,
+      })
+      .from(assets)
+      .where(eq(assets.ownerId, ownerId));
+
+    const [rentalStats] = await db
+      .select({
+        totalRentals: sql<number>`count(*)`,
+        activeRentals: sql<number>`count(*) filter (where status in ('active','out_for_delivery','confirmed'))`,
+        totalEarned: sql<string>`coalesce(sum(rental_subtotal_halalas) filter (where status in ('closed','closed_with_penalty')), 0)`,
+      })
+      .from(rentals)
+      .where(eq(rentals.ownerId, ownerId));
+
+    const recentRentals = await db
+      .select({
+        id: rentals.id,
+        reference: rentals.reference,
+        status: rentals.status,
+        startDate: rentals.startDate,
+        endDate: rentals.endDate,
+        totalPayableHalalas: rentals.totalPayableHalalas,
+        assetTitle: assets.title,
+      })
+      .from(rentals)
+      .leftJoin(assets, eq(rentals.assetId, assets.id))
+      .where(eq(rentals.ownerId, ownerId))
+      .orderBy(desc(rentals.createdAt))
+      .limit(10);
+
+    res.json({
+      assets: {
+        total: Number(assetCounts?.total ?? 0),
+        listed: Number(assetCounts?.listed ?? 0),
+        rented: Number(assetCounts?.rented ?? 0),
+      },
+      rentals: {
+        total: Number(rentalStats?.totalRentals ?? 0),
+        active: Number(rentalStats?.activeRentals ?? 0),
+        totalEarnedHalalas: Number(rentalStats?.totalEarned ?? 0),
+      },
+      recentRentals,
+    });
+  })
+);
+
+// ── Renter: stats for dashboard ───────────────────────────────────────────
+router.get(
+  "/renter-stats",
+  authenticate,
+  requirePermission("rental.read.own"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const renterId = req.user!.userId;
+
+    const [stats] = await db
+      .select({
+        totalRentals: sql<number>`count(*)`,
+        activeRentals: sql<number>`count(*) filter (where status in ('active','out_for_delivery','confirmed'))`,
+        completedRentals: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
+        totalSpent: sql<string>`coalesce(sum(total_payable_halalas) filter (where status in ('closed','closed_with_penalty','active','confirmed')), 0)`,
+      })
+      .from(rentals)
+      .where(eq(rentals.renterId, renterId));
+
+    const activeRentals = await db
+      .select({
+        id: rentals.id,
+        reference: rentals.reference,
+        status: rentals.status,
+        startDate: rentals.startDate,
+        endDate: rentals.endDate,
+        totalPayableHalalas: rentals.totalPayableHalalas,
+        assetTitle: assets.title,
+        assetBrand: assets.brand,
+      })
+      .from(rentals)
+      .leftJoin(assets, eq(rentals.assetId, assets.id))
+      .where(
+        and(
+          eq(rentals.renterId, renterId),
+          inArray(rentals.status, ["active", "out_for_delivery", "confirmed", "pending_legal_signing", "pending_payment"])
+        )
+      )
+      .orderBy(desc(rentals.createdAt))
+      .limit(10);
+
+    res.json({
+      stats: {
+        total: Number(stats?.totalRentals ?? 0),
+        active: Number(stats?.activeRentals ?? 0),
+        completed: Number(stats?.completedRentals ?? 0),
+        totalSpentHalalas: Number(stats?.totalSpent ?? 0),
+      },
+      activeRentals,
+    });
   })
 );
 

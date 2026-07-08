@@ -1,15 +1,15 @@
 import React from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Diamond, Plus, TrendingUp, Package, Wallet } from "lucide-react";
+import { Diamond, Plus, TrendingUp, Package, Wallet, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { assetsApi, paymentsApi, formatSar, type Asset } from "@/lib/api";
+import { assetsApi, paymentsApi, dashboardApi, formatSar, type Asset } from "@/lib/api";
 
 function statusColor(s: string): string {
   if (s === "listed" || s === "rented_out") return "bg-green-100 text-green-700";
-  if (s.startsWith("pending")) return "bg-amber-100 text-amber-800";
+  if (s.startsWith("pending") || s === "inspection_reported") return "bg-amber-100 text-amber-800";
   if (s === "rejected" || s === "withdrawn") return "bg-red-100 text-red-700";
   return "bg-neutral-200 text-neutral-700";
 }
@@ -20,23 +20,13 @@ export default function OwnerDashboard() {
     queryFn: () => assetsApi.mine(),
   });
 
-  const payoutsQuery = useQuery({
-    queryKey: ["my-payouts"],
-    queryFn: () => paymentsApi.myPayouts(),
+  const statsQuery = useQuery({
+    queryKey: ["owner-stats"],
+    queryFn: () => dashboardApi.ownerStats(),
   });
 
   const assets = assetsQuery.data ?? [];
-  const totalValue = assets.reduce(
-    (sum, a) => sum + (a.evaluatedValueHalalas ?? 0),
-    0
-  );
-  const activeCount = assets.filter(
-    (a) => a.status === "listed" || a.status === "rented_out"
-  ).length;
-  const totalPayouts = (payoutsQuery.data ?? []).reduce(
-    (sum, p) => sum + Number(p.netHalalas ?? 0),
-    0
-  );
+  const stats = statsQuery.data;
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -55,48 +45,86 @@ export default function OwnerDashboard() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-2 text-neutral-500 text-sm">
               <Diamond className="w-4 h-4" />
-              Active assets
+              Listed assets
             </div>
-            <p className="text-3xl font-bold">{activeCount}</p>
+            <p className="text-3xl font-bold">{stats?.assets.listed ?? 0}</p>
             <p className="text-xs text-neutral-500 mt-1">
-              of {assets.length} total
+              of {stats?.assets.total ?? assets.length} total
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-2 text-neutral-500 text-sm">
-              <TrendingUp className="w-4 h-4" />
-              Portfolio value
+              <Activity className="w-4 h-4" />
+              Currently rented
             </div>
-            <p className="text-3xl font-bold">{formatSar(totalValue)}</p>
-            <p className="text-xs text-neutral-500 mt-1">Sum of evaluations</p>
+            <p className="text-3xl font-bold">{stats?.assets.rented ?? 0}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-2 text-neutral-500 text-sm">
-              <Wallet className="w-4 h-4" />
-              Lifetime payouts
+              <TrendingUp className="w-4 h-4" />
+              Active rentals
             </div>
-            <p className="text-3xl font-bold">{formatSar(totalPayouts)}</p>
+            <p className="text-3xl font-bold">{stats?.rentals.active ?? 0}</p>
+            <p className="text-xs text-neutral-500 mt-1">
+              {stats?.rentals.total ?? 0} lifetime
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-amber-500/10 to-neutral-50">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3 mb-2 text-neutral-500 text-sm">
+              <Wallet className="w-4 h-4" />
+              Total earned
+            </div>
+            <p className="text-3xl font-bold text-amber-600">
+              {formatSar(stats?.rentals.totalEarnedHalalas ?? 0)}
+            </p>
             <Link href="/owner/payouts">
               <a className="text-xs text-amber-600 hover:underline mt-1 inline-block">
-                View payout history →
+                View payout history
               </a>
             </Link>
           </CardContent>
         </Card>
       </div>
 
+      {/* Recent rental activity */}
+      {(stats?.recentRentals ?? []).length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-xl font-bold mb-4">Recent rental activity</h2>
+          <Card>
+            <CardContent className="p-0">
+              <div className="divide-y">
+                {(stats?.recentRentals ?? []).map((r) => (
+                  <div key={r.id} className="flex items-center justify-between px-5 py-3 hover:bg-neutral-50">
+                    <div>
+                      <p className="text-sm font-medium">{r.assetTitle}</p>
+                      <p className="text-xs text-neutral-500">{r.reference} &middot; {r.startDate} to {r.endDate}</p>
+                    </div>
+                    <div className="text-right">
+                      <Badge className={statusColor(r.status)}>{r.status.replace(/_/g, " ")}</Badge>
+                      <p className="text-xs text-neutral-500 mt-1">{formatSar(r.totalPayableHalalas)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <h2 className="text-xl font-bold mb-4">My assets</h2>
       {assetsQuery.isLoading ? (
-        <p className="text-neutral-500">Loading…</p>
+        <p className="text-neutral-500">Loading...</p>
       ) : assets.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">
@@ -104,7 +132,7 @@ export default function OwnerDashboard() {
             <p>You haven't submitted any assets yet.</p>
             <Link href="/owner/submit">
               <a className="text-amber-600 hover:underline text-sm mt-2 inline-block">
-                Submit your first asset →
+                Submit your first asset
               </a>
             </Link>
           </CardContent>
@@ -119,8 +147,8 @@ export default function OwnerDashboard() {
                     {asset.studioImagesJson?.[0] || asset.submissionImagesJson?.[0] ? (
                       <img
                         src={
-                          asset.studioImagesJson[0] ||
-                          asset.submissionImagesJson[0]
+                          (asset.studioImagesJson as string[])[0] ||
+                          (asset.submissionImagesJson as string[])[0]
                         }
                         alt={asset.title}
                         className="w-full h-full object-cover"
@@ -129,9 +157,7 @@ export default function OwnerDashboard() {
                       <Diamond className="w-12 h-12 text-neutral-300" />
                     )}
                     <Badge
-                      className={`absolute top-3 right-3 border-0 ${statusColor(
-                        asset.status
-                      )}`}
+                      className={`absolute top-3 right-3 border-0 ${statusColor(asset.status)}`}
                     >
                       {asset.status.replace(/_/g, " ")}
                     </Badge>

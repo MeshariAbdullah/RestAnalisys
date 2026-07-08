@@ -12,6 +12,7 @@ import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify, notifyMany } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -59,6 +60,26 @@ router.post(
       entityId: dispute.id,
       after: dispute,
     });
+
+    const otherPartyId = actorId === rental.renterId ? rental.ownerId : rental.renterId;
+    await notifyMany([
+      {
+        userId: otherPartyId,
+        type: "dispute_opened",
+        title: "Dispute opened",
+        body: `A ${input.category} dispute has been opened for rental ${rental.reference}.`,
+        entityType: "dispute",
+        entityId: dispute.id,
+      },
+      {
+        userId: actorId,
+        type: "dispute_opened",
+        title: "Dispute submitted",
+        body: `Your ${input.category} dispute for rental ${rental.reference} has been submitted and is under review.`,
+        entityType: "dispute",
+        entityId: dispute.id,
+      },
+    ]);
 
     res.status(201).json(dispute);
   })
@@ -149,6 +170,28 @@ router.post(
       entityId: input.disputeId,
       after: updated,
     });
+
+    const [dRental] = await db.select().from(rentals).where(eq(rentals.id, dispute.rentalId)).limit(1);
+    if (dRental) {
+      await notifyMany([
+        {
+          userId: dRental.renterId,
+          type: "dispute_resolved",
+          title: "Dispute resolved",
+          body: `Dispute for rental ${dRental.reference} has been resolved: ${input.resolution.replace(/_/g, " ")}.`,
+          entityType: "dispute",
+          entityId: dispute.id,
+        },
+        {
+          userId: dRental.ownerId,
+          type: "dispute_resolved",
+          title: "Dispute resolved",
+          body: `Dispute for rental ${dRental.reference} has been resolved: ${input.resolution.replace(/_/g, " ")}.`,
+          entityType: "dispute",
+          entityId: dispute.id,
+        },
+      ]);
+    }
 
     res.json(updated);
   })

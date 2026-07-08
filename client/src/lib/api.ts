@@ -266,12 +266,15 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: { category?: string; brand?: string; search?: string; sort?: string; limit?: number; cursor?: number }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.sort) qs.set("sort", params.sort);
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    if (params?.cursor) qs.set("cursor", String(params.cursor));
+    return request<{ items: Asset[]; count: number; nextCursor: number | null }>(`/assets/listings?${qs}`);
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
@@ -582,6 +585,87 @@ export const adminApi = {
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (cursor?: number) => {
+    const qs = cursor ? `?cursor=${cursor}` : "";
+    return request<{ items: Notification[]; nextCursor: number | null }>(`/notifications${qs}`);
+  },
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) => request<{ ok: boolean }>(`/notifications/read/${id}`, { method: "POST" }),
+  markAllRead: () => request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const profileApi = {
+  update: (data: { fullName: string; phone?: string }) =>
+    request<User>("/auth/profile", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dashboard stats
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface OwnerStats {
+  assets: { total: number; listed: number; rented: number };
+  rentals: { total: number; active: number; totalEarnedHalalas: number };
+  recentRentals: Array<{
+    id: number;
+    reference: string;
+    status: string;
+    startDate: string;
+    endDate: string;
+    totalPayableHalalas: number;
+    assetTitle: string;
+  }>;
+}
+
+export interface RenterStats {
+  stats: { total: number; active: number; completed: number; totalSpentHalalas: number };
+  activeRentals: Array<{
+    id: number;
+    reference: string;
+    status: string;
+    startDate: string;
+    endDate: string;
+    totalPayableHalalas: number;
+    assetTitle: string;
+    assetBrand: string;
+  }>;
+}
+
+export const dashboardApi = {
+  ownerStats: () => request<OwnerStats>("/rentals/owner-stats"),
+  renterStats: () => request<RenterStats>("/rentals/renter-stats"),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
