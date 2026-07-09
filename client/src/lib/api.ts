@@ -259,6 +259,20 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ nationalId }),
     }),
+  updateProfile: (data: { fullName?: string; phone?: string }) =>
+    request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ message: string }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+  refreshToken: () =>
+    request<{ token: string; user: User }>("/auth/refresh", {
+      method: "POST",
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -266,12 +280,14 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: { category?: string; brand?: string; q?: string; limit?: number; cursor?: number }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.q) qs.set("q", params.q);
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    if (params?.cursor) qs.set("cursor", String(params.cursor));
+    return request<{ items: Asset[]; count: number; nextCursor?: number }>(`/assets/listings?${qs}`);
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
@@ -560,6 +576,19 @@ export const operationsApi = {
 // Admin
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface AuditLogEntry {
+  id: number;
+  actorUserId: number | null;
+  actorRole: string | null;
+  action: string;
+  entityType: string;
+  entityId: number | null;
+  beforeJson: unknown;
+  afterJson: unknown;
+  ip: string | null;
+  createdAt: string;
+}
+
 export const adminApi = {
   kpis: () => request<AdminKPIs>("/admin/kpis"),
   revenueTrend: () =>
@@ -576,8 +605,26 @@ export const adminApi = {
       method: "POST",
       body: JSON.stringify({ block, reason }),
     }),
+  createStaffUser: (data: { email: string; fullName: string; password: string; role: "admin" | "operations" | "inspector" }) =>
+    request<User>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  recalculateTrust: (id: number) =>
+    request<{ id: number; trustScore: number; riskCategory: string }>(`/admin/users/${id}/recalculate-trust`, {
+      method: "POST",
+    }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: { entityType?: string; action?: string; actorUserId?: number; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    if (params?.actorUserId) qs.set("actorUserId", String(params.actorUserId));
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    return request<{ items: AuditLogEntry[]; total: number; limit: number; offset: number }>(`/admin/audit-logs?${qs}`);
+  },
 };
 
 export const healthApi = {

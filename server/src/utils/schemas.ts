@@ -79,8 +79,9 @@ export const AssetApprovalSchema = z.object({
 export const AssetListingFilter = z.object({
   category: AssetCategory.optional(),
   brand: z.string().optional(),
-  minDaily: HalalasAmount.optional(),
-  maxDaily: HalalasAmount.optional(),
+  q: z.string().optional(),
+  minDaily: z.coerce.number().int().nonnegative().optional(),
+  maxDaily: z.coerce.number().int().nonnegative().optional(),
   from: IsoDate.optional(),
   to: IsoDate.optional(),
   cursor: z.coerce.number().int().nonnegative().optional(),
@@ -226,4 +227,88 @@ export const ShipmentUpdateSchema = z.object({
     "returned",
   ]),
   trackingNumber: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Asset valuation response (owner)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const AssetValuationResponseSchema = z.object({
+  approved: z.boolean(),
+  rejectionReason: z.string().optional(),
+});
+
+export const AssetReceivedSchema = z.object({
+  warehouseLocationCode: z.string().min(1),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rental close
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const RentalCloseSchema = z.object({
+  outcome: z.enum(["clean", "penalty", "major_damage", "loss"]),
+  penaltyHalalas: HalalasAmount.optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dispute assignment
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const DisputeAssignSchema = z.object({
+  assigneeUserId: z.number().int().positive(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin user management
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const UserBlockSchema = z.object({
+  block: z.boolean(),
+  reason: z.string().optional(),
+});
+
+export const CreateStaffUserSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().min(2),
+  password: z.string().min(8),
+  role: z.enum(["admin", "operations", "inspector"]),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User profile + auth
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const UpdateProfileSchema = z.object({
+  fullName: z.string().min(2).optional(),
+  phone: SaudiPhone.optional(),
+});
+
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+
+export const RefreshTokenSchema = z.object({});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit log query
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const AuditLogQuerySchema = z.object({
+  entityType: z.string().optional(),
+  action: z.string().optional(),
+  actorUserId: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().nonnegative().default(0),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Asset listing text search
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const RentalQuoteQuerySchema = z.object({
+  assetId: z.coerce.number().int().positive(),
+  startDate: IsoDate,
+  endDate: IsoDate,
 });

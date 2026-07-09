@@ -9,16 +9,20 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
-import { LoginSchema, RegisterSchema, NafathVerifySchema } from "../utils/schemas.js";
+import { LoginSchema, RegisterSchema, NafathVerifySchema, UpdateProfileSchema, ChangePasswordSchema } from "../utils/schemas.js";
 import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
+import { rateLimit } from "../middleware/rateLimit.js";
+
+const authRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, keyPrefix: "auth" });
 
 const router = Router();
 
 router.post(
   "/register",
+  authRateLimit,
   asyncHandler(async (req, res) => {
     const input = RegisterSchema.parse(req.body);
 
@@ -77,6 +81,7 @@ router.post(
 
 router.post(
   "/login",
+  authRateLimit,
   asyncHandler(async (req, res) => {
     const { email, password } = LoginSchema.parse(req.body);
     const [user] = await db
@@ -185,6 +190,115 @@ router.get(
       trustScore: user.trustScore,
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
+    });
+  })
+);
+
+// ── Update profile ─────────────────────────────────────────────────────────
+router.patch(
+  "/profile",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const input = UpdateProfileSchema.parse(req.body);
+    const userId = req.user!.userId;
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (input.fullName) updates.fullName = input.fullName;
+    if (input.phone) updates.phoneE164 = input.phone;
+
+    const [updated] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning();
+    if (!updated) throw new NotFoundError("User");
+
+    await recordAudit({
+      req,
+      action: "auth.profile_update",
+      entityType: "user",
+      entityId: userId,
+      after: input,
+    });
+
+    return res.json({
+      id: updated.id,
+      email: updated.email,
+      fullName: updated.fullName,
+      phoneE164: updated.phoneE164,
+      role: updated.role,
+    });
+  })
+);
+
+// ── Change password ────────────────────────────────────────────────────────
+router.post(
+  "/change-password",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const { currentPassword, newPassword } = ChangePasswordSchema.parse(req.body);
+    const userId = req.user!.userId;
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) throw new UnauthorizedError("Current password is incorrect");
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await db
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+
+    await recordAudit({
+      req,
+      action: "auth.password_changed",
+      entityType: "user",
+      entityId: userId,
+    });
+
+    return res.json({ message: "Password changed successfully" });
+  })
+);
+
+// ── Refresh token ──────────────────────────────────────────────────────────
+router.post(
+  "/refresh",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, req.user!.userId))
+      .limit(1);
+    if (!user) throw new NotFoundError("User");
+    if (user.isBlocked) {
+      throw new UnauthorizedError(`Account blocked: ${user.blockedReason ?? "contact support"}`);
+    }
+
+    const token = signToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      nafathVerified: user.nafathVerified,
+    });
+
+    return res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        nafathVerified: user.nafathVerified,
+        kycStatus: user.kycStatus,
+        trustScore: user.trustScore,
+      },
     });
   })
 );

@@ -20,7 +20,7 @@
  */
 
 import { Router } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   assets,
@@ -37,9 +37,10 @@ import {
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission, requireNafath } from "../middleware/rbac.js";
 import {
-  RentalQuoteRequestSchema,
+  RentalQuoteQuerySchema,
   RentalCreateSchema,
   RentalCancelSchema,
+  RentalCloseSchema,
 } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
@@ -56,6 +57,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { recalculateTrustScore } from "../services/trustScoreService.js";
 
 const router = Router();
 
@@ -89,6 +91,17 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     .where(eq(rentals.renterId, userId));
   const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
 
+  const lateReturnRows = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        inArray(rentals.status, ["closed", "closed_with_penalty"]),
+        sql`returned_at::date > end_date::date`
+      )
+    );
+
   const accountAgeDays = Math.max(
     0,
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
@@ -99,7 +112,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateReturnRows[0]?.count ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -115,7 +128,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
 router.get(
   "/quote",
   asyncHandler(async (req, res) => {
-    const input = RentalQuoteRequestSchema.parse(req.query);
+    const input = RentalQuoteQuerySchema.parse(req.query);
     const [asset] = await db
       .select()
       .from(assets)
@@ -488,10 +501,7 @@ router.post(
   requirePermission("rental.close"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { outcome, penaltyHalalas } = req.body as {
-      outcome: "clean" | "penalty" | "major_damage" | "loss";
-      penaltyHalalas?: number;
-    };
+    const { outcome, penaltyHalalas } = RentalCloseSchema.parse(req.body);
 
     const [rental] = await db.select().from(rentals).where(eq(rentals.id, id)).limit(1);
     if (!rental) throw new NotFoundError("Rental");
@@ -516,6 +526,7 @@ router.post(
         entityId: id,
         after: updated,
       });
+      recalculateTrustScore(rental.renterId).catch(() => {});
       return res.json(updated);
     }
 
@@ -547,6 +558,7 @@ router.post(
         entityId: id,
         after: { updated, penaltyHalalas },
       });
+      recalculateTrustScore(rental.renterId).catch(() => {});
       return res.json(updated);
     }
 
@@ -582,6 +594,7 @@ router.post(
       after: { updated, outcome },
     });
 
+    recalculateTrustScore(rental.renterId).catch(() => {});
     res.json(updated);
   })
 );

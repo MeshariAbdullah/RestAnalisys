@@ -13,12 +13,15 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { UserBlockSchema, CreateStaffUserSchema, AuditLogQuerySchema } from "../utils/schemas.js";
+import bcrypt from "bcryptjs";
 
 const router = Router();
 
@@ -148,7 +151,7 @@ router.post(
   requirePermission("user.block"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { reason, block } = req.body as { reason?: string; block: boolean };
+    const { reason, block } = UserBlockSchema.parse(req.body);
     const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
     if (!user) throw new NotFoundError("User");
     const [updated] = await db
@@ -178,12 +181,8 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
-      email: string;
-      fullName: string;
-      role: "admin" | "operations" | "inspector";
-      passwordHash: string;
-    };
+    const { email, fullName, role, password } = CreateStaffUserSchema.parse(req.body);
+    const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db
       .insert(users)
       .values({
@@ -218,6 +217,119 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const filter = AuditLogQuerySchema.parse(req.query);
+    const conditions: ReturnType<typeof eq>[] = [];
+
+    if (filter.entityType) conditions.push(eq(auditLogs.entityType, filter.entityType));
+    if (filter.action) conditions.push(sql`${auditLogs.action} ILIKE ${'%' + filter.action + '%'}`);
+    if (filter.actorUserId) conditions.push(eq(auditLogs.actorUserId, filter.actorUserId));
+
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(filter.limit)
+      .offset(filter.offset);
+
+    const [total] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(auditLogs)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    res.json({
+      items: rows,
+      total: Number(total?.count ?? 0),
+      limit: filter.limit,
+      offset: filter.offset,
+    });
+  })
+);
+
+// ── Recalculate a user's trust score from rental history ──────────────────
+router.post(
+  "/users/:id/recalculate-trust",
+  authenticate,
+  requirePermission("user.block"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const id = Number(req.params.id);
+    const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const stats = await db
+      .select({
+        completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
+        disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
+        cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      })
+      .from(rentals)
+      .where(eq(rentals.renterId, id));
+    const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+
+    const lateReturnRows = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(rentals)
+      .where(
+        and(
+          eq(rentals.renterId, id),
+          sql`status in ('closed','closed_with_penalty')`,
+          sql`returned_at::date > end_date::date`
+        )
+      );
+
+    const accountAgeDays = Math.max(
+      0,
+      Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+    );
+    const completed = Number(row.completed ?? 0);
+    const disputed = Number(row.disputed ?? 0);
+    const cancelled = Number(row.cancelled ?? 0);
+    const lateReturns = Number(lateReturnRows[0]?.count ?? 0);
+
+    let score = 50;
+    if (accountAgeDays >= 365) score += 15;
+    else if (accountAgeDays >= 90) score += 8;
+    else if (accountAgeDays < 30) score -= 10;
+
+    if (completed >= 10) score += 15;
+    else if (completed >= 3) score += 8;
+    else if (completed === 0) score -= 5;
+
+    if (disputed > 0) score -= 10 * disputed;
+    if (lateReturns > 0) score -= 5 * lateReturns;
+    if (cancelled >= 3) score -= 8;
+
+    if (user.phoneVerified) score += 2;
+    if (user.emailVerified) score += 2;
+
+    score = Math.max(0, Math.min(100, score));
+    const riskCategory = score >= 80 ? "low" : score >= 60 ? "medium" : score >= 25 ? "high" : "ultra_high";
+
+    const [updated] = await db
+      .update(users)
+      .set({ trustScore: score, riskCategory, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+
+    await recordAudit({
+      req,
+      action: "user.recalculate_trust",
+      entityType: "user",
+      entityId: id,
+      before: { trustScore: user.trustScore, riskCategory: user.riskCategory },
+      after: { trustScore: score, riskCategory },
+    });
+
+    res.json({ id, trustScore: score, riskCategory, stats: { completed, disputed, cancelled, lateReturns } });
   })
 );
 
