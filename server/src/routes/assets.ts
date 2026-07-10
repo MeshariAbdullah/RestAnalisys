@@ -20,6 +20,8 @@ import {
   AssetSubmissionSchema,
   AssetApprovalSchema,
   AssetListingFilter,
+  OwnerValuationBodySchema,
+  WarehouseReceiveSchema,
 } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
@@ -122,10 +124,7 @@ router.post(
   requirePermission("asset.read.own"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { approved, rejectionReason } = req.body as {
-      approved: boolean;
-      rejectionReason?: string;
-    };
+    const { approved, rejectionReason } = OwnerValuationBodySchema.parse(req.body);
 
     const [asset] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
     if (!asset) throw new NotFoundError("Asset");
@@ -280,7 +279,7 @@ router.post(
   requirePermission("operations.update"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { warehouseLocationCode } = req.body as { warehouseLocationCode: string };
+    const { warehouseLocationCode } = WarehouseReceiveSchema.parse(req.body);
 
     const [asset] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
     if (!asset) throw new NotFoundError("Asset");
@@ -331,6 +330,13 @@ router.get(
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.search) {
+      const term = `%${filter.search}%`;
+      conditions.push(
+        sql`(${assets.title} ILIKE ${term} OR ${assets.brand} ILIKE ${term} OR ${assets.model} ILIKE ${term})`
+      );
+    }
+    if (filter.cursor) conditions.push(sql`${assets.id} < ${filter.cursor}`);
 
     const rows = await db
       .select({
@@ -347,10 +353,11 @@ router.get(
       })
       .from(assets)
       .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
+      .orderBy(desc(assets.id))
       .limit(filter.limit);
 
-    res.json({ items: rows, count: rows.length });
+    const nextCursor = rows.length === filter.limit ? rows[rows.length - 1]?.id : undefined;
+    res.json({ items: rows, count: rows.length, nextCursor });
   })
 );
 

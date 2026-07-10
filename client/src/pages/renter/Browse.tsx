@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { assetsApi, formatSar, type Asset } from "@/lib/api";
+import { assetsApi, formatSar } from "@/lib/api";
 
 const CATEGORIES = [
   { id: undefined, label: "All", icon: Diamond },
@@ -22,17 +22,15 @@ export default function Browse() {
   const [search, setSearch] = useState("");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["listings", category],
-    queryFn: () => assetsApi.listings({ category }),
+    queryKey: ["listings", category, search],
+    queryFn: () =>
+      assetsApi.listings({
+        category,
+        search: search || undefined,
+      }),
   });
 
-  const filtered = (data?.items ?? []).filter((a: Asset) =>
-    search
-      ? `${a.brand} ${a.title} ${a.model ?? ""}`
-          .toLowerCase()
-          .includes(search.toLowerCase())
-      : true
-  );
+  const items = data?.items ?? [];
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -80,13 +78,13 @@ export default function Browse() {
             />
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : items.length === 0 ? (
         <div className="text-center py-20 text-neutral-500">
           No assets match your filters.
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((asset) => (
+          {items.map((asset) => (
             <Link key={asset.id} href={`/browse/${asset.id}`}>
               <a>
                 <Card className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer h-full">

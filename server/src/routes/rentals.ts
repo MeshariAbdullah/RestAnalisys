@@ -21,7 +21,7 @@
 
 import { Router } from "express";
 import crypto from "crypto";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   assets,
@@ -41,6 +41,7 @@ import {
   RentalQuoteRequestSchema,
   RentalCreateSchema,
   RentalCancelSchema,
+  RentalCloseSchema,
 } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
@@ -91,6 +92,19 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     .where(eq(rentals.renterId, userId));
   const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
 
+  // Count late returns: rentals where returned_at exceeded end_date.
+  const [lateStats] = await db
+    .select({
+      count: sql<number>`count(*) filter (where returned_at is not null and returned_at > end_date)`,
+    })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        inArray(rentals.status, ["closed", "closed_with_penalty"])
+      )
+    );
+
   const accountAgeDays = Math.max(
     0,
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
@@ -101,7 +115,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateStats?.count ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -500,10 +514,7 @@ router.post(
   requirePermission("rental.close"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { outcome, penaltyHalalas } = req.body as {
-      outcome: "clean" | "penalty" | "major_damage" | "loss";
-      penaltyHalalas?: number;
-    };
+    const { outcome, penaltyHalalas } = RentalCloseSchema.parse(req.body);
 
     const [rental] = await db.select().from(rentals).where(eq(rentals.id, id)).limit(1);
     if (!rental) throw new NotFoundError("Rental");

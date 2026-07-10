@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
-import { LoginSchema, RegisterSchema, NafathVerifySchema } from "../utils/schemas.js";
+import { LoginSchema, RegisterSchema, NafathVerifySchema, ProfileUpdateSchema, ChangePasswordSchema } from "../utils/schemas.js";
 import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
@@ -194,10 +194,7 @@ router.patch(
   authenticate,
   asyncHandler(async (req: AuthedRequest, res) => {
     const userId = req.user!.userId;
-    const { fullName, phoneE164 } = req.body as {
-      fullName?: string;
-      phoneE164?: string;
-    };
+    const { fullName, phoneE164 } = ProfileUpdateSchema.parse(req.body);
 
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (fullName?.trim()) updates.fullName = fullName.trim();
@@ -237,14 +234,7 @@ router.post(
   authenticate,
   asyncHandler(async (req: AuthedRequest, res) => {
     const userId = req.user!.userId;
-    const { currentPassword, newPassword } = req.body as {
-      currentPassword: string;
-      newPassword: string;
-    };
-
-    if (!newPassword || newPassword.length < 8) {
-      return res.status(400).json({ error: "New password must be at least 8 characters" });
-    }
+    const { currentPassword, newPassword } = ChangePasswordSchema.parse(req.body);
 
     const [user] = await db
       .select()

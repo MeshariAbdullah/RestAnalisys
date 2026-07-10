@@ -33,7 +33,7 @@ export function errorHandler(
 
   console.error(`[error] ${req.method} ${req.path}:`, err);
   res.status(500).json({
-    error: err instanceof Error ? err.message : "Internal server error",
+    error: "Internal server error",
     code: "INTERNAL",
   });
 }

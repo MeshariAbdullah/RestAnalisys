@@ -83,6 +83,7 @@ export const AssetListingFilter = z.object({
   maxDaily: HalalasAmount.optional(),
   from: IsoDate.optional(),
   to: IsoDate.optional(),
+  search: z.string().max(100).optional(),
   cursor: z.coerce.number().int().nonnegative().optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
@@ -226,4 +227,48 @@ export const ShipmentUpdateSchema = z.object({
     "returned",
   ]),
   trackingNumber: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile + Admin
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ProfileUpdateSchema = z.object({
+  fullName: z.string().min(2).max(100).optional(),
+  phoneE164: SaudiPhone.optional(),
+});
+
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+export const OwnerValuationBodySchema = z.object({
+  approved: z.boolean(),
+  rejectionReason: z.string().optional(),
+});
+
+export const WarehouseReceiveSchema = z.object({
+  warehouseLocationCode: z.string().min(1),
+});
+
+export const RentalCloseSchema = z.object({
+  outcome: z.enum(["clean", "penalty", "major_damage", "loss"]),
+  penaltyHalalas: HalalasAmount.optional(),
+});
+
+export const DisputeAssignSchema = z.object({
+  assigneeUserId: z.number().int().positive(),
+});
+
+export const UserBlockSchema = z.object({
+  block: z.boolean(),
+  reason: z.string().optional(),
+});
+
+export const StaffCreateSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().min(2),
+  role: z.enum(["admin", "operations", "inspector"]),
+  password: z.string().min(8, "Password must be at least 8 characters"),
 });

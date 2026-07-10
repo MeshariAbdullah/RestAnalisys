@@ -28,6 +28,7 @@ import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
 import notificationsRouter from "./routes/notifications.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { generalLimiter, authLimiter, strictLimiter } from "./middleware/rateLimiter.js";
 
 dotenv.config();
 
@@ -42,6 +43,8 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+app.use("/api", generalLimiter);
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -59,11 +62,13 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+app.use("/api/auth", authLimiter);
 app.use("/api/auth", authRouter);
 app.use("/api/assets", assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
 app.use("/api/rentals", rentalsRouter);
 app.use("/api/legal", legalRouter);
+app.use("/api/payments", strictLimiter);
 app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
