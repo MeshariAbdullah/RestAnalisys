@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
@@ -19,8 +19,13 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  CheckCheck,
+  User as UserIcon,
+  ScrollText,
 } from "lucide-react";
-import type { Role, User } from "@/lib/api";
+import type { Role, User, AppNotification } from "@/lib/api";
+import { notificationsApi } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
 
 interface NavItem {
@@ -56,6 +61,7 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit", label: "Audit Log", icon: ScrollText, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
@@ -69,12 +75,85 @@ function roleLabel(role: Role): string {
   }[role];
 }
 
+function timeAgo(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const seconds = Math.floor((now - then) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const user: User | null = getCurrentUser();
 
   const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
+
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifs, setNotifs] = useState<AppNotification[]>([]);
+  const [notifsLoading, setNotifsLoading] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    notificationsApi.unreadCount().then((r) => setUnreadCount(r.count)).catch(() => {});
+    const interval = setInterval(() => {
+      notificationsApi.unreadCount().then((r) => setUnreadCount(r.count)).catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  async function openNotifications() {
+    if (notifOpen) {
+      setNotifOpen(false);
+      return;
+    }
+    setNotifOpen(true);
+    setNotifsLoading(true);
+    try {
+      const list = await notificationsApi.list(20);
+      setNotifs(list);
+    } catch {
+      setNotifs([]);
+    } finally {
+      setNotifsLoading(false);
+    }
+  }
+
+  async function markAllRead() {
+    await notificationsApi.markAllRead();
+    setUnreadCount(0);
+    setNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
+  }
+
+  async function handleNotifClick(n: AppNotification) {
+    if (!n.read) {
+      notificationsApi.markRead(n.id);
+      setNotifs((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+      setUnreadCount((c) => Math.max(0, c - 1));
+    }
+    if (n.linkUrl) {
+      navigate(n.linkUrl);
+      setNotifOpen(false);
+    }
+  }
 
   function handleLogout() {
     clearSession();
@@ -130,7 +209,96 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="p-3 border-t border-neutral-800">
+        <div className="p-3 border-t border-neutral-800 space-y-2">
+          {/* Notifications bell */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={openNotifications}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors w-full",
+                notifOpen
+                  ? "bg-amber-500 text-neutral-950 font-medium"
+                  : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+              )}
+            >
+              <div className="relative">
+                <Bell className="w-5 h-5 shrink-0" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </div>
+              {sidebarOpen && <span>Notifications</span>}
+            </button>
+
+            {notifOpen && (
+              <div className="absolute bottom-full left-0 mb-2 w-80 bg-white text-neutral-900 border border-neutral-200 rounded-xl shadow-xl z-50 max-h-96 overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between px-4 py-3 border-b">
+                  <p className="text-sm font-semibold">Notifications</p>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllRead}
+                      className="text-xs text-amber-600 hover:text-amber-700 flex items-center gap-1"
+                    >
+                      <CheckCheck className="w-3 h-3" />
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+                <div className="overflow-y-auto flex-1">
+                  {notifsLoading ? (
+                    <div className="p-6 text-center text-neutral-500 text-sm">Loading...</div>
+                  ) : notifs.length === 0 ? (
+                    <div className="p-6 text-center text-neutral-500 text-sm">
+                      No notifications yet
+                    </div>
+                  ) : (
+                    notifs.map((n) => (
+                      <button
+                        key={n.id}
+                        onClick={() => handleNotifClick(n)}
+                        className={cn(
+                          "w-full text-left px-4 py-3 border-b border-neutral-100 hover:bg-neutral-50 transition-colors",
+                          !n.read && "bg-amber-50/50"
+                        )}
+                      >
+                        <div className="flex items-start gap-2">
+                          {!n.read && (
+                            <span className="w-2 h-2 bg-amber-500 rounded-full mt-1.5 shrink-0" />
+                          )}
+                          <div className={cn("flex-1 min-w-0", n.read && "pl-4")}>
+                            <p className="text-sm font-medium truncate">{n.title}</p>
+                            <p className="text-xs text-neutral-500 line-clamp-2">{n.message}</p>
+                            <p className="text-[11px] text-neutral-400 mt-1">
+                              {timeAgo(n.createdAt)}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Profile link */}
+          <Link href="/profile">
+            <a
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
+                location === "/profile"
+                  ? "bg-amber-500 text-neutral-950 font-medium"
+                  : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+              )}
+            >
+              <UserIcon className="w-5 h-5 shrink-0" />
+              {sidebarOpen && <span>Profile</span>}
+            </a>
+          </Link>
+
+          {/* User info + logout */}
           {sidebarOpen ? (
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">

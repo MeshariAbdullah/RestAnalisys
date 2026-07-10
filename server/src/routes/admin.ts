@@ -4,6 +4,7 @@
 
 import { Router } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 import { db } from "../db/index.js";
 import {
   users,
@@ -13,6 +14,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -133,7 +135,23 @@ router.get(
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
+    const selectColumns = {
+      id: users.id,
+      email: users.email,
+      fullName: users.fullName,
+      role: users.role,
+      phoneE164: users.phoneE164,
+      nationalId: users.nationalId,
+      nafathVerified: users.nafathVerified,
+      kycStatus: users.kycStatus,
+      trustScore: users.trustScore,
+      riskCategory: users.riskCategory,
+      isBlocked: users.isBlocked,
+      blockedReason: users.blockedReason,
+      createdAt: users.createdAt,
+      lastLoginAt: users.lastLoginAt,
+    };
+    const query = db.select(selectColumns).from(users);
     const rows = role
       ? await query.where(eq(users.role, role as any)).limit(200)
       : await query.limit(200);
@@ -178,12 +196,16 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
+    const { email, fullName, role, password } = req.body as {
       email: string;
       fullName: string;
       role: "admin" | "operations" | "inspector";
-      passwordHash: string;
+      password: string;
     };
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db
       .insert(users)
       .values({
@@ -217,6 +239,44 @@ router.get(
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
+    res.json(rows);
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const entityType = (req.query.entityType as string) || undefined;
+    const action = (req.query.action as string) || undefined;
+
+    let query = db
+      .select({
+        id: auditLogs.id,
+        actorUserId: auditLogs.actorUserId,
+        actorRole: auditLogs.actorRole,
+        action: auditLogs.action,
+        entityType: auditLogs.entityType,
+        entityId: auditLogs.entityId,
+        ip: auditLogs.ip,
+        createdAt: auditLogs.createdAt,
+      })
+      .from(auditLogs)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit);
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (action) conditions.push(sql`${auditLogs.action} ILIKE ${'%' + action + '%'}`);
+
+    const rows =
+      conditions.length > 0
+        ? await query.where(and(...conditions))
+        : await query;
+
     res.json(rows);
   })
 );

@@ -20,6 +20,7 @@
  */
 
 import { Router } from "express";
+import crypto from "crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
@@ -56,6 +57,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -70,7 +72,7 @@ function daysBetween(startIso: string, endIso: string): number {
 
 function generateRentalReference(): string {
   const year = new Date().getFullYear();
-  const rand = Math.floor(100000 + Math.random() * 900000);
+  const rand = crypto.randomInt(100000, 999999);
   return `MLR-${year}-${rand}`;
 }
 
@@ -278,6 +280,16 @@ router.post(
       entityType: "rental",
       entityId: rental.id,
       after: { rental, decision },
+    });
+
+    notify({
+      userId: asset.ownerId,
+      type: "rental_created",
+      title: "New rental request",
+      message: `Your "${asset.title}" has been reserved for rental ${reference}.`,
+      linkUrl: `/owner/assets/${asset.id}`,
+      entityType: "rental",
+      entityId: rental.id,
     });
 
     res.status(201).json({

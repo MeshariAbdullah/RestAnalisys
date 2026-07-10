@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -254,6 +255,18 @@ router.post(
       entityId: assetId,
       before: asset,
       after: updated,
+    });
+
+    notify({
+      userId: asset.ownerId,
+      type: approved ? "asset_approved" : "asset_rejected",
+      title: approved ? "Asset approved" : "Asset rejected",
+      message: approved
+        ? `Your "${asset.title}" has been approved. Please arrange shipment.`
+        : `Your "${asset.title}" was rejected: ${rejectionReason ?? "No reason given"}.`,
+      linkUrl: `/owner/assets/${asset.id}`,
+      entityType: "asset",
+      entityId: asset.id,
     });
 
     res.json(updated);

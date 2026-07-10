@@ -28,6 +28,9 @@ import Shipments from "./pages/ops/Shipments";
 import Inventory from "./pages/ops/Inventory";
 import AlertsPage from "./pages/ops/Alerts";
 
+// Profile
+import Profile from "./pages/Profile";
+
 // Admin
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AssetApprovals from "./pages/admin/AssetApprovals";
@@ -35,6 +38,7 @@ import UsersPage from "./pages/admin/Users";
 import DisputesPage from "./pages/admin/Disputes";
 import FinancialOverview from "./pages/admin/FinancialOverview";
 import SanadTracking from "./pages/admin/SanadTracking";
+import AuditLog from "./pages/admin/AuditLog";
 
 export default function App() {
   return (
@@ -110,6 +114,13 @@ export default function App() {
         <ProtectedRoute roles={["operations"]}><AlertsPage /></ProtectedRoute>
       </Route>
 
+      {/* Profile (all roles) */}
+      <Route path="/profile">
+        <ProtectedRoute roles={["renter", "owner", "inspector", "operations", "admin", "super_admin"]}>
+          <Profile />
+        </ProtectedRoute>
+      </Route>
+
       {/* Admin */}
       <Route path="/admin">
         <ProtectedRoute roles={["admin", "super_admin"]}><AdminDashboard /></ProtectedRoute>
@@ -128,6 +139,9 @@ export default function App() {
       </Route>
       <Route path="/admin/sanad">
         <ProtectedRoute roles={["admin", "super_admin"]}><SanadTracking /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/audit">
+        <ProtectedRoute roles={["admin", "super_admin"]}><AuditLog /></ProtectedRoute>
       </Route>
 
       <Route>

@@ -223,6 +223,17 @@ export interface RentalQuote {
   totalPayableHalalas: number;
 }
 
+export interface AuditLogEntry {
+  id: number;
+  actorUserId: number | null;
+  actorRole: string | null;
+  action: string;
+  entityType: string;
+  entityId: number | null;
+  ip: string | null;
+  createdAt: string;
+}
+
 export interface AdminKPIs {
   users: number;
   listedAssets: number;
@@ -258,6 +269,16 @@ export const authApi = {
     request<{ transactionId: string; status: string }>("/auth/nafath/initiate", {
       method: "POST",
       body: JSON.stringify({ nationalId }),
+    }),
+  updateProfile: (data: { fullName?: string; phoneE164?: string }) =>
+    request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
     }),
 };
 
@@ -578,6 +599,38 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: { limit?: number; entityType?: string; action?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    return request<AuditLogEntry[]>(`/admin/audit-logs?${qs}`);
+  },
+};
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  linkUrl?: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (limit = 50) =>
+    request<AppNotification[]>(`/notifications?limit=${limit}`),
+  unreadCount: () =>
+    request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
 };
 
 export const healthApi = {
