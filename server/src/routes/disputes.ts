@@ -12,6 +12,7 @@ import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -149,6 +150,24 @@ router.post(
       entityId: input.disputeId,
       after: updated,
     });
+
+    const [rental] = await db
+      .select()
+      .from(rentals)
+      .where(eq(rentals.id, dispute.rentalId))
+      .limit(1);
+
+    if (rental) {
+      await notify({
+        userId: dispute.openedByUserId,
+        category: "dispute",
+        title: "Dispute resolved",
+        body: `Your dispute for rental ${rental.reference} has been resolved: ${input.resolution.replace(/_/g, " ")}.`,
+        linkUrl: `/my-rentals`,
+        entityType: "dispute",
+        entityId: input.disputeId,
+      });
+    }
 
     res.json(updated);
   })

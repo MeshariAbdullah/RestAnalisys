@@ -13,12 +13,14 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  operationalAlerts,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -218,6 +220,79 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Late returns detection ────────────────────────────────────────────────
+router.get(
+  "/late-returns",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db.execute(sql`
+      select r.id, r.reference, r.renter_id, r.owner_id, r.asset_id,
+             r.end_date, r.status,
+             (current_date - r.end_date::date) as days_overdue,
+             u.full_name as renter_name, u.email as renter_email,
+             a.title as asset_title
+      from rentals r
+      join users u on u.id = r.renter_id
+      join assets a on a.id = r.asset_id
+      where r.status = 'active'
+        and r.end_date::date < current_date
+      order by r.end_date asc
+    `);
+    res.json(rows.rows);
+  })
+);
+
+// ── Trigger late return alerts (idempotent, can be called by a cron) ─────
+router.post(
+  "/late-returns/alert",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const lateRentals = await db.execute(sql`
+      select r.id, r.reference, r.renter_id, r.owner_id, r.asset_id,
+             r.end_date,
+             (current_date - r.end_date::date) as days_overdue,
+             a.title as asset_title
+      from rentals r
+      join assets a on a.id = r.asset_id
+      where r.status = 'active'
+        and r.end_date::date < current_date
+        and r.id not in (
+          select subject_id from operational_alerts
+          where type = 'late_return' and subject_type = 'rental'
+            and status != 'resolved'
+        )
+    `);
+
+    let created = 0;
+    for (const row of lateRentals.rows as any[]) {
+      await db.insert(operationalAlerts).values({
+        type: "late_return",
+        severity: row.days_overdue > 7 ? "critical" : "high",
+        subjectType: "rental",
+        subjectId: row.id,
+        message: `Rental ${row.reference} is ${row.days_overdue} day(s) overdue for "${row.asset_title}".`,
+        payloadJson: { rentalId: row.id, daysOverdue: row.days_overdue },
+      });
+
+      await notify({
+        userId: row.renter_id,
+        category: "alert",
+        title: "Overdue rental",
+        body: `Your rental ${row.reference} is ${row.days_overdue} day(s) overdue. Please arrange return immediately.`,
+        linkUrl: `/my-rentals`,
+        entityType: "rental",
+        entityId: row.id,
+      });
+
+      created++;
+    }
+
+    res.json({ alertsCreated: created });
   })
 );
 

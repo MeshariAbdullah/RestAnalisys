@@ -118,6 +118,17 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | GET    | `/users`              | admin / super_admin   | All users (filter by role)             |
 | POST   | `/users/:id/block`    | admin / super_admin   | Block or unblock a user                |
 | POST   | `/users`              | super_admin           | Create staff users                     |
+| GET    | `/late-returns`       | admin / super_admin   | Overdue active rentals                 |
+| POST   | `/late-returns/alert` | admin / super_admin   | Trigger alerts for overdue rentals     |
+
+## Notifications — `/api/notifications`
+
+| Method | Path                  | Roles          | Purpose                                |
+| ------ | --------------------- | -------------- | -------------------------------------- |
+| GET    | `/`                   | authenticated  | List own notifications (query: limit)  |
+| GET    | `/unread-count`       | authenticated  | Unread notification count              |
+| POST   | `/:id/read`           | authenticated  | Mark a notification as read            |
+| POST   | `/read-all`           | authenticated  | Mark all notifications as read         |
 
 ## Health
 
