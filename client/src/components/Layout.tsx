@@ -19,8 +19,12 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  UserCircle,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import type { Role, User } from "@/lib/api";
+import { notificationsApi } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
 
 interface NavItem {
@@ -162,7 +166,40 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <TopBar user={user} />
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
     </div>
+  );
+}
+
+function TopBar({ user }: { user: User | null }) {
+  const { data } = useQuery({
+    queryKey: ["unread-notifications"],
+    queryFn: () => notificationsApi.unreadCount(),
+    refetchInterval: 30_000,
+    enabled: !!user,
+  });
+  const count = data?.count ?? 0;
+
+  return (
+    <header className="h-14 border-b border-neutral-200 bg-white flex items-center justify-end px-6 gap-4 shrink-0">
+      <Link href="/profile">
+        <a className="p-2 rounded-lg hover:bg-neutral-100 transition-colors text-neutral-600 hover:text-neutral-900">
+          <UserCircle className="w-5 h-5" />
+        </a>
+      </Link>
+      <Link href="/notifications">
+        <a className="relative p-2 rounded-lg hover:bg-neutral-100 transition-colors text-neutral-600 hover:text-neutral-900">
+          <Bell className="w-5 h-5" />
+          {count > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+              {count > 99 ? "99+" : count}
+            </span>
+          )}
+        </a>
+      </Link>
+    </header>
   );
 }

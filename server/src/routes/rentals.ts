@@ -56,6 +56,9 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { countLateReturnsForUser } from "../services/lateReturnService.js";
+import { notify, NotificationTypes } from "../services/notificationService.js";
+import { recalculateTrustScore } from "../services/trustScoreService.js";
 
 const router = Router();
 
@@ -99,7 +102,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await countLateReturnsForUser(userId),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +283,16 @@ router.post(
       after: { rental, decision },
     });
 
+    await notify({
+      userId: asset.ownerId,
+      type: NotificationTypes.RENTAL_CREATED,
+      title: "New Rental Request",
+      body: `A rental request has been created for your ${asset.title} (${rental.reference}).`,
+      relatedEntityType: "rental",
+      relatedEntityId: rental.id,
+      actionUrl: `/owner`,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -433,6 +446,16 @@ router.post(
       .set({ status: "rented_out", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
 
+    await notify({
+      userId: rental.renterId,
+      type: NotificationTypes.RENTAL_DELIVERED,
+      title: "Item Delivered",
+      body: `Your rental ${rental.reference} has been delivered. Enjoy!`,
+      relatedEntityType: "rental",
+      relatedEntityId: id,
+      actionUrl: `/my-rentals`,
+    });
+
     await recordAudit({
       req,
       action: "rental.delivered",
@@ -509,6 +532,28 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      await recalculateTrustScore(rental.renterId);
+
+      await notify({
+        userId: rental.renterId,
+        type: NotificationTypes.RENTAL_CLOSED,
+        title: "Rental Completed",
+        body: `Your rental ${rental.reference} has been closed successfully. Thank you!`,
+        relatedEntityType: "rental",
+        relatedEntityId: id,
+        actionUrl: `/my-rentals`,
+      });
+      await notify({
+        userId: rental.ownerId,
+        type: NotificationTypes.RENTAL_CLOSED,
+        title: "Rental Closed — Item Returned",
+        body: `Rental ${rental.reference} is complete. Your item is back in inventory and available for listing.`,
+        relatedEntityType: "rental",
+        relatedEntityId: id,
+        actionUrl: `/owner`,
+      });
+
       await recordAudit({
         req,
         action: "rental.close_clean",
