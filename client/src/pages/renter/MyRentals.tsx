@@ -6,27 +6,23 @@ import { Badge } from "@/components/ui/badge";
 import { rentalsApi, formatSar, type Rental } from "@/lib/api";
 
 const STATUS_META: Record<string, { color: string; icon: typeof Clock }> = {
-  draft: { color: "bg-neutral-200 text-neutral-700", icon: Clock },
+  pending_risk_review: { color: "bg-neutral-200 text-neutral-700", icon: Clock },
+  pending_legal_signing: { color: "bg-neutral-200 text-neutral-700", icon: Clock },
   pending_payment: { color: "bg-amber-100 text-amber-800", icon: Clock },
   confirmed: { color: "bg-blue-100 text-blue-700", icon: CheckCircle },
-  in_fulfillment: { color: "bg-blue-100 text-blue-700", icon: Package },
   out_for_delivery: { color: "bg-blue-100 text-blue-700", icon: Package },
-  delivered: { color: "bg-green-100 text-green-700", icon: CheckCircle },
-  in_use: { color: "bg-green-100 text-green-700", icon: CheckCircle },
-  awaiting_return: { color: "bg-amber-100 text-amber-800", icon: Clock },
-  returned: { color: "bg-green-100 text-green-700", icon: CheckCircle },
-  inspection_post_return: {
-    color: "bg-amber-100 text-amber-800",
-    icon: Clock,
-  },
-  closed_clean: { color: "bg-green-100 text-green-700", icon: CheckCircle },
+  active: { color: "bg-green-100 text-green-700", icon: CheckCircle },
+  return_in_transit: { color: "bg-amber-100 text-amber-800", icon: Package },
+  under_inspection: { color: "bg-amber-100 text-amber-800", icon: Clock },
+  closed: { color: "bg-green-100 text-green-700", icon: CheckCircle },
   closed_with_penalty: { color: "bg-red-100 text-red-700", icon: AlertCircle },
-  disputed: { color: "bg-red-100 text-red-700", icon: AlertCircle },
+  in_dispute: { color: "bg-red-100 text-red-700", icon: AlertCircle },
+  enforcement: { color: "bg-red-100 text-red-700", icon: AlertCircle },
   cancelled: { color: "bg-neutral-200 text-neutral-600", icon: AlertCircle },
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const meta = STATUS_META[status] ?? STATUS_META.draft;
+  const meta = STATUS_META[status] ?? STATUS_META.pending_risk_review;
   const Icon = meta.icon;
   return (
     <Badge className={`${meta.color} hover:${meta.color} border-0`}>
