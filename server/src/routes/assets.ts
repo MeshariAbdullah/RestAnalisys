@@ -209,7 +209,9 @@ router.get(
         title: assets.title,
         brand: assets.brand,
         category: assets.category,
+        status: assets.status,
         ownerDeclaredValueHalalas: assets.ownerDeclaredValueHalalas,
+        evaluatedValueHalalas: assets.evaluatedValueHalalas,
         submissionImagesJson: assets.submissionImagesJson,
         createdAt: assets.createdAt,
         ownerId: assets.ownerId,
@@ -217,7 +219,7 @@ router.get(
       })
       .from(assets)
       .leftJoin(users, eq(assets.ownerId, users.id))
-      .where(eq(assets.status, "pending_approval"))
+      .where(inArray(assets.status, ["pending_approval", "inspection_reported", "ready_for_listing"]))
       .orderBy(asc(assets.createdAt));
     res.json(rows);
   })
@@ -329,6 +331,7 @@ router.get(
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
+        submissionImagesJson: assets.submissionImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
       })

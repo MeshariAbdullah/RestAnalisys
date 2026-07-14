@@ -1,9 +1,18 @@
-import React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Package, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import React, { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Package, CheckCircle, Clock, AlertCircle, Flag } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { rentalsApi, formatSar, type Rental } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { rentalsApi, disputesApi, formatSar, type Rental } from "@/lib/api";
 
 const STATUS_META: Record<string, { color: string; icon: typeof Clock }> = {
   draft: { color: "bg-neutral-200 text-neutral-700", icon: Clock },
@@ -36,11 +45,48 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+const DISPUTABLE_STATUSES = [
+  "active",
+  "return_in_transit",
+  "under_inspection",
+  "closed",
+  "closed_with_penalty",
+];
+
+type DisputeCategory = "damage" | "loss" | "fraud" | "service" | "billing";
+
 export default function MyRentals() {
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["rentals-mine"],
     queryFn: () => rentalsApi.mine(),
   });
+
+  const [disputeRentalId, setDisputeRentalId] = useState<number | null>(null);
+  const [disputeCategory, setDisputeCategory] = useState<DisputeCategory>("service");
+  const [disputeSummary, setDisputeSummary] = useState("");
+  const [disputeSubmitting, setDisputeSubmitting] = useState(false);
+  const [disputeError, setDisputeError] = useState<string | null>(null);
+
+  async function submitDispute() {
+    if (!disputeRentalId || disputeSummary.length < 10) return;
+    setDisputeSubmitting(true);
+    setDisputeError(null);
+    try {
+      await disputesApi.open({
+        rentalId: disputeRentalId,
+        category: disputeCategory,
+        summary: disputeSummary,
+      });
+      setDisputeRentalId(null);
+      setDisputeSummary("");
+      await qc.invalidateQueries({ queryKey: ["rentals-mine"] });
+    } catch (err) {
+      setDisputeError((err as Error).message ?? "Failed to open dispute");
+    } finally {
+      setDisputeSubmitting(false);
+    }
+  }
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -87,8 +133,19 @@ export default function MyRentals() {
                         ({r.durationDays} days)
                       </span>
                     </p>
-                    <div className="mt-3">
+                    <div className="mt-3 flex items-center gap-2">
                       <StatusBadge status={r.status} />
+                      {DISPUTABLE_STATUSES.includes(r.status) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 border-red-200 hover:bg-red-50"
+                          onClick={() => setDisputeRentalId(r.id)}
+                        >
+                          <Flag className="w-3 h-3 mr-1" />
+                          Open dispute
+                        </Button>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">
@@ -105,6 +162,76 @@ export default function MyRentals() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {disputeRentalId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg">
+            <CardContent className="p-6 space-y-4">
+              <h2 className="text-xl font-bold">Open a dispute</h2>
+              <p className="text-sm text-neutral-500">
+                Describe the issue with your rental. Our team will review and
+                respond.
+              </p>
+
+              <div>
+                <label className="text-sm font-medium">Category</label>
+                <Select
+                  value={disputeCategory}
+                  onValueChange={(v) => setDisputeCategory(v as DisputeCategory)}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="damage">Damage</SelectItem>
+                    <SelectItem value="loss">Loss</SelectItem>
+                    <SelectItem value="fraud">Fraud</SelectItem>
+                    <SelectItem value="service">Service issue</SelectItem>
+                    <SelectItem value="billing">Billing</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Description</label>
+                <Textarea
+                  value={disputeSummary}
+                  onChange={(e) => setDisputeSummary(e.target.value)}
+                  placeholder="Describe the issue in detail (at least 10 characters)…"
+                  rows={4}
+                  className="mt-1"
+                />
+              </div>
+
+              {disputeError && (
+                <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
+                  {disputeError}
+                </div>
+              )}
+
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDisputeRentalId(null);
+                    setDisputeSummary("");
+                    setDisputeError(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                  disabled={disputeSubmitting || disputeSummary.length < 10}
+                  onClick={submitDispute}
+                >
+                  {disputeSubmitting ? "Submitting…" : "Submit dispute"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>
