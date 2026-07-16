@@ -20,6 +20,7 @@ import {
   AssetSubmissionSchema,
   AssetApprovalSchema,
   AssetListingFilter,
+  OwnerValuationResponseSchema,
 } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
@@ -121,10 +122,7 @@ router.post(
   requirePermission("asset.read.own"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { approved, rejectionReason } = req.body as {
-      approved: boolean;
-      rejectionReason?: string;
-    };
+    const { approved, rejectionReason } = OwnerValuationResponseSchema.omit({ inspectionId: true }).parse(req.body);
 
     const [asset] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
     if (!asset) throw new NotFoundError("Asset");
@@ -209,7 +207,9 @@ router.get(
         title: assets.title,
         brand: assets.brand,
         category: assets.category,
+        status: assets.status,
         ownerDeclaredValueHalalas: assets.ownerDeclaredValueHalalas,
+        evaluatedValueHalalas: assets.evaluatedValueHalalas,
         submissionImagesJson: assets.submissionImagesJson,
         createdAt: assets.createdAt,
         ownerId: assets.ownerId,
@@ -217,7 +217,7 @@ router.get(
       })
       .from(assets)
       .leftJoin(users, eq(assets.ownerId, users.id))
-      .where(eq(assets.status, "pending_approval"))
+      .where(inArray(assets.status, ["pending_approval", "ready_for_listing"]))
       .orderBy(asc(assets.createdAt));
     res.json(rows);
   })
@@ -328,6 +328,7 @@ router.get(
         category: assets.category,
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
+        submissionImagesJson: assets.submissionImagesJson,
         studioImagesJson: assets.studioImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,

@@ -4,6 +4,7 @@
 
 import { Router } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 import { db } from "../db/index.js";
 import {
   users,
@@ -178,12 +179,21 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
+    const { email, fullName, role, password } = req.body as {
       email: string;
       fullName: string;
       role: "admin" | "operations" | "inspector";
-      passwordHash: string;
+      password: string;
     };
+    if (!email || !fullName || !role || !password) {
+      res.status(400).json({ error: "email, fullName, role, and password are required" });
+      return;
+    }
+    if (password.length < 8) {
+      res.status(400).json({ error: "Password must be at least 8 characters" });
+      return;
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db
       .insert(users)
       .values({

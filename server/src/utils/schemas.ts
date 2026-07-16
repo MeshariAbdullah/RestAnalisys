@@ -144,6 +144,15 @@ export const RentalCancelSchema = z.object({
   reason: z.string().min(3),
 });
 
+export const RentalCloseSchema = z.object({
+  outcome: z.enum(["clean", "penalty", "major_damage", "loss"]),
+  penaltyHalalas: HalalasAmount.optional(),
+});
+
+export const DisputeAssignSchema = z.object({
+  assigneeUserId: z.number().int().positive(),
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Legal + Sanad
 // ─────────────────────────────────────────────────────────────────────────────

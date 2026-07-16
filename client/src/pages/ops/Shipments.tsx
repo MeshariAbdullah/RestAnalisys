@@ -20,7 +20,7 @@ const STATUSES = [
   "in_transit",
   "delivered",
   "failed",
-  "returned_to_warehouse",
+  "returned",
 ] as const;
 
 export default function Shipments() {
@@ -34,14 +34,21 @@ export default function Shipments() {
     queryFn: () => operationsApi.shipments(),
   });
 
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
   async function handleUpdate(id: number) {
-    await operationsApi.updateShipment(id, {
-      status: editStatus,
-      trackingNumber: editTracking || undefined,
-    });
-    setEditingId(null);
-    setEditTracking("");
-    await qc.invalidateQueries({ queryKey: ["shipments"] });
+    setUpdateError(null);
+    try {
+      await operationsApi.updateShipment(id, {
+        status: editStatus,
+        trackingNumber: editTracking || undefined,
+      });
+      setEditingId(null);
+      setEditTracking("");
+      await qc.invalidateQueries({ queryKey: ["shipments"] });
+    } catch (err) {
+      setUpdateError((err as Error).message ?? "Update failed");
+    }
   }
 
   return (
@@ -50,6 +57,12 @@ export default function Shipments() {
       <p className="text-neutral-500 mb-8">
         Outbound deliveries to renters and returns to warehouse.
       </p>
+
+      {updateError && (
+        <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
+          {updateError}
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>
