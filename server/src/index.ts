@@ -15,6 +15,8 @@
 
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 
 import authRouter from "./routes/auth.js";
@@ -33,6 +35,7 @@ dotenv.config();
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "3001");
 
+app.use(helmet());
 app.use(
   cors({
     origin: process.env.CLIENT_URL ?? "http://localhost:5173",
@@ -41,6 +44,14 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many attempts, please try again later" },
+});
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -58,7 +69,7 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRouter);
+app.use("/api/auth", authLimiter, authRouter);
 app.use("/api/assets", assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
 app.use("/api/rentals", rentalsRouter);
