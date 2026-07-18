@@ -9,16 +9,21 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
-import { LoginSchema, RegisterSchema, NafathVerifySchema } from "../utils/schemas.js";
+import { LoginSchema, RegisterSchema, NafathVerifySchema, PasswordResetRequestSchema, PasswordResetSchema } from "../utils/schemas.js";
 import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
+import { authLimiter } from "../middleware/rateLimiter.js";
+import crypto from "crypto";
 
 const router = Router();
 
+const resetTokens = new Map<string, { userId: number; expiresAt: number }>();
+
 router.post(
   "/register",
+  authLimiter,
   asyncHandler(async (req, res) => {
     const input = RegisterSchema.parse(req.body);
 
@@ -77,6 +82,7 @@ router.post(
 
 router.post(
   "/login",
+  authLimiter,
   asyncHandler(async (req, res) => {
     const { email, password } = LoginSchema.parse(req.body);
     const [user] = await db
@@ -186,6 +192,69 @@ router.get(
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
     });
+  })
+);
+
+// ── Password reset request ────────────────────────────────────────────────
+router.post(
+  "/password-reset/request",
+  authLimiter,
+  asyncHandler(async (req, res) => {
+    const { email } = PasswordResetRequestSchema.parse(req.body);
+
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (user) {
+      const token = crypto.randomBytes(32).toString("hex");
+      resetTokens.set(token, {
+        userId: user.id,
+        expiresAt: Date.now() + 30 * 60 * 1000,
+      });
+
+      // In production, send the token via email.
+      // In dev mode, return the token in the response.
+      if (!process.env.EMAIL_SERVICE_KEY) {
+        return res.json({ message: "Reset token generated", token });
+      }
+    }
+
+    res.json({ message: "If that email exists, a reset link has been sent" });
+  })
+);
+
+// ── Password reset ────────────────────────────────────────────────────────
+router.post(
+  "/password-reset/confirm",
+  authLimiter,
+  asyncHandler(async (req, res) => {
+    const { token, newPassword } = PasswordResetSchema.parse(req.body);
+
+    const entry = resetTokens.get(token);
+    if (!entry || entry.expiresAt < Date.now()) {
+      throw new UnauthorizedError("Invalid or expired reset token");
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await db
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(users.id, entry.userId));
+
+    resetTokens.delete(token);
+
+    await recordAudit({
+      req,
+      actorUserId: entry.userId,
+      action: "auth.password_reset",
+      entityType: "user",
+      entityId: entry.userId,
+    });
+
+    res.json({ message: "Password updated successfully" });
   })
 );
 

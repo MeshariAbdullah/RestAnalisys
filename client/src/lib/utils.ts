@@ -52,27 +52,56 @@ export function getSeverityLabel(severity: string) {
 
 export function getStatusLabel(status: string) {
   const labels: Record<string, string> = {
-    uploaded: "تم الرفع",
-    extracting_frames: "استخراج الإطارات",
-    analyzing_gpt: "تحليل GPT-4o",
-    analyzing_gemini: "تحليل Gemini",
-    saving_results: "حفظ النتائج",
-    done: "مكتمل",
-    error: "خطأ",
-    queued: "في الانتظار",
+    pending_approval: "بانتظار الموافقة",
+    rejected: "مرفوض",
+    awaiting_shipment: "بانتظار الشحن",
+    in_inspection: "قيد الفحص",
+    inspection_reported: "تم الفحص",
+    owner_rejected_valuation: "رفض المالك التقييم",
+    ready_for_listing: "جاهز للعرض",
+    listed: "معروض",
+    reserved: "محجوز",
+    rented_out: "مؤجر",
+    returned_under_inspection: "مرتجع قيد الفحص",
+    completed: "مكتمل",
+    withdrawn: "مسحوب",
+    lost_or_destroyed: "مفقود أو تالف",
+    pending_risk_review: "مراجعة المخاطر",
+    pending_legal_signing: "بانتظار التوقيع",
+    pending_payment: "بانتظار الدفع",
+    confirmed: "مؤكد",
+    out_for_delivery: "قيد التوصيل",
+    active: "نشط",
+    return_in_transit: "مرتجع في الطريق",
+    under_inspection: "قيد الفحص",
+    closed: "مغلق",
+    closed_with_penalty: "مغلق مع غرامة",
+    in_dispute: "في نزاع",
+    enforcement: "تنفيذ",
+    cancelled: "ملغي",
+    open: "مفتوح",
+    investigating: "قيد التحقيق",
+    resolved: "تم الحل",
+    escalated: "تم التصعيد",
   };
-  return labels[status] ?? status;
+  return labels[status] ?? status.replace(/_/g, " ");
 }
 
 export function getStatusIcon(status: string) {
   switch (status) {
-    case "done": return "✅";
-    case "error": return "❌";
-    case "uploaded": return "📤";
-    case "extracting_frames": return "🎞️";
-    case "analyzing_gpt": return "🤖";
-    case "analyzing_gemini": return "💎";
-    case "saving_results": return "💾";
-    default: return "⏳";
+    case "listed": return "📋";
+    case "rented_out": return "🔑";
+    case "active": return "✅";
+    case "closed": return "🏁";
+    case "cancelled": return "❌";
+    case "in_dispute": return "⚠️";
+    case "enforcement": return "⚖️";
+    case "pending_approval": return "⏳";
+    case "in_inspection": return "🔍";
+    case "confirmed": return "💳";
+    case "out_for_delivery": return "🚚";
+    case "under_inspection": return "🔍";
+    case "withdrawn": return "↩️";
+    default: return "📌";
   }
 }

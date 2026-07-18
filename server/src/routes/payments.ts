@@ -4,17 +4,18 @@
  */
 
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { payments, rentals, users, assets, payouts } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
-import { requirePermission } from "../middleware/rbac.js";
+import { requirePermission, requireNafath } from "../middleware/rbac.js";
 import { PaymentChargeSchema, PaymentRefundSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
   NotFoundError,
   LegalStateError,
   ForbiddenError,
+  ConflictError,
 } from "../utils/errors.js";
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
@@ -27,6 +28,7 @@ router.post(
   "/charge",
   authenticate,
   requirePermission("rental.create"),
+  requireNafath,
   asyncHandler(async (req: AuthedRequest, res) => {
     const { rentalId, paymentMethodToken } = PaymentChargeSchema.parse(req.body);
 
@@ -195,6 +197,13 @@ router.post(
     if (!["closed", "closed_with_penalty"].includes(rental.status)) {
       throw new LegalStateError("Rental must be closed before payout");
     }
+
+    const [existingPayout] = await db
+      .select()
+      .from(payouts)
+      .where(eq(payouts.rentalId, rentalId))
+      .limit(1);
+    if (existingPayout) throw new ConflictError("Payout already exists for this rental");
 
     const payoutCalc = computeOwnerPayout({
       rentalSubtotalHalalas: rental.rentalSubtotalHalalas,
