@@ -585,6 +585,37 @@ export const healthApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Uploads
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UploadedFile {
+  filename: string;
+  originalName: string;
+  url: string;
+  size: number;
+  mimeType: string;
+}
+
+export const uploadsApi = {
+  uploadFiles: (files: File[]) => {
+    const formData = new FormData();
+    files.forEach((f) => formData.append("files", f));
+    return request<{ files: UploadedFile[] }>("/uploads", {
+      method: "POST",
+      body: formData,
+    });
+  },
+  uploadSingle: (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<UploadedFile>("/uploads/single", {
+      method: "POST",
+      body: formData,
+    });
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Money helpers (frontend copies of the backend constants)
 // ─────────────────────────────────────────────────────────────────────────────
 

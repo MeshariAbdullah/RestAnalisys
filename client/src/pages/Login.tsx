@@ -94,7 +94,12 @@ export default function Login() {
             </Button>
           </form>
 
-          <p className="text-center text-sm text-neutral-400 mt-6">
+          <p className="text-center text-sm text-neutral-400 mt-4">
+            <Link href="/forgot-password">
+              <a className="text-amber-400 hover:underline">Forgot password?</a>
+            </Link>
+          </p>
+          <p className="text-center text-sm text-neutral-400 mt-2">
             New to MLR?{" "}
             <Link href="/register">
               <a className="text-amber-400 hover:underline">Create an account</a>
