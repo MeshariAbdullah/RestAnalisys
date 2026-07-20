@@ -5,6 +5,7 @@
 
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
@@ -14,6 +15,7 @@ import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
+import { sensitiveRateLimit } from "../middleware/rateLimit.js";
 
 const router = Router();
 
@@ -186,6 +188,84 @@ router.get(
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
     });
+  })
+);
+
+// ── Password change (authenticated) ──────────────────────────────────────────
+router.post(
+  "/change-password",
+  authenticate,
+  sensitiveRateLimit,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const { currentPassword, newPassword } = req.body as {
+      currentPassword: string;
+      newPassword: string;
+    };
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: "New password must be at least 8 characters" });
+    }
+
+    const [user] = await db.select().from(users).where(eq(users.id, req.user!.userId)).limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) throw new UnauthorizedError("Current password is incorrect");
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await db.update(users).set({ passwordHash: hash, updatedAt: new Date() }).where(eq(users.id, user.id));
+
+    await recordAudit({
+      req,
+      action: "auth.password_changed",
+      entityType: "user",
+      entityId: user.id,
+    });
+
+    return res.json({ success: true });
+  })
+);
+
+// ── Password reset request (unauthenticated) ────────────────────────────────
+const resetTokens = new Map<string, { userId: number; expiresAt: number }>();
+
+router.post(
+  "/forgot-password",
+  sensitiveRateLimit,
+  asyncHandler(async (req, res) => {
+    const { email } = req.body as { email: string };
+    const [user] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+
+    // Always return success to avoid email enumeration
+    if (user) {
+      const token = randomUUID();
+      resetTokens.set(token, { userId: user.id, expiresAt: Date.now() + 3600_000 });
+      console.log(`[PASSWORD_RESET] Token for ${email}: ${token}`);
+      // In production: send via notificationService
+    }
+
+    return res.json({ success: true, message: "If an account exists, a reset link has been sent" });
+  })
+);
+
+router.post(
+  "/reset-password",
+  sensitiveRateLimit,
+  asyncHandler(async (req, res) => {
+    const { token, newPassword } = req.body as { token: string; newPassword: string };
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: "New password must be at least 8 characters" });
+    }
+
+    const entry = resetTokens.get(token);
+    if (!entry || entry.expiresAt < Date.now()) {
+      return res.status(400).json({ error: "Invalid or expired reset token" });
+    }
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await db.update(users).set({ passwordHash: hash, updatedAt: new Date() }).where(eq(users.id, entry.userId));
+    resetTokens.delete(token);
+
+    return res.json({ success: true });
   })
 );
 

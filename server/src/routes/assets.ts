@@ -24,6 +24,8 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyAssetApproved, notifyAssetRejected } from "../services/notificationService.js";
+import { PaginationSchema, paginatedResult, paginationOffset } from "../utils/pagination.js";
 
 const router = Router();
 
@@ -256,6 +258,12 @@ router.post(
       after: updated,
     });
 
+    if (approved) {
+      notifyAssetApproved(asset.ownerId, asset.title).catch(() => {});
+    } else {
+      notifyAssetRejected(asset.ownerId, asset.title, rejectionReason ?? "Does not meet criteria").catch(() => {});
+    }
+
     res.json(updated);
   })
 );
@@ -310,6 +318,7 @@ router.get(
   "/listings",
   asyncHandler(async (req, res) => {
     const filter = AssetListingFilter.parse(req.query);
+    const pagination = PaginationSchema.parse(req.query);
     const conditions = [eq(assets.status, "listed")];
 
     if (filter.category) conditions.push(eq(assets.category, filter.category));
@@ -319,6 +328,15 @@ router.get(
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
 
+    const whereClause = and(...conditions);
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(assets)
+      .where(whereClause);
+    const total = Number(countResult?.count ?? 0);
+
+    const { offset, limit } = paginationOffset(pagination);
     const rows = await db
       .select({
         id: assets.id,
@@ -333,11 +351,12 @@ router.get(
         riskCategory: assets.riskCategory,
       })
       .from(assets)
-      .where(and(...conditions))
+      .where(whereClause)
       .orderBy(desc(assets.updatedAt))
-      .limit(filter.limit);
+      .limit(limit)
+      .offset(offset);
 
-    res.json({ items: rows, count: rows.length });
+    res.json(paginatedResult(rows, total, pagination));
   })
 );
 

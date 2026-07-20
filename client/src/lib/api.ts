@@ -265,13 +265,26 @@ export const authApi = {
 // Assets
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface PaginatedResponse<T> {
+  items: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+}
+
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: { category?: string; brand?: string; limit?: number; page?: number }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    if (params?.page) qs.set("page", String(params.page));
+    return request<PaginatedResponse<Asset>>(`/assets/listings?${qs}`);
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
@@ -578,6 +591,43 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+};
+
+export const uploadsApi = {
+  presign: (data: {
+    filename: string;
+    mimeType: string;
+    sizeBytes: number;
+    category: "submission" | "studio" | "inspection" | "evidence";
+  }) =>
+    request<{
+      uploadId: string;
+      uploadUrl: string;
+      publicUrl: string;
+      expiresAt: string;
+    }>("/uploads/presign", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  presignBatch: (
+    files: Array<{
+      filename: string;
+      mimeType: string;
+      sizeBytes: number;
+      category: "submission" | "studio" | "inspection" | "evidence";
+    }>
+  ) =>
+    request<{
+      uploads: Array<{
+        uploadId: string;
+        uploadUrl: string;
+        publicUrl: string;
+        expiresAt: string;
+      }>;
+    }>("/uploads/presign/batch", {
+      method: "POST",
+      body: JSON.stringify({ files }),
+    }),
 };
 
 export const healthApi = {

@@ -19,6 +19,7 @@ import {
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyRentalConfirmed, notifyPayoutReleased } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -110,6 +111,8 @@ router.post(
           updatedAt: new Date(),
         })
         .where(eq(rentals.id, rental.id));
+
+      notifyRentalConfirmed(rental.id, rental.renterId, rental.reference).catch(() => {});
     }
 
     await recordAudit({
@@ -220,6 +223,8 @@ router.post(
       entityId: payout.id,
       after: payout,
     });
+
+    notifyPayoutReleased(rental.ownerId, payoutCalc.netHalalas / 100, rental.reference).catch(() => {});
 
     res.json(payout);
   })

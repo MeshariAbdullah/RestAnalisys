@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Diamond, Watch, Shirt, Gem } from "lucide-react";
+import { Search, Diamond, Watch, Shirt, Gem, ChevronLeft, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { assetsApi, formatSar, type Asset } from "@/lib/api";
 
 const CATEGORIES = [
   { id: undefined, label: "All", icon: Diamond },
-  { id: "bag", label: "Bags", icon: Diamond },
+  { id: "handbag", label: "Bags", icon: Diamond },
   { id: "watch", label: "Watches", icon: Watch },
   { id: "dress", label: "Dresses", icon: Shirt },
   { id: "jewelry", label: "Jewelry", icon: Gem },
@@ -19,10 +19,11 @@ const CATEGORIES = [
 export default function Browse() {
   const [category, setCategory] = useState<string | undefined>(undefined);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["listings", category],
-    queryFn: () => assetsApi.listings({ category }),
+    queryKey: ["listings", category, page],
+    queryFn: () => assetsApi.listings({ category, page, limit: 12 }),
   });
 
   const filtered = (data?.items ?? []).filter((a: Asset) =>
@@ -32,6 +33,8 @@ export default function Browse() {
           .includes(search.toLowerCase())
       : true
   );
+
+  const pagination = data?.pagination;
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -135,6 +138,32 @@ export default function Browse() {
               </a>
             </Link>
           ))}
+        </div>
+      )}
+
+      {pagination && pagination.totalPages > 1 && (
+        <div className="flex items-center justify-center gap-4 mt-10">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!pagination.hasPrev}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            <ChevronLeft className="w-4 h-4 mr-1" />
+            Previous
+          </Button>
+          <span className="text-sm text-neutral-500">
+            Page {pagination.page} of {pagination.totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!pagination.hasNext}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next
+            <ChevronRight className="w-4 h-4 ml-1" />
+          </Button>
         </div>
       )}
     </div>
