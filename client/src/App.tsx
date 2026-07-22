@@ -5,6 +5,8 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 // Renter
 import Browse from "./pages/renter/Browse";
@@ -43,6 +45,8 @@ export default function App() {
       <Route path="/" component={Landing} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
 
       {/* Renter */}
       <Route path="/browse">

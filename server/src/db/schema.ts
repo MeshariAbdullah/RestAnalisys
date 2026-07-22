@@ -216,6 +216,22 @@ export const users = pgTable(
   })
 );
 
+export const passwordResetTokens = pgTable(
+  "password_reset_tokens",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("prt_user_idx").on(t.userId),
+    tokenIdx: uniqueIndex("prt_token_idx").on(t.tokenHash),
+  })
+);
+
 export const roles = pgTable("roles", {
   id: serial("id").primaryKey(),
   key: text("key").notNull().unique(),

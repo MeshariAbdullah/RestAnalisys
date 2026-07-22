@@ -46,6 +46,15 @@ export const NafathVerifySchema = z.object({
   nationalId: SaudiNationalId,
 });
 
+export const ForgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+export const ResetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Assets (owner submission + admin review)
 // ─────────────────────────────────────────────────────────────────────────────

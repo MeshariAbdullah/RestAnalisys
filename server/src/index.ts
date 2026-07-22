@@ -53,6 +53,7 @@ app.get("/api/health", (_req, res) => {
       nafith: !!process.env.NAFITH_API_KEY,
       paymentGateway: !!process.env.PAYMENT_GATEWAY_API_KEY,
       zatca: !!process.env.ZATCA_API_KEY,
+      nationalAddress: !!process.env.SPL_API_KEY,
     },
     timestamp: new Date().toISOString(),
   });

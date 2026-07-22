@@ -5,6 +5,7 @@
  */
 
 import crypto from "node:crypto";
+import { recordIntegrationEvent } from "./integrationEventService.js";
 
 const GATEWAY = process.env.PAYMENT_GATEWAY ?? "hyperpay"; // hyperpay | moyasar | paytabs
 const GATEWAY_API_KEY = process.env.PAYMENT_GATEWAY_API_KEY ?? "";
@@ -29,15 +30,21 @@ export interface ChargeResponse {
 
 export async function chargeCard(req: ChargeRequest): Promise<ChargeResponse> {
   if (!GATEWAY_API_KEY) {
-    // Dev fallback: auto-capture
     const transactionId = `PAY-DEV-${crypto.randomBytes(6).toString("hex")}`;
-    return {
+    const response: ChargeResponse = {
       gateway: GATEWAY as PaymentGateway,
       transactionId,
       status: "captured",
       capturedAt: new Date().toISOString(),
       raw: { dev: true, ...req },
     };
+    await recordIntegrationEvent({
+      provider: "hyperpay",
+      eventType: "charge_captured",
+      referenceId: transactionId,
+      payload: { rentalReference: req.rentalReference, amountHalalas: req.amountHalalas, response },
+    });
+    return response;
   }
   throw new Error("Payment gateway production client not configured");
 }

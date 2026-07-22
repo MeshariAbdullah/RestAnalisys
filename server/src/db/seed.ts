@@ -16,6 +16,7 @@ import { eq } from "drizzle-orm";
 import { db } from "./index.js";
 import {
   users,
+  roles,
   ownerAgreements,
   assets,
   inspections,
@@ -35,6 +36,52 @@ import { generateLegalCommitment } from "../services/legalService.js";
 
 async function seed() {
   console.log("🌱 Seeding MLR platform...");
+
+  // ── Roles ─────────────────────────────────────────────────────────────
+  await db.insert(roles).values([
+    {
+      key: "renter",
+      nameEn: "Renter",
+      nameAr: "مستأجر",
+      description: "End user who rents luxury items",
+      permissionsJson: ["asset.list", "rental.create", "rental.read.own", "rental.cancel", "legal.sign", "payment.read", "dispute.open"] as unknown as object,
+    },
+    {
+      key: "owner",
+      nameEn: "Owner",
+      nameAr: "مالك",
+      description: "Luxury item owner who consigns assets to the platform",
+      permissionsJson: ["asset.submit", "asset.read.own", "asset.withdraw", "rental.read.own", "payment.read", "dispute.open"] as unknown as object,
+    },
+    {
+      key: "inspector",
+      nameEn: "Inspector",
+      nameAr: "مفتش",
+      description: "Authenticates and evaluates luxury items",
+      permissionsJson: ["asset.read.any", "inspection.create", "inspection.update", "inspection.read"] as unknown as object,
+    },
+    {
+      key: "operations",
+      nameEn: "Operations",
+      nameAr: "عمليات",
+      description: "Manages logistics, shipments, and warehouse inventory",
+      permissionsJson: ["asset.read.any", "rental.read.any", "rental.fulfill", "rental.close", "operations.read", "operations.update", "dispute.open", "inspection.read"] as unknown as object,
+    },
+    {
+      key: "admin",
+      nameEn: "Administrator",
+      nameAr: "مشرف",
+      description: "Platform administrator with broad access",
+      permissionsJson: ["asset.read.any", "asset.approve", "asset.reject", "inspection.read", "rental.read.any", "rental.cancel", "legal.enforce", "legal.read.any", "payment.refund", "payment.read", "payout.release", "user.read", "user.block", "user.create_staff", "finance.read", "finance.export", "dispute.assign", "dispute.resolve", "operations.read", "system.audit"] as unknown as object,
+    },
+    {
+      key: "super_admin",
+      nameEn: "Super Administrator",
+      nameAr: "مشرف أعلى",
+      description: "Full system access including impersonation",
+      permissionsJson: ["*"] as unknown as object,
+    },
+  ]);
 
   // ── Users ─────────────────────────────────────────────────────────────
   const pass = await bcrypt.hash("Mlr@2024!", 10);
