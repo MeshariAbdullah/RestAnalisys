@@ -9,11 +9,19 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
-import { LoginSchema, RegisterSchema, NafathVerifySchema } from "../utils/schemas.js";
-import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors.js";
+import {
+  LoginSchema,
+  RegisterSchema,
+  NafathVerifySchema,
+  PasswordResetRequestSchema,
+  PasswordResetSchema,
+  ChangePasswordSchema,
+} from "../utils/schemas.js";
+import { UnauthorizedError, ConflictError, NotFoundError, ValidationError } from "../utils/errors.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
+import crypto from "crypto";
 
 const router = Router();
 
@@ -186,6 +194,112 @@ router.get(
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
     });
+  })
+);
+
+// In-memory reset token store (replace with Redis or DB in production)
+const resetTokens = new Map<string, { userId: number; expiresAt: number }>();
+
+router.post(
+  "/password/reset-request",
+  asyncHandler(async (req, res) => {
+    const { email } = PasswordResetRequestSchema.parse(req.body);
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (user) {
+      const token = crypto.randomBytes(32).toString("hex");
+      resetTokens.set(token, {
+        userId: user.id,
+        expiresAt: Date.now() + 30 * 60 * 1000,
+      });
+
+      await recordAudit({
+        req,
+        actorUserId: user.id,
+        action: "auth.password_reset_requested",
+        entityType: "user",
+        entityId: user.id,
+      });
+
+      // In production, send email with reset link containing the token
+      if (process.env.NODE_ENV === "development") {
+        return res.json({
+          message: "Password reset link sent to your email.",
+          _devToken: token,
+        });
+      }
+    }
+
+    res.json({ message: "Password reset link sent to your email." });
+  })
+);
+
+router.post(
+  "/password/reset",
+  asyncHandler(async (req, res) => {
+    const { token, newPassword } = PasswordResetSchema.parse(req.body);
+
+    const record = resetTokens.get(token);
+    if (!record || record.expiresAt < Date.now()) {
+      resetTokens.delete(token);
+      throw new ValidationError("Invalid or expired reset token");
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await db
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(users.id, record.userId));
+
+    resetTokens.delete(token);
+
+    await recordAudit({
+      req,
+      actorUserId: record.userId,
+      action: "auth.password_reset",
+      entityType: "user",
+      entityId: record.userId,
+    });
+
+    res.json({ message: "Password has been reset successfully." });
+  })
+);
+
+router.post(
+  "/password/change",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const { currentPassword, newPassword } = ChangePasswordSchema.parse(req.body);
+    const userId = req.user!.userId;
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) throw new UnauthorizedError("Current password is incorrect");
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await db
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+
+    await recordAudit({
+      req,
+      action: "auth.password_changed",
+      entityType: "user",
+      entityId: userId,
+    });
+
+    res.json({ message: "Password changed successfully." });
   })
 );
 

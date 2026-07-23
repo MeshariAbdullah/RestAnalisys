@@ -12,67 +12,50 @@ export function formatDate(date: string | Date) {
   }).format(new Date(date));
 }
 
-export function formatScore(score: number) {
-  return `${Math.round(score)}%`;
+export function formatMoney(halalas: number | undefined | null): string {
+  if (halalas == null) return "—";
+  return new Intl.NumberFormat("en-SA", {
+    style: "currency",
+    currency: "SAR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(halalas / 100);
 }
 
-export function getScoreColor(score: number) {
-  if (score >= 85) return "text-green-600";
-  if (score >= 70) return "text-yellow-600";
-  if (score >= 50) return "text-orange-600";
-  return "text-red-600";
+export function getStatusColor(status: string): string {
+  const colors: Record<string, string> = {
+    listed: "bg-green-100 text-green-800",
+    active: "bg-blue-100 text-blue-800",
+    rented_out: "bg-blue-100 text-blue-800",
+    pending_approval: "bg-yellow-100 text-yellow-800",
+    in_inspection: "bg-yellow-100 text-yellow-800",
+    inspection_reported: "bg-amber-100 text-amber-800",
+    closed: "bg-neutral-100 text-neutral-800",
+    cancelled: "bg-red-100 text-red-800",
+    rejected: "bg-red-100 text-red-800",
+    enforcement: "bg-red-100 text-red-800",
+    in_dispute: "bg-orange-100 text-orange-800",
+    withdrawn: "bg-neutral-100 text-neutral-600",
+  };
+  return colors[status] ?? "bg-neutral-100 text-neutral-800";
 }
 
-export function getScoreBg(score: number) {
-  if (score >= 85) return "bg-green-100 text-green-800";
-  if (score >= 70) return "bg-yellow-100 text-yellow-800";
-  if (score >= 50) return "bg-orange-100 text-orange-800";
-  return "bg-red-100 text-red-800";
+export function getRiskColor(category: string): string {
+  switch (category) {
+    case "low": return "text-green-600";
+    case "medium": return "text-yellow-600";
+    case "high": return "text-orange-600";
+    case "ultra_high": return "text-red-600";
+    default: return "text-neutral-600";
+  }
 }
 
-export function getSeverityColor(severity: string) {
+export function getSeverityColor(severity: string): string {
   switch (severity) {
     case "critical": return "text-red-600 bg-red-100";
     case "high": return "text-orange-600 bg-orange-100";
     case "medium": return "text-yellow-600 bg-yellow-100";
     case "low": return "text-blue-600 bg-blue-100";
     default: return "text-gray-600 bg-gray-100";
-  }
-}
-
-export function getSeverityLabel(severity: string) {
-  switch (severity) {
-    case "critical": return "حرج";
-    case "high": return "مرتفع";
-    case "medium": return "متوسط";
-    case "low": return "منخفض";
-    default: return severity;
-  }
-}
-
-export function getStatusLabel(status: string) {
-  const labels: Record<string, string> = {
-    uploaded: "تم الرفع",
-    extracting_frames: "استخراج الإطارات",
-    analyzing_gpt: "تحليل GPT-4o",
-    analyzing_gemini: "تحليل Gemini",
-    saving_results: "حفظ النتائج",
-    done: "مكتمل",
-    error: "خطأ",
-    queued: "في الانتظار",
-  };
-  return labels[status] ?? status;
-}
-
-export function getStatusIcon(status: string) {
-  switch (status) {
-    case "done": return "✅";
-    case "error": return "❌";
-    case "uploaded": return "📤";
-    case "extracting_frames": return "🎞️";
-    case "analyzing_gpt": return "🤖";
-    case "analyzing_gemini": return "💎";
-    case "saving_results": return "💾";
-    default: return "⏳";
   }
 }

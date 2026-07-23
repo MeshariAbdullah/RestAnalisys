@@ -259,6 +259,21 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ nationalId }),
     }),
+  requestPasswordReset: (email: string) =>
+    request<{ message: string; _devToken?: string }>("/auth/password/reset-request", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  resetPassword: (token: string, newPassword: string) =>
+    request<{ message: string }>("/auth/password/reset", {
+      method: "POST",
+      body: JSON.stringify({ token, newPassword }),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ message: string }>("/auth/password/change", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
