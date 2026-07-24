@@ -15,6 +15,9 @@
 
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import morgan from "morgan";
+import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 
 import authRouter from "./routes/auth.js";
@@ -27,12 +30,16 @@ import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { db } from "./db/index.js";
+import { sql } from "drizzle-orm";
 
 dotenv.config();
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "3001");
 
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use(
   cors({
     origin: process.env.CLIENT_URL ?? "http://localhost:5173",
@@ -42,7 +49,25 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// Health
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+app.use("/api/", apiLimiter);
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many authentication attempts, please try again later" },
+});
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/register", authLimiter);
+
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
@@ -56,6 +81,15 @@ app.get("/api/health", (_req, res) => {
     },
     timestamp: new Date().toISOString(),
   });
+});
+
+app.get("/api/health/ready", async (_req, res) => {
+  try {
+    await db.execute(sql`SELECT 1`);
+    res.json({ ok: true, db: "connected", timestamp: new Date().toISOString() });
+  } catch {
+    res.status(503).json({ ok: false, db: "unreachable", timestamp: new Date().toISOString() });
+  }
 });
 
 app.use("/api/auth", authRouter);
