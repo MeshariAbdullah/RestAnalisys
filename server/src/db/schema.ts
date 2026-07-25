@@ -303,7 +303,7 @@ export const inspections = pgTable(
     inspectorId: integer("inspector_id").references(() => users.id).notNull(),
 
     type: text("type").notNull().default("intake"), // intake | return | audit
-    rentalId: integer("rental_id"), // set when type = return
+    rentalId: integer("rental_id").references(() => rentals.id), // set when type = return
 
     authenticityVerified: boolean("authenticity_verified").notNull().default(false),
     authenticityNotes: text("authenticity_notes"),
@@ -697,6 +697,30 @@ export const integrationEvents = pgTable("integration_events", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    type: text("type").notNull(), // rental_status | payment | dispute | system | alert
+    title: text("title").notNull(),
+    message: text("message").notNull(),
+    entityType: text("entity_type"), // rental | asset | payment | dispute
+    entityId: integer("entity_id"),
+    read: boolean("read").notNull().default(false),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    readIdx: index("notifications_read_idx").on(t.userId, t.read),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Type exports
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -713,3 +737,4 @@ export type SanadRecord = typeof sanadRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
 export type Shipment = typeof shipments.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;

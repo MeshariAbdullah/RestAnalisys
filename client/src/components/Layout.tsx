@@ -19,6 +19,9 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  UserCog,
+  ScrollText,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
@@ -56,6 +59,7 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit", label: "Audit Log", icon: ScrollText, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
@@ -130,34 +134,60 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="p-3 border-t border-neutral-800">
+        <div className="p-3 border-t border-neutral-800 space-y-1">
           {sidebarOpen ? (
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">
-                <Shield className="w-4 h-4 text-neutral-950" />
+            <>
+              <div className="flex gap-1 mb-2">
+                <Link href="/notifications">
+                  <a className="flex items-center gap-2 px-3 py-1.5 rounded text-xs text-neutral-400 hover:bg-neutral-800 hover:text-white transition-colors flex-1">
+                    <Bell className="w-3.5 h-3.5" /> Notifications
+                  </a>
+                </Link>
+                <Link href="/profile">
+                  <a className="flex items-center gap-2 px-3 py-1.5 rounded text-xs text-neutral-400 hover:bg-neutral-800 hover:text-white transition-colors flex-1">
+                    <UserCog className="w-3.5 h-3.5" /> Profile
+                  </a>
+                </Link>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
-                <p className="text-[11px] text-neutral-400 truncate">
-                  {user ? roleLabel(user.role) : ""}
-                </p>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">
+                  <Shield className="w-4 h-4 text-neutral-950" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
+                  <p className="text-[11px] text-neutral-400 truncate">
+                    {user ? roleLabel(user.role) : ""}
+                  </p>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="p-1.5 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white"
+                  title="Logout"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
               </div>
+            </>
+          ) : (
+            <div className="space-y-1">
+              <Link href="/notifications">
+                <a className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400" title="Notifications">
+                  <Bell className="w-4 h-4" />
+                </a>
+              </Link>
+              <Link href="/profile">
+                <a className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400" title="Profile">
+                  <UserCog className="w-4 h-4" />
+                </a>
+              </Link>
               <button
                 onClick={handleLogout}
-                className="p-1.5 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white"
+                className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400"
                 title="Logout"
               >
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
-          ) : (
-            <button
-              onClick={handleLogout}
-              className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400"
-              title="Logout"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
           )}
         </div>
       </aside>

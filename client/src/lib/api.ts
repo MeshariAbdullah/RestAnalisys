@@ -211,6 +211,19 @@ export interface Shipment {
   deliveredAt?: string;
 }
 
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
 export interface RentalQuote {
   assetId: number;
   assetTitle: string;
@@ -258,6 +271,16 @@ export const authApi = {
     request<{ transactionId: string; status: string }>("/auth/nafath/initiate", {
       method: "POST",
       body: JSON.stringify({ nationalId }),
+    }),
+  updateProfile: (data: { fullName?: string; phone?: string; nationalAddressJson?: Record<string, unknown> }) =>
+    request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean; message: string }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
     }),
 };
 
@@ -578,6 +601,37 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLog: (params?: { limit?: number; offset?: number; entityType?: string; action?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    return request<Array<{
+      id: number;
+      actorUserId?: number;
+      actorRole?: string;
+      action: string;
+      entityType: string;
+      entityId?: number;
+      createdAt: string;
+    }>>(`/admin/audit-log?${qs}`);
+  },
+};
+
+export const notificationsApi = {
+  list: (params?: { limit?: number; unread?: boolean }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.unread) qs.set("unread", "true");
+    return request<Notification[]>(`/notifications?${qs}`);
+  },
+  unreadCount: () =>
+    request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<Notification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
 };
 
 export const healthApi = {
