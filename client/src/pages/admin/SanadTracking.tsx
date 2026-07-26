@@ -11,7 +11,7 @@ function statusColor(s: string): string {
   if (s === "issued" || s === "active") return "bg-blue-100 text-blue-700";
   if (s === "signed") return "bg-green-100 text-green-700";
   if (s === "discharged") return "bg-green-100 text-green-700";
-  if (s === "defaulted") return "bg-amber-100 text-amber-800";
+  if (s === "matured") return "bg-amber-100 text-amber-800";
   if (s === "under_execution") return "bg-red-100 text-red-700";
   return "bg-neutral-200 text-neutral-700";
 }
@@ -97,7 +97,7 @@ export default function SanadTracking() {
                 Discharge
               </Button>
             )}
-            {s.status === "defaulted" && (
+            {s.status === "under_execution" && (
               <Button
                 size="sm"
                 className="bg-red-600 hover:bg-red-700"

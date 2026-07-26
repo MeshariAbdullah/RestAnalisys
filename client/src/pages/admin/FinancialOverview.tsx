@@ -1,10 +1,15 @@
-import React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Receipt, TrendingUp } from "lucide-react";
+import React, { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Receipt, TrendingUp, Banknote } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { adminApi, formatSar } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { adminApi, rentalsApi, paymentsApi, formatSar, type Rental } from "@/lib/api";
 
 export default function FinancialOverview() {
+  const qc = useQueryClient();
+  const [payoutError, setPayoutError] = useState<string | null>(null);
+
   const kpisQuery = useQuery({
     queryKey: ["admin-kpis"],
     queryFn: () => adminApi.kpis(),
@@ -14,6 +19,22 @@ export default function FinancialOverview() {
     queryKey: ["revenue-trend"],
     queryFn: () => adminApi.revenueTrend(),
   });
+
+  const closedRentalsQuery = useQuery({
+    queryKey: ["closed-rentals"],
+    queryFn: () => rentalsApi.list(),
+    select: (data: Rental[]) => data.filter((r) => ["closed", "closed_with_penalty"].includes(r.status)),
+  });
+
+  async function releasePayout(rentalId: number) {
+    setPayoutError(null);
+    try {
+      await paymentsApi.releasePayout(rentalId);
+      await qc.invalidateQueries({ queryKey: ["closed-rentals"] });
+    } catch (err) {
+      setPayoutError((err as Error).message);
+    }
+  }
 
   const kpis = kpisQuery.data;
   const trend = trendQuery.data ?? [];
@@ -97,6 +118,48 @@ export default function FinancialOverview() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <h2 className="text-lg font-semibold mb-3 mt-8">Owner payouts</h2>
+
+      {payoutError && (
+        <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
+          {payoutError}
+        </div>
+      )}
+
+      <Card>
+        <CardContent className="p-6">
+          {closedRentalsQuery.isLoading ? (
+            <p className="text-neutral-500 text-sm">Loading...</p>
+          ) : !closedRentalsQuery.data || closedRentalsQuery.data.length === 0 ? (
+            <p className="text-neutral-500 text-sm">No closed rentals awaiting payout.</p>
+          ) : (
+            <div className="space-y-3">
+              {closedRentalsQuery.data.map((r) => (
+                <div key={r.id} className="flex items-center justify-between border-b pb-3 last:border-0">
+                  <div>
+                    <p className="font-mono text-xs text-neutral-500">{r.reference}</p>
+                    <p className="text-sm font-medium mt-1">
+                      Subtotal {formatSar(r.rentalSubtotalHalalas)}
+                    </p>
+                    <Badge variant="outline" className="mt-1 text-xs">
+                      {r.status.replace(/_/g, " ")}
+                    </Badge>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700"
+                    onClick={() => releasePayout(r.id)}
+                  >
+                    <Banknote className="w-4 h-4 mr-1" />
+                    Release payout
+                  </Button>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>

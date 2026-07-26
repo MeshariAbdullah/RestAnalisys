@@ -29,9 +29,16 @@ export const HalalasAmount = z.number().int().nonnegative();
 // Auth
 // ─────────────────────────────────────────────────────────────────────────────
 
+const StrongPassword = z
+  .string()
+  .min(8, "Password must be at least 8 characters")
+  .regex(/[a-z]/, "Password must contain a lowercase letter")
+  .regex(/[A-Z]/, "Password must contain an uppercase letter")
+  .regex(/\d/, "Password must contain a digit");
+
 export const RegisterSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: StrongPassword,
   fullName: z.string().min(2),
   phone: SaudiPhone.optional(),
   role: z.enum(["renter", "owner"]).default("renter"),
@@ -214,6 +221,19 @@ export const ShipmentScheduleSchema = z.object({
   scheduledAt: z.string().datetime().optional(),
   fromAddress: z.record(z.any()).optional(),
   toAddress: z.record(z.any()).optional(),
+});
+
+export const RentalCloseSchema = z.object({
+  outcome: z.enum(["clean", "penalty", "major_damage", "loss"]),
+  penaltyHalalas: HalalasAmount.optional(),
+});
+
+export const AssetReceivedSchema = z.object({
+  warehouseLocationCode: z.string().min(1, "Warehouse location code is required"),
+});
+
+export const DisputeAssignSchema = z.object({
+  assigneeUserId: z.number().int().positive(),
 });
 
 export const ShipmentUpdateSchema = z.object({

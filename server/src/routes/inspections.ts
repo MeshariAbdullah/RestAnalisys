@@ -29,8 +29,32 @@ router.get(
   requirePermission("inspection.create"),
   asyncHandler(async (_req, res) => {
     const rows = await db
-      .select()
+      .select({
+        id: assets.id,
+        ownerId: assets.ownerId,
+        category: assets.category,
+        brand: assets.brand,
+        model: assets.model,
+        title: assets.title,
+        description: assets.description,
+        ownerDeclaredValueHalalas: assets.ownerDeclaredValueHalalas,
+        evaluatedValueHalalas: assets.evaluatedValueHalalas,
+        dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
+        riskCategory: assets.riskCategory,
+        status: assets.status,
+        submissionImagesJson: assets.submissionImagesJson,
+        studioImagesJson: assets.studioImagesJson,
+        attributesJson: assets.attributesJson,
+        warehouseLocationCode: assets.warehouseLocationCode,
+        createdAt: assets.createdAt,
+        updatedAt: assets.updatedAt,
+        rentalId: rentals.id,
+      })
       .from(assets)
+      .leftJoin(
+        rentals,
+        eq(assets.id, rentals.assetId)
+      )
       .where(inArray(assets.status, ["in_inspection", "returned_under_inspection"]))
       .orderBy(desc(assets.updatedAt));
     res.json(rows);

@@ -196,6 +196,15 @@ router.post(
       throw new LegalStateError("Rental must be closed before payout");
     }
 
+    const [existingPayout] = await db
+      .select({ id: payouts.id })
+      .from(payouts)
+      .where(eq(payouts.rentalId, rentalId))
+      .limit(1);
+    if (existingPayout) {
+      throw new LegalStateError("Payout already exists for this rental");
+    }
+
     const payoutCalc = computeOwnerPayout({
       rentalSubtotalHalalas: rental.rentalSubtotalHalalas,
       commissionPct: 20,
