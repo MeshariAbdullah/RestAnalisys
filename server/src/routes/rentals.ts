@@ -61,6 +61,31 @@ const router = Router();
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
+async function countLateReturns(userId: number): Promise<number> {
+  const result = await db
+    .select({
+      count: sql<number>`count(*) filter (where returned_at is not null and returned_at::date > end_date::date)`,
+    })
+    .from(rentals)
+    .where(eq(rentals.renterId, userId));
+  return Number(result[0]?.count ?? 0);
+}
+
+function computeTrustScoreDelta(outcome: string): number {
+  switch (outcome) {
+    case "clean":
+      return 5;
+    case "penalty":
+      return -10;
+    case "major_damage":
+      return -25;
+    case "loss":
+      return -40;
+    default:
+      return 0;
+  }
+}
+
 function daysBetween(startIso: string, endIso: string): number {
   const start = new Date(startIso + "T00:00:00Z").getTime();
   const end = new Date(endIso + "T00:00:00Z").getTime();
@@ -99,7 +124,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await countLateReturns(userId),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -497,6 +522,24 @@ router.post(
     if (!rental) throw new NotFoundError("Rental");
     if (rental.status !== "under_inspection") {
       throw new LegalStateError(`Expected under_inspection, got ${rental.status}`);
+    }
+
+    // Update renter's trust score based on outcome
+    const delta = computeTrustScoreDelta(outcome);
+    if (delta !== 0) {
+      const [renter] = await db.select({ trustScore: users.trustScore }).from(users).where(eq(users.id, rental.renterId)).limit(1);
+      if (renter) {
+        const newScore = Math.max(0, Math.min(100, renter.trustScore + delta));
+        const newRiskCategory =
+          newScore >= 80 ? "low" as const :
+          newScore >= 50 ? "medium" as const :
+          newScore >= 25 ? "high" as const :
+          "ultra_high" as const;
+        await db
+          .update(users)
+          .set({ trustScore: newScore, riskCategory: newRiskCategory, updatedAt: new Date() })
+          .where(eq(users.id, rental.renterId));
+      }
     }
 
     if (outcome === "clean") {

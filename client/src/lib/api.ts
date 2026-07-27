@@ -548,6 +548,10 @@ export const operationsApi = {
     request<Array<{ id: number; title: string; brand: string; status: string }>>(
       "/operations/inventory"
     ),
+  inventoryMovements: (assetId: number) =>
+    request<Array<{ id: number; fromLocation: string; toLocation: string; reason: string; createdAt: string }>>(
+      `/operations/inventory/${assetId}/movements`
+    ),
   alerts: () =>
     request<Array<{ id: number; type: string; severity: string; message: string; status: string; createdAt: string }>>(
       "/operations/alerts"
@@ -578,6 +582,16 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  createStaffUser: (data: {
+    email: string;
+    fullName: string;
+    role: "admin" | "operations" | "inspector";
+    password: string;
+  }) =>
+    request<User>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 export const healthApi = {

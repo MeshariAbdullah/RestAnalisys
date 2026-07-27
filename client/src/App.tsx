@@ -21,6 +21,7 @@ import Payouts from "./pages/owner/Payouts";
 // Inspector
 import InspectorDashboard from "./pages/inspector/InspectorDashboard";
 import InspectionForm from "./pages/inspector/InspectionForm";
+import ReturnInspectionForm from "./pages/inspector/ReturnInspectionForm";
 
 // Ops
 import OpsDashboard from "./pages/ops/OpsDashboard";
@@ -92,6 +93,13 @@ export default function App() {
         {(params) => (
           <ProtectedRoute roles={["inspector"]}>
             <InspectionForm assetId={Number(params.assetId)} />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/inspector/return/:assetId">
+        {(params) => (
+          <ProtectedRoute roles={["inspector"]}>
+            <ReturnInspectionForm assetId={Number(params.assetId)} />
           </ProtectedRoute>
         )}
       </Route>

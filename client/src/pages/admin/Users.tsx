@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users as UsersIcon, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Users as UsersIcon, ShieldAlert, ShieldCheck, UserPlus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -23,6 +25,13 @@ function riskColor(c: string): string {
 export default function UsersPage() {
   const qc = useQueryClient();
   const [role, setRole] = useState<string>("all");
+  const [showCreate, setShowCreate] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newRole, setNewRole] = useState<"admin" | "operations" | "inspector">("inspector");
+  const [newPassword, setNewPassword] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users", role],
@@ -39,12 +48,87 @@ export default function UsersPage() {
     await qc.invalidateQueries({ queryKey: ["admin-users"] });
   }
 
+  async function handleCreateStaff(e: React.FormEvent) {
+    e.preventDefault();
+    setCreating(true);
+    setCreateError(null);
+    try {
+      await adminApi.createStaffUser({
+        email: newEmail,
+        fullName: newName,
+        role: newRole,
+        password: newPassword,
+      });
+      setShowCreate(false);
+      setNewEmail("");
+      setNewName("");
+      setNewPassword("");
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (err) {
+      setCreateError((err as Error).message ?? "Failed to create user");
+    } finally {
+      setCreating(false);
+    }
+  }
+
   return (
     <div className="p-8 max-w-6xl mx-auto">
-      <h1 className="text-3xl font-bold mb-2">Users</h1>
-      <p className="text-neutral-500 mb-6">
-        All accounts across the platform.
-      </p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Users</h1>
+          <p className="text-neutral-500">
+            All accounts across the platform.
+          </p>
+        </div>
+        <Button onClick={() => setShowCreate(!showCreate)} className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
+          <UserPlus className="w-4 h-4 mr-2" />
+          Add staff
+        </Button>
+      </div>
+
+      {showCreate && (
+        <Card className="mb-6 border-amber-300">
+          <CardContent className="p-6">
+            <h3 className="font-semibold mb-4">Create staff account</h3>
+            <form onSubmit={handleCreateStaff} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Full name</Label>
+                  <Input value={newName} onChange={(e) => setNewName(e.target.value)} required className="mt-1" />
+                </div>
+                <div>
+                  <Label>Email</Label>
+                  <Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required className="mt-1" />
+                </div>
+                <div>
+                  <Label>Role</Label>
+                  <Select value={newRole} onValueChange={(v) => setNewRole(v as typeof newRole)}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="inspector">Inspector</SelectItem>
+                      <SelectItem value="operations">Operations</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Password</Label>
+                  <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} className="mt-1" />
+                </div>
+              </div>
+              {createError && (
+                <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">{createError}</div>
+              )}
+              <div className="flex gap-2">
+                <Button type="submit" disabled={creating} className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
+                  {creating ? "Creating..." : "Create account"}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex items-center gap-3 mb-5">
         <Select value={role} onValueChange={setRole}>
