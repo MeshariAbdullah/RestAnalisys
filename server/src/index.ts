@@ -30,6 +30,22 @@ import { errorHandler } from "./middleware/errorHandler.js";
 
 dotenv.config();
 
+function validateEnv() {
+  if (!process.env.DATABASE_URL) {
+    console.error("FATAL: DATABASE_URL is not set. The server cannot start without a database connection.");
+    process.exit(1);
+  }
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === "mlr-platform-dev-secret-change-me") {
+    if (process.env.NODE_ENV === "production") {
+      console.error("FATAL: JWT_SECRET must be set to a secure value in production.");
+      process.exit(1);
+    }
+    console.warn("WARNING: Using default JWT_SECRET. Set a secure value for production.");
+  }
+}
+
+validateEnv();
+
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "3001");
 

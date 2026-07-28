@@ -92,6 +92,7 @@ export default function SubmitAsset() {
                     <SelectItem value="dress">Dress / couture</SelectItem>
                     <SelectItem value="jewelry">Jewelry</SelectItem>
                     <SelectItem value="accessory">Accessory</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
