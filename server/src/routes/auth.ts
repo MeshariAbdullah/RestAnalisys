@@ -5,6 +5,7 @@
 
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import rateLimit from "express-rate-limit";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
@@ -15,7 +16,16 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
 
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many attempts, please try again after 15 minutes" },
+});
+
 const router = Router();
+router.use(authLimiter);
 
 router.post(
   "/register",

@@ -9,7 +9,7 @@ import { saveSession, homeForRole } from "@/lib/auth";
 
 export default function Login() {
   const [, navigate] = useLocation();
-  const [email, setEmail] = useState("renter@demo.sa");
+  const [email, setEmail] = useState("renter@mlr.sa");
   const [password, setPassword] = useState("Mlr@2024!");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

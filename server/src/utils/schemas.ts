@@ -119,7 +119,7 @@ export const OwnerValuationResponseSchema = z.object({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const RentalQuoteRequestSchema = z.object({
-  assetId: z.number().int().positive(),
+  assetId: z.coerce.number().int().positive(),
   startDate: IsoDate,
   endDate: IsoDate,
 });
