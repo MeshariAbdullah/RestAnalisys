@@ -227,3 +227,49 @@ export const ShipmentUpdateSchema = z.object({
   ]),
   trackingNumber: z.string().optional(),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const UserBlockSchema = z.object({
+  block: z.boolean(),
+  reason: z.string().optional(),
+});
+
+export const StaffCreateSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().min(2),
+  role: z.enum(["admin", "operations", "inspector"]),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rental close
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const RentalCloseSchema = z.object({
+  outcome: z.enum(["clean", "penalty", "major_damage", "loss"]),
+  penaltyHalalas: HalalasAmount.optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Asset valuation response + warehouse received
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ValuationResponseSchema = z.object({
+  approved: z.boolean(),
+  rejectionReason: z.string().optional(),
+});
+
+export const AssetReceivedSchema = z.object({
+  warehouseLocationCode: z.string().min(1),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dispute assign
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const DisputeAssignSchema = z.object({
+  assigneeUserId: z.number().int().positive(),
+});
