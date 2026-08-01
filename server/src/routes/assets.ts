@@ -318,6 +318,8 @@ router.get(
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.cursor)
+      conditions.push(lte(assets.id, filter.cursor));
 
     const rows = await db
       .select({
@@ -329,15 +331,20 @@ router.get(
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
+        submissionImagesJson: assets.submissionImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
       })
       .from(assets)
       .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
-      .limit(filter.limit);
+      .orderBy(desc(assets.id))
+      .limit(filter.limit + 1);
 
-    res.json({ items: rows, count: rows.length });
+    const hasMore = rows.length > filter.limit;
+    const items = hasMore ? rows.slice(0, filter.limit) : rows;
+    const nextCursor = hasMore ? items[items.length - 1].id : undefined;
+
+    res.json({ items, count: items.length, nextCursor });
   })
 );
 

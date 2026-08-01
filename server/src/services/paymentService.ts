@@ -5,9 +5,24 @@
  */
 
 import crypto from "node:crypto";
+import { db } from "../db/index.js";
+import { integrationEvents } from "../db/schema.js";
 
-const GATEWAY = process.env.PAYMENT_GATEWAY ?? "hyperpay"; // hyperpay | moyasar | paytabs
+const GATEWAY = process.env.PAYMENT_GATEWAY ?? "hyperpay";
 const GATEWAY_API_KEY = process.env.PAYMENT_GATEWAY_API_KEY ?? "";
+
+async function logIntegrationEvent(eventType: string, referenceId: string, payload: unknown) {
+  try {
+    await db.insert(integrationEvents).values({
+      provider: GATEWAY,
+      eventType,
+      referenceId,
+      payloadJson: payload as object,
+      processed: true,
+      processedAt: new Date(),
+    });
+  } catch { /* non-critical */ }
+}
 
 export type PaymentGateway = "hyperpay" | "moyasar" | "paytabs";
 
@@ -29,15 +44,16 @@ export interface ChargeResponse {
 
 export async function chargeCard(req: ChargeRequest): Promise<ChargeResponse> {
   if (!GATEWAY_API_KEY) {
-    // Dev fallback: auto-capture
     const transactionId = `PAY-DEV-${crypto.randomBytes(6).toString("hex")}`;
-    return {
+    const response: ChargeResponse = {
       gateway: GATEWAY as PaymentGateway,
       transactionId,
       status: "captured",
       capturedAt: new Date().toISOString(),
       raw: { dev: true, ...req },
     };
+    await logIntegrationEvent("charge", transactionId, { request: req, response });
+    return response;
   }
   throw new Error("Payment gateway production client not configured");
 }
@@ -47,11 +63,10 @@ export async function refundPayment(
   amountHalalas: number
 ): Promise<{ transactionId: string; refundId: string; status: "refunded" }> {
   if (!GATEWAY_API_KEY) {
-    return {
-      transactionId,
-      refundId: `RFD-DEV-${crypto.randomBytes(6).toString("hex")}`,
-      status: "refunded",
-    };
+    const refundId = `RFD-DEV-${crypto.randomBytes(6).toString("hex")}`;
+    const response = { transactionId, refundId, status: "refunded" as const };
+    await logIntegrationEvent("refund", transactionId, { amountHalalas, response });
+    return response;
   }
   throw new Error("Payment gateway production client not configured");
 }

@@ -94,12 +94,19 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
   );
 
+  const lateStats = await db
+    .select({
+      lateCount: sql<number>`count(*) filter (where returned_at > (end_date::date + interval '1 day'))`,
+    })
+    .from(rentals)
+    .where(and(eq(rentals.renterId, userId), sql`returned_at is not null`));
+
   return {
     accountAgeDays,
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateStats[0]?.lateCount ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -509,6 +516,17 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      const [renter] = await db.select().from(users).where(eq(users.id, rental.renterId)).limit(1);
+      if (renter) {
+        const newScore = Math.min(100, renter.trustScore + 5);
+        await db.update(users).set({
+          trustScore: newScore,
+          riskCategory: newScore >= 80 ? "low" : newScore >= 60 ? "medium" : "high",
+          updatedAt: new Date(),
+        }).where(eq(users.id, rental.renterId));
+      }
+
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -540,6 +558,17 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      const [renter] = await db.select().from(users).where(eq(users.id, rental.renterId)).limit(1);
+      if (renter) {
+        const newScore = Math.max(0, renter.trustScore - 10);
+        await db.update(users).set({
+          trustScore: newScore,
+          riskCategory: newScore >= 80 ? "low" : newScore >= 60 ? "medium" : "high",
+          updatedAt: new Date(),
+        }).where(eq(users.id, rental.renterId));
+      }
+
       await recordAudit({
         req,
         action: "rental.close_penalty",
@@ -573,6 +602,16 @@ router.post(
       message: `Rental ${rental.reference} requires Sanad execution for ${outcome}.`,
       payloadJson: { outcome, rentalId: id },
     });
+
+    const [renter] = await db.select().from(users).where(eq(users.id, rental.renterId)).limit(1);
+    if (renter) {
+      const newScore = Math.max(0, renter.trustScore - 25);
+      await db.update(users).set({
+        trustScore: newScore,
+        riskCategory: newScore >= 80 ? "low" : newScore >= 60 ? "medium" : newScore >= 40 ? "high" : "ultra_high",
+        updatedAt: new Date(),
+      }).where(eq(users.id, rental.renterId));
+    }
 
     await recordAudit({
       req,

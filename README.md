@@ -85,13 +85,13 @@ Password for all: `Mlr@2024!`
 
 | Role         | Email              |
 | ------------ | ------------------ |
-| super_admin  | admin@mlr.sa       |
-| admin        | admin2@mlr.sa      |
+| super_admin  | super@mlr.sa       |
+| admin        | admin@mlr.sa       |
 | inspector    | inspector@mlr.sa   |
 | operations   | ops@mlr.sa         |
-| owner        | owner@demo.sa      |
-| renter       | renter@demo.sa     |
-| new renter   | newbie@demo.sa     |
+| owner        | owner@mlr.sa       |
+| renter       | renter@mlr.sa      |
+| new renter   | newbie@mlr.sa      |
 
 ---
 
