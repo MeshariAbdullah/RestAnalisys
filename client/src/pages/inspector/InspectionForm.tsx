@@ -19,7 +19,15 @@ import { assetsApi, inspectionsApi } from "@/lib/api";
 type Grade = "A" | "B" | "C" | "D";
 type Risk = "low" | "medium" | "high" | "ultra_high";
 
-export default function InspectionForm({ assetId }: { assetId: number }) {
+export default function InspectionForm({
+  assetId,
+  type = "intake",
+  rentalId,
+}: {
+  assetId: number;
+  type?: "intake" | "return";
+  rentalId?: number;
+}) {
   const [, navigate] = useLocation();
   const [authenticityVerified, setAuthenticityVerified] = useState(true);
   const [authenticityNotes, setAuthenticityNotes] = useState("");
@@ -31,6 +39,7 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
   const [riskCategory, setRiskCategory] = useState<Risk>("medium");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [returnHint, setReturnHint] = useState<string | null>(null);
 
   const { data: asset } = useQuery({
     queryKey: ["asset", assetId],
@@ -49,18 +58,37 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
       if (!marketValueHalalas || !recommendedDailyPriceHalalas) {
         throw new Error("Market value and daily price are required");
       }
-      await inspectionsApi.createIntake({
-        assetId,
-        authenticityVerified,
-        authenticityNotes: authenticityNotes || undefined,
-        conditionScore,
-        conditionGrade,
-        conditionNotes: conditionNotes || undefined,
-        marketValueHalalas,
-        recommendedDailyPriceHalalas,
-        riskCategory,
-      });
-      navigate("/inspector");
+
+      if (type === "return" && rentalId) {
+        const result = await inspectionsApi.createReturn({
+          assetId,
+          rentalId,
+          authenticityVerified,
+          conditionScore,
+          conditionGrade,
+          conditionNotes: conditionNotes || undefined,
+          marketValueHalalas,
+          recommendedDailyPriceHalalas,
+          riskCategory,
+          beforeImages: [],
+          afterImages: [],
+        });
+        setReturnHint(result.hint);
+        setTimeout(() => navigate("/inspector"), 3000);
+      } else {
+        await inspectionsApi.createIntake({
+          assetId,
+          authenticityVerified,
+          authenticityNotes: authenticityNotes || undefined,
+          conditionScore,
+          conditionGrade,
+          conditionNotes: conditionNotes || undefined,
+          marketValueHalalas,
+          recommendedDailyPriceHalalas,
+          riskCategory,
+        });
+        navigate("/inspector");
+      }
     } catch (err) {
       setError((err as Error).message ?? "Submission failed");
     } finally {
@@ -68,17 +96,47 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
     }
   }
 
+  if (returnHint) {
+    const hintColor =
+      returnHint === "clean"
+        ? "bg-green-50 border-green-200 text-green-800"
+        : returnHint === "penalty"
+        ? "bg-amber-50 border-amber-200 text-amber-800"
+        : "bg-red-50 border-red-200 text-red-800";
+    return (
+      <div className="p-8 max-w-3xl mx-auto">
+        <Card className={`border ${hintColor}`}>
+          <CardContent className="p-8 text-center">
+            <ClipboardCheck className="w-12 h-12 mx-auto mb-3" />
+            <h2 className="text-2xl font-bold mb-2">Return inspection submitted</h2>
+            <p className="text-lg">
+              Outcome hint: <strong>{returnHint.replace(/_/g, " ")}</strong>
+            </p>
+            <p className="text-sm mt-2 opacity-70">
+              Redirecting to queue...
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const isReturn = type === "return";
+
   return (
     <div className="p-8 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-2 text-sm text-neutral-500">
         <ClipboardCheck className="w-4 h-4" />
-        Intake inspection
+        {isReturn ? "Return inspection" : "Intake inspection"}
+        {rentalId && <span> · Rental #{rentalId}</span>}
       </div>
       <h1 className="text-3xl font-bold mb-1">
         {asset ? `${asset.brand} — ${asset.title}` : "Inspection report"}
       </h1>
       <p className="text-neutral-500 mb-8">
-        Authenticate, grade and valuate the asset.
+        {isReturn
+          ? "Compare the returned item against its pre-rental condition."
+          : "Authenticate, grade and valuate the asset."}
       </p>
 
       <form onSubmit={handleSubmit}>
@@ -107,7 +165,7 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
               <Textarea
                 value={authenticityNotes}
                 onChange={(e) => setAuthenticityNotes(e.target.value)}
-                placeholder="Serial, hologram, stitching notes…"
+                placeholder="Serial, hologram, stitching notes..."
                 rows={3}
               />
             </section>
@@ -116,7 +174,7 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
               <h2 className="font-semibold mb-3">Condition</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>Condition score (0–100)</Label>
+                  <Label>Condition score (0-100)</Label>
                   <Input
                     type="number"
                     min="0"
@@ -138,10 +196,10 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="A">A — pristine</SelectItem>
-                      <SelectItem value="B">B — minor wear</SelectItem>
-                      <SelectItem value="C">C — visible wear</SelectItem>
-                      <SelectItem value="D">D — damaged</SelectItem>
+                      <SelectItem value="A">A - pristine</SelectItem>
+                      <SelectItem value="B">B - minor wear</SelectItem>
+                      <SelectItem value="C">C - visible wear</SelectItem>
+                      <SelectItem value="D">D - damaged</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -149,14 +207,20 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
               <Textarea
                 value={conditionNotes}
                 onChange={(e) => setConditionNotes(e.target.value)}
-                placeholder="Scratches, scuffs, missing accessories…"
+                placeholder={
+                  isReturn
+                    ? "Compare with intake report. Note new damage, wear, missing parts..."
+                    : "Scratches, scuffs, missing accessories..."
+                }
                 rows={3}
                 className="mt-3"
               />
             </section>
 
             <section>
-              <h2 className="font-semibold mb-3">Valuation & pricing</h2>
+              <h2 className="font-semibold mb-3">
+                {isReturn ? "Post-rental valuation" : "Valuation & pricing"}
+              </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label>Market value (SAR)</Label>
@@ -215,7 +279,11 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
             disabled={submitting}
             className="bg-amber-500 text-neutral-950 hover:bg-amber-400"
           >
-            {submitting ? "Submitting…" : "Submit inspection report"}
+            {submitting
+              ? "Submitting..."
+              : isReturn
+              ? "Submit return inspection"
+              : "Submit inspection report"}
           </Button>
           <Button
             type="button"
