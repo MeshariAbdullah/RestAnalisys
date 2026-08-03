@@ -13,6 +13,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -217,6 +218,36 @@ router.get(
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
+    res.json(rows);
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const entityType = (req.query.entityType as string | undefined) ?? undefined;
+    const limit = Math.min(Number(req.query.limit) || 200, 500);
+
+    const conditions = entityType
+      ? [eq(auditLogs.entityType, entityType)]
+      : [];
+
+    const rows = conditions.length > 0
+      ? await db
+          .select()
+          .from(auditLogs)
+          .where(and(...conditions))
+          .orderBy(desc(auditLogs.createdAt))
+          .limit(limit)
+      : await db
+          .select()
+          .from(auditLogs)
+          .orderBy(desc(auditLogs.createdAt))
+          .limit(limit);
+
     res.json(rows);
   })
 );

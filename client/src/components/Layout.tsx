@@ -56,6 +56,7 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit", label: "Audit Log", icon: ClipboardCheck, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
@@ -133,14 +134,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="p-3 border-t border-neutral-800">
           {sidebarOpen ? (
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">
-                <Shield className="w-4 h-4 text-neutral-950" />
-              </div>
+              <Link href="/profile">
+                <a className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0 hover:bg-amber-400 transition-colors">
+                  <Shield className="w-4 h-4 text-neutral-950" />
+                </a>
+              </Link>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
-                <p className="text-[11px] text-neutral-400 truncate">
-                  {user ? roleLabel(user.role) : ""}
-                </p>
+                <Link href="/profile">
+                  <a className="block hover:text-amber-300 transition-colors">
+                    <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
+                    <p className="text-[11px] text-neutral-400 truncate">
+                      {user ? roleLabel(user.role) : ""}
+                    </p>
+                  </a>
+                </Link>
               </div>
               <button
                 onClick={handleLogout}

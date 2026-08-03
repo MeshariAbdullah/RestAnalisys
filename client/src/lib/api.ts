@@ -578,6 +578,22 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (entityType?: string) => {
+    const qs = entityType ? `?entityType=${entityType}` : "";
+    return request<Array<{
+      id: number;
+      actorUserId: number | null;
+      actorRole: string | null;
+      action: string;
+      entityType: string;
+      entityId: number | null;
+      beforeJson: unknown;
+      afterJson: unknown;
+      ip: string | null;
+      userAgent: string | null;
+      createdAt: string;
+    }>>(`/admin/audit-logs${qs}`);
+  },
 };
 
 export const healthApi = {

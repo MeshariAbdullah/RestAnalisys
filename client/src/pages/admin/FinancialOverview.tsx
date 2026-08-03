@@ -1,8 +1,18 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Receipt, TrendingUp } from "lucide-react";
+import { Receipt, TrendingUp, DollarSign } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { adminApi, formatSar } from "@/lib/api";
+import { adminApi, formatSar, halalasToSar } from "@/lib/api";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
 
 export default function FinancialOverview() {
   const kpisQuery = useQuery({
@@ -16,15 +26,20 @@ export default function FinancialOverview() {
   });
 
   const kpis = kpisQuery.data;
-  const trend = trendQuery.data ?? [];
-  const maxTotal = Math.max(
-    ...trend.map((t) => Number(t.total_halalas ?? 0)),
-    1
-  );
+  const trend = (trendQuery.data ?? []).map((t) => ({
+    day: new Date(t.day).toLocaleDateString("en-SA", { month: "short", day: "numeric" }),
+    revenue: halalasToSar(Number(t.total_halalas)),
+    fees: halalasToSar(Number(t.fee_halalas)),
+    rentals: Number(t.rentals),
+  }));
+
+  const totalRevenue = kpis?.revenue.rentalSubtotalHalalas ?? 0;
+  const totalFees = kpis?.revenue.platformFeeHalalas ?? 0;
+  const totalVat = kpis?.revenue.vatHalalas ?? 0;
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <h1 className="text-3xl font-bold mb-2">Financial overview</h1>
+    <div className="p-8 max-w-6xl mx-auto">
+      <h1 className="text-3xl font-bold mb-2">Financial Overview</h1>
       <p className="text-neutral-500 mb-8">
         Revenue, fees and VAT across all confirmed rentals.
       </p>
@@ -34,69 +49,77 @@ export default function FinancialOverview() {
           <CardContent className="p-6">
             <div className="flex items-center gap-2 text-sm text-neutral-500 mb-2">
               <TrendingUp className="w-4 h-4" />
-              Gross revenue
+              Gross Revenue
             </div>
-            <p className="text-3xl font-bold">
-              {formatSar(kpis?.revenue.rentalSubtotalHalalas)}
-            </p>
+            <p className="text-3xl font-bold">{formatSar(totalRevenue)}</p>
+            <p className="text-xs text-neutral-400 mt-1">Total rental subtotals</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 text-sm text-neutral-500 mb-2">
+              <DollarSign className="w-4 h-4" />
+              Platform Fees
+            </div>
+            <p className="text-3xl font-bold text-amber-600">{formatSar(totalFees)}</p>
+            <p className="text-xs text-neutral-400 mt-1">Platform commission earned</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-2 text-sm text-neutral-500 mb-2">
               <Receipt className="w-4 h-4" />
-              Platform fees
+              VAT Collected (15%)
             </div>
-            <p className="text-3xl font-bold text-amber-600">
-              {formatSar(kpis?.revenue.platformFeeHalalas)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 text-sm text-neutral-500 mb-2">
-              <Receipt className="w-4 h-4" />
-              VAT collected (15%)
-            </div>
-            <p className="text-3xl font-bold">
-              {formatSar(kpis?.revenue.vatHalalas)}
-            </p>
+            <p className="text-3xl font-bold">{formatSar(totalVat)}</p>
+            <p className="text-xs text-neutral-400 mt-1">ZATCA tax liability</p>
           </CardContent>
         </Card>
       </div>
 
-      <h2 className="text-lg font-semibold mb-3">Last 30 days</h2>
+      <h2 className="text-lg font-semibold mb-3">Revenue Trend (Last 30 Days)</h2>
       <Card>
         <CardContent className="p-6">
           {trend.length === 0 ? (
-            <p className="text-neutral-500 text-sm">No recent rentals.</p>
+            <p className="text-neutral-500 text-sm text-center py-12">
+              No rental data in the last 30 days.
+            </p>
           ) : (
-            <div className="space-y-2">
-              {trend.map((t) => {
-                const pct = (Number(t.total_halalas) / maxTotal) * 100;
-                return (
-                  <div
-                    key={t.day}
-                    className="flex items-center gap-3 text-sm"
-                  >
-                    <span className="w-24 text-neutral-500 shrink-0">
-                      {new Date(t.day).toLocaleDateString()}
-                    </span>
-                    <div className="flex-1 h-6 bg-neutral-100 rounded">
-                      <div
-                        className="h-full bg-amber-500 rounded"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="w-24 text-right font-mono">
-                      {formatSar(Number(t.total_halalas))}
-                    </span>
-                    <span className="w-16 text-right text-xs text-neutral-500">
-                      {t.rentals} rentals
-                    </span>
-                  </div>
-                );
-              })}
+            <div className="w-full overflow-x-auto">
+              <ResponsiveContainer width="100%" height={360}>
+                <BarChart data={trend} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                  <XAxis
+                    dataKey="day"
+                    tick={{ fontSize: 12, fill: "#737373" }}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    tick={{ fontSize: 12, fill: "#737373" }}
+                    tickFormatter={(v: number) => `${v.toLocaleString()} SAR`}
+                    width={100}
+                  />
+                  <Tooltip
+                    formatter={(value: number, name: string) => [
+                      `${value.toLocaleString()} SAR`,
+                      name === "revenue" ? "Gross Revenue" : "Platform Fees",
+                    ]}
+                    labelStyle={{ fontWeight: 600 }}
+                    contentStyle={{
+                      borderRadius: "8px",
+                      border: "1px solid #e5e5e5",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                    }}
+                  />
+                  <Legend
+                    formatter={(value: string) =>
+                      value === "revenue" ? "Gross Revenue" : "Platform Fees"
+                    }
+                  />
+                  <Bar dataKey="revenue" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="fees" fill="#0a0a0a" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           )}
         </CardContent>

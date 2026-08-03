@@ -59,6 +59,20 @@ import { recordAudit } from "../services/auditService.js";
 
 const router = Router();
 
+async function deriveLateReturns(renterId: number): Promise<number> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, renterId),
+        sql`returned_at is not null`,
+        sql`returned_at::date > end_date::date`
+      )
+    );
+  return Number(rows[0]?.count ?? 0);
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function daysBetween(startIso: string, endIso: string): number {
@@ -99,7 +113,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await deriveLateReturns(userId),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
