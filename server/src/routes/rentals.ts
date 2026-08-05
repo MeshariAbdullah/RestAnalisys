@@ -52,7 +52,7 @@ import {
   computeRentalQuote,
   DEFAULT_PLATFORM_FEE_PCT,
 } from "../utils/money.js";
-import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
+import { computeRiskDecision, trustScoreToCategory, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
@@ -66,6 +66,22 @@ function daysBetween(startIso: string, endIso: string): number {
   const end = new Date(endIso + "T00:00:00Z").getTime();
   if (end <= start) throw new LegalStateError("endDate must be after startDate");
   return Math.round((end - start) / (1000 * 60 * 60 * 24));
+}
+
+async function countLateReturns(userId: number): Promise<number> {
+  const result = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`${rentals.returnedAt} IS NOT NULL`,
+        sql`${rentals.returnedAt}::date > ${rentals.endDate}::date`
+      )
+    );
+  return Number(result[0]?.count ?? 0);
 }
 
 function generateRentalReference(): string {
@@ -99,7 +115,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await countLateReturns(userId),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -109,6 +125,20 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     userRole: user.role,
     countryIsSaudi: true,
   };
+}
+
+async function recalcTrustScore(userId: number): Promise<void> {
+  const features = await buildRiskFeatures(userId, 0);
+  const decision = computeRiskDecision({
+    ...features,
+    nafathVerified: true,
+    kycVerified: true,
+  });
+  const category = trustScoreToCategory(decision.finalScore);
+  await db
+    .update(users)
+    .set({ trustScore: decision.finalScore, riskCategory: category, updatedAt: new Date() })
+    .where(eq(users.id, userId));
 }
 
 // ── Quote (no side effects) ─────────────────────────────────────────────────
@@ -192,6 +222,10 @@ router.post(
       durationDays,
     });
 
+    const initialStatus = decision.requiresReview
+      ? "pending_risk_review"
+      : "pending_legal_signing";
+
     // Rental row -----------------------------------------------------------
     const reference = generateRentalReference();
     const [rental] = await db
@@ -201,7 +235,7 @@ router.post(
         assetId: asset.id,
         renterId,
         ownerId: asset.ownerId,
-        status: "pending_legal_signing",
+        status: initialStatus,
         startDate: input.startDate,
         endDate: input.endDate,
         durationDays,
@@ -509,6 +543,7 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await recalcTrustScore(rental.renterId);
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -540,6 +575,7 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await recalcTrustScore(rental.renterId);
       await recordAudit({
         req,
         action: "rental.close_penalty",
@@ -574,12 +610,71 @@ router.post(
       payloadJson: { outcome, rentalId: id },
     });
 
+    await recalcTrustScore(rental.renterId);
     await recordAudit({
       req,
       action: "rental.close_enforcement",
       entityType: "rental",
       entityId: id,
       after: { updated, outcome },
+    });
+
+    res.json(updated);
+  })
+);
+
+// ── Admin: approve or reject a rental pending risk review ─────────────────
+router.post(
+  "/:id/risk-review",
+  authenticate,
+  requirePermission("rental.close"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const id = Number(req.params.id);
+    const { approved, reason } = req.body as { approved: boolean; reason?: string };
+
+    const [rental] = await db.select().from(rentals).where(eq(rentals.id, id)).limit(1);
+    if (!rental) throw new NotFoundError("Rental");
+    if (rental.status !== "pending_risk_review") {
+      throw new LegalStateError(`Expected pending_risk_review, got ${rental.status}`);
+    }
+
+    if (!approved) {
+      const [updated] = await db
+        .update(rentals)
+        .set({
+          status: "cancelled",
+          cancelledAt: new Date(),
+          cancellationReason: reason ?? "Rejected during manual risk review",
+          updatedAt: new Date(),
+        })
+        .where(eq(rentals.id, id))
+        .returning();
+      await db
+        .update(assets)
+        .set({ status: "listed", updatedAt: new Date() })
+        .where(eq(assets.id, rental.assetId));
+      await recordAudit({
+        req,
+        action: "rental.risk_review_rejected",
+        entityType: "rental",
+        entityId: id,
+        after: updated,
+      });
+      return res.json(updated);
+    }
+
+    const [updated] = await db
+      .update(rentals)
+      .set({ status: "pending_legal_signing", updatedAt: new Date() })
+      .where(eq(rentals.id, id))
+      .returning();
+
+    await recordAudit({
+      req,
+      action: "rental.risk_review_approved",
+      entityType: "rental",
+      entityId: id,
+      after: updated,
     });
 
     res.json(updated);

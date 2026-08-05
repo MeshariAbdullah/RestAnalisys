@@ -62,6 +62,7 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | POST   | `/:id/delivered` | operations               | Confirm delivery to renter                       |
 | POST   | `/:id/returned`  | operations               | Confirm return received                          |
 | POST   | `/:id/close`     | admin / super_admin      | Close with outcome (`clean`/`penalty`/`major_damage`/`loss`) |
+| POST   | `/:id/risk-review` | admin / super_admin   | Approve or reject a rental in manual risk review |
 | POST   | `/:id/cancel`    | renter / admin           | Cancel a rental with reason                      |
 
 ## Legal & Sanad — `/api/legal`

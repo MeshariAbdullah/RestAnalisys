@@ -248,10 +248,10 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
-  register: (email: string, password: string, fullName: string, role: "renter" | "owner" = "renter") =>
+  register: (email: string, password: string, fullName: string, role: "renter" | "owner" = "renter", phone?: string) =>
     request<{ token: string; user: User }>("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ email, password, fullName, role }),
+      body: JSON.stringify({ email, password, fullName, role, phone }),
     }),
   me: () => request<User>("/auth/me"),
   nafathVerify: (nationalId: string) =>
@@ -402,6 +402,11 @@ export const rentalsApi = {
       sanad: SanadRecord | null;
       payments: Payment[];
     }>(`/rentals/${id}`),
+  riskReview: (id: number, approved: boolean, reason?: string) =>
+    request<Rental>(`/rentals/${id}/risk-review`, {
+      method: "POST",
+      body: JSON.stringify({ approved, reason }),
+    }),
   cancel: (id: number, reason: string) =>
     request<Rental>(`/rentals/${id}/cancel`, {
       method: "POST",

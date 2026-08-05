@@ -62,9 +62,17 @@ export default function InspectorDashboard() {
                     </span>
                   </div>
                 </div>
-                <Link href={`/inspector/report/${asset.id}`}>
+                <Link
+                  href={
+                    asset.status === "returned_under_inspection"
+                      ? `/inspector/return/${asset.id}`
+                      : `/inspector/report/${asset.id}`
+                  }
+                >
                   <Button className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
-                    Inspect
+                    {asset.status === "returned_under_inspection"
+                      ? "Return inspect"
+                      : "Intake inspect"}
                   </Button>
                 </Link>
               </CardContent>

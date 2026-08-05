@@ -12,6 +12,7 @@ export default function Register() {
   const [role, setRole] = useState<"renter" | "owner">("renter");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -21,7 +22,7 @@ export default function Register() {
     setLoading(true);
     setError("");
     try {
-      const res = await authApi.register(email, password, fullName, role);
+      const res = await authApi.register(email, password, fullName, role, phone || undefined);
       saveSession(res.token, res.user);
       navigate(homeForRole(res.user.role));
     } catch (err) {
@@ -87,6 +88,16 @@ export default function Register() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="mt-1 bg-neutral-950 border-neutral-800 text-white"
                 required
+              />
+            </div>
+            <div>
+              <Label className="text-neutral-300">Phone (Saudi mobile)</Label>
+              <Input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+966 5X XXX XXXX"
+                className="mt-1 bg-neutral-950 border-neutral-800 text-white"
               />
             </div>
             <div>
