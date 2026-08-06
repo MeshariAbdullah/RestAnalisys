@@ -46,6 +46,23 @@ export const NafathVerifySchema = z.object({
   nationalId: SaudiNationalId,
 });
 
+export const ProfileUpdateSchema = z
+  .object({
+    fullName: z.string().min(2).optional(),
+    phone: SaudiPhone.optional(),
+    nationalAddressJson: z.record(z.any()).optional(),
+    currentPassword: z.string().optional(),
+    newPassword: z.string().min(8).optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.newPassword && !data.currentPassword) return false;
+      if (data.currentPassword && !data.newPassword) return false;
+      return true;
+    },
+    { message: "Both currentPassword and newPassword are required to change password" }
+  );
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Assets (owner submission + admin review)
 // ─────────────────────────────────────────────────────────────────────────────

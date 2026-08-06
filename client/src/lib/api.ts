@@ -259,6 +259,16 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ nationalId }),
     }),
+  updateProfile: (data: {
+    fullName?: string;
+    phone?: string;
+    currentPassword?: string;
+    newPassword?: string;
+  }) =>
+    request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -578,6 +588,68 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  linkUrl?: string;
+  relatedEntityType?: string;
+  relatedEntityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (opts?: { unread?: boolean; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (opts?.unread) qs.set("unread", "true");
+    if (opts?.limit) qs.set("limit", String(opts.limit));
+    return request<Notification[]>(`/notifications?${qs}`);
+  },
+  unreadCount: () => request<{ unread: number }>("/notifications/count"),
+  markRead: (id: number) =>
+    request<Notification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit logs (admin)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AuditLog {
+  id: number;
+  actorUserId?: number;
+  actorRole?: string;
+  action: string;
+  entityType: string;
+  entityId?: number;
+  beforeJson?: Record<string, unknown>;
+  afterJson?: Record<string, unknown>;
+  ip?: string;
+  createdAt: string;
+}
+
+export const auditLogsApi = {
+  list: (opts?: { limit?: number; offset?: number; entityType?: string; action?: string }) => {
+    const qs = new URLSearchParams();
+    if (opts?.limit) qs.set("limit", String(opts.limit));
+    if (opts?.offset) qs.set("offset", String(opts.offset));
+    if (opts?.entityType) qs.set("entityType", opts.entityType);
+    if (opts?.action) qs.set("action", opts.action);
+    return request<{ items: AuditLog[]; total: number; limit: number; offset: number }>(
+      `/admin/audit-logs?${qs}`
+    );
+  },
 };
 
 export const healthApi = {

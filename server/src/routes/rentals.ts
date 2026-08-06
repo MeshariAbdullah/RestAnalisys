@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyUser } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -94,12 +95,19 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
   );
 
+  const [lateRow] = await db
+    .select({
+      count: sql<number>`count(*) filter (where returned_at > (end_date::date + interval '1 day'))`,
+    })
+    .from(rentals)
+    .where(eq(rentals.renterId, userId));
+
   return {
     accountAgeDays,
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateRow?.count ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -441,6 +449,16 @@ router.post(
       after: updated,
     });
 
+    await notifyUser(rental.renterId, "rental_delivered", "Item Delivered", `Your rental ${rental.reference} has been delivered.`, {
+      linkUrl: `/my-rentals`,
+      relatedEntityType: "rental",
+      relatedEntityId: id,
+    });
+    await notifyUser(rental.ownerId, "rental_delivered", "Item Delivered to Renter", `Your asset from rental ${rental.reference} has been delivered to the renter.`, {
+      relatedEntityType: "rental",
+      relatedEntityId: id,
+    });
+
     res.json(updated);
   })
 );
@@ -515,6 +533,16 @@ router.post(
         entityType: "rental",
         entityId: id,
         after: updated,
+      });
+      await notifyUser(rental.renterId, "rental_closed", "Rental Closed", `Your rental ${rental.reference} has been closed successfully.`, {
+        linkUrl: `/my-rentals`,
+        relatedEntityType: "rental",
+        relatedEntityId: id,
+      });
+      await notifyUser(rental.ownerId, "rental_closed", "Rental Closed — Payout Pending", `Rental ${rental.reference} closed cleanly. Your payout will be processed soon.`, {
+        linkUrl: `/owner/payouts`,
+        relatedEntityType: "rental",
+        relatedEntityId: id,
       });
       return res.json(updated);
     }
