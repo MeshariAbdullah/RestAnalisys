@@ -37,6 +37,21 @@ router.get(
   })
 );
 
+// ── Rentals awaiting return inspection ─────────────────────────────────────
+router.get(
+  "/return-queue",
+  authenticate,
+  requirePermission("inspection.create"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select()
+      .from(rentals)
+      .where(eq(rentals.status, "under_inspection"))
+      .orderBy(desc(rentals.updatedAt));
+    res.json(rows);
+  })
+);
+
 // ── Create an intake inspection report ──────────────────────────────────────
 router.post(
   "/intake",
@@ -145,12 +160,12 @@ router.post(
       after: inspection,
     });
 
-    // Interpret outcome by condition grade — the actual rental closing is done
-    // via POST /rentals/:id/close which reads this inspection.
-    res.status(201).json({
-      inspection,
-      hint: "Call POST /rentals/:id/close with outcome=clean|penalty|major_damage",
-    });
+    let hint = "clean";
+    if (input.conditionGrade === "D") hint = "major_damage";
+    else if (input.conditionGrade === "C") hint = "penalty";
+    else if (!input.authenticityVerified) hint = "major_damage";
+
+    res.status(201).json({ inspection, hint });
   })
 );
 

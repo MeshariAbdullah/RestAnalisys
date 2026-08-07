@@ -11,6 +11,7 @@ import Browse from "./pages/renter/Browse";
 import ItemDetail from "./pages/renter/ItemDetail";
 import LegalCommitmentPage from "./pages/renter/LegalCommitment";
 import MyRentals from "./pages/renter/MyRentals";
+import RentalDetail from "./pages/renter/RentalDetail";
 
 // Owner
 import OwnerDashboard from "./pages/owner/OwnerDashboard";
@@ -21,6 +22,10 @@ import Payouts from "./pages/owner/Payouts";
 // Inspector
 import InspectorDashboard from "./pages/inspector/InspectorDashboard";
 import InspectionForm from "./pages/inspector/InspectionForm";
+import ReturnInspectionForm from "./pages/inspector/ReturnInspectionForm";
+
+// Profile
+import Profile from "./pages/Profile";
 
 // Ops
 import OpsDashboard from "./pages/ops/OpsDashboard";
@@ -65,6 +70,13 @@ export default function App() {
       <Route path="/my-rentals">
         <ProtectedRoute roles={["renter"]}><MyRentals /></ProtectedRoute>
       </Route>
+      <Route path="/my-rentals/:id">
+        {(params) => (
+          <ProtectedRoute roles={["renter"]}>
+            <RentalDetail id={Number(params.id)} />
+          </ProtectedRoute>
+        )}
+      </Route>
 
       {/* Owner */}
       <Route path="/owner">
@@ -95,6 +107,13 @@ export default function App() {
           </ProtectedRoute>
         )}
       </Route>
+      <Route path="/inspector/return/:rentalId">
+        {(params) => (
+          <ProtectedRoute roles={["inspector"]}>
+            <ReturnInspectionForm rentalId={Number(params.rentalId)} />
+          </ProtectedRoute>
+        )}
+      </Route>
 
       {/* Operations */}
       <Route path="/ops">
@@ -108,6 +127,13 @@ export default function App() {
       </Route>
       <Route path="/ops/alerts">
         <ProtectedRoute roles={["operations"]}><AlertsPage /></ProtectedRoute>
+      </Route>
+
+      {/* Profile (all roles) */}
+      <Route path="/profile">
+        <ProtectedRoute roles={["renter", "owner", "inspector", "operations", "admin", "super_admin"]}>
+          <Profile />
+        </ProtectedRoute>
       </Route>
 
       {/* Admin */}

@@ -211,6 +211,20 @@ export interface Shipment {
   deliveredAt?: string;
 }
 
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  entityType?: string;
+  entityId?: number;
+  link?: string;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
 export interface RentalQuote {
   assetId: number;
   assetTitle: string;
@@ -318,6 +332,7 @@ export const assetsApi = {
 
 export const inspectionsApi = {
   queue: () => request<Asset[]>("/inspections/queue"),
+  returnQueue: () => request<Rental[]>("/inspections/return-queue"),
   createIntake: (data: {
     assetId: number;
     authenticityVerified: boolean;
@@ -578,6 +593,22 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notificationsApi = {
+  list: (limit?: number) => {
+    const qs = limit ? `?limit=${limit}` : "";
+    return request<AppNotification[]>(`/notifications${qs}`);
+  },
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
 };
 
 export const healthApi = {
