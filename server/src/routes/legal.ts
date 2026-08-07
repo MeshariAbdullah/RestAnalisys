@@ -27,6 +27,7 @@ import {
 import { requestNafathSignature } from "../services/nafathService.js";
 import { issueSanad, signSanad, dischargeSanad, executeSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyUser } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -266,6 +267,14 @@ router.post(
       entityId: sanadId,
       after: { updated, reason },
     });
+
+    await notifyUser(
+      sanad.renterId,
+      "sanad.execution",
+      "Sanad under execution",
+      `Your promissory note has been submitted for legal execution via Najiz. Case: ${result.executionCaseNumber ?? "pending"}.`,
+      { entityType: "sanad_record", entityId: sanadId }
+    );
 
     res.json(updated);
   })

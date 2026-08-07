@@ -12,6 +12,7 @@ import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyUser } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -59,6 +60,15 @@ router.post(
       entityId: dispute.id,
       after: dispute,
     });
+
+    const otherParty = actorId === rental.renterId ? rental.ownerId : rental.renterId;
+    await notifyUser(
+      otherParty,
+      "dispute.opened",
+      "Dispute opened",
+      `A ${input.category} dispute has been opened for rental ${rental.reference}.`,
+      { entityType: "dispute", entityId: dispute.id }
+    );
 
     res.status(201).json(dispute);
   })
@@ -149,6 +159,24 @@ router.post(
       entityId: input.disputeId,
       after: updated,
     });
+
+    const [rental] = await db
+      .select({ renterId: rentals.renterId, ownerId: rentals.ownerId, reference: rentals.reference })
+      .from(rentals)
+      .where(eq(rentals.id, dispute.rentalId))
+      .limit(1);
+    if (rental) {
+      const resLabel = input.resolution.replace(/_/g, " ");
+      for (const uid of [rental.renterId, rental.ownerId]) {
+        await notifyUser(
+          uid,
+          "dispute.resolved",
+          "Dispute resolved",
+          `Dispute for rental ${rental.reference} has been resolved: ${resLabel}.`,
+          { entityType: "dispute", entityId: input.disputeId }
+        );
+      }
+    }
 
     res.json(updated);
   })
