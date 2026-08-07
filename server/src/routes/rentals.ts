@@ -320,6 +320,37 @@ router.get(
   })
 );
 
+// ── Owner: view rentals on my assets ────────────────────────────────────────
+router.get(
+  "/owner",
+  authenticate,
+  requirePermission("asset.read.own"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const rows = await db
+      .select({
+        id: rentals.id,
+        reference: rentals.reference,
+        assetId: rentals.assetId,
+        assetTitle: assets.title,
+        assetBrand: assets.brand,
+        renterId: rentals.renterId,
+        status: rentals.status,
+        startDate: rentals.startDate,
+        endDate: rentals.endDate,
+        durationDays: rentals.durationDays,
+        rentalSubtotalHalalas: rentals.rentalSubtotalHalalas,
+        totalPayableHalalas: rentals.totalPayableHalalas,
+        createdAt: rentals.createdAt,
+        closedAt: rentals.closedAt,
+      })
+      .from(rentals)
+      .innerJoin(assets, eq(rentals.assetId, assets.id))
+      .where(eq(rentals.ownerId, req.user!.userId))
+      .orderBy(desc(rentals.createdAt));
+    res.json(rows);
+  })
+);
+
 // ── Admin/Ops: list all rentals ─────────────────────────────────────────────
 router.get(
   "/",

@@ -19,6 +19,7 @@ import OwnerDashboard from "./pages/owner/OwnerDashboard";
 import SubmitAsset from "./pages/owner/SubmitAsset";
 import AssetDetail from "./pages/owner/AssetDetail";
 import Payouts from "./pages/owner/Payouts";
+import OwnerRentals from "./pages/owner/OwnerRentals";
 
 // Inspector
 import InspectorDashboard from "./pages/inspector/InspectorDashboard";
@@ -97,6 +98,9 @@ export default function App() {
             <AssetDetail id={Number(params.id)} />
           </ProtectedRoute>
         )}
+      </Route>
+      <Route path="/owner/rentals">
+        <ProtectedRoute roles={["owner"]}><OwnerRentals /></ProtectedRoute>
       </Route>
       <Route path="/owner/payouts">
         <ProtectedRoute roles={["owner"]}><Payouts /></ProtectedRoute>
