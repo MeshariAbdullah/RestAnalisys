@@ -13,6 +13,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -217,6 +218,42 @@ router.get(
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
+    res.json(rows);
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const entityType = req.query.entityType as string | undefined;
+    const action = req.query.action as string | undefined;
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (action) conditions.push(eq(auditLogs.action, action));
+
+    const rows = await db
+      .select({
+        id: auditLogs.id,
+        userId: auditLogs.actorUserId,
+        action: auditLogs.action,
+        entityType: auditLogs.entityType,
+        entityId: auditLogs.entityId,
+        ipAddress: auditLogs.ip,
+        userAgent: auditLogs.userAgent,
+        before: auditLogs.beforeJson,
+        after: auditLogs.afterJson,
+        createdAt: auditLogs.createdAt,
+      })
+      .from(auditLogs)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit);
+
     res.json(rows);
   })
 );

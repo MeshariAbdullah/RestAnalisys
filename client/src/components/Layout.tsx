@@ -36,6 +36,7 @@ const NAV: NavItem[] = [
   // Renter
   { href: "/browse", label: "Browse Catalog", icon: ShoppingBag, roles: ["renter"] },
   { href: "/my-rentals", label: "My Rentals", icon: FileText, roles: ["renter"] },
+  { href: "/my-payments", label: "Payments", icon: Receipt, roles: ["renter"] },
 
   // Owner
   { href: "/owner", label: "Owner Dashboard", icon: LayoutDashboard, roles: ["owner"] },
@@ -58,6 +59,8 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/risk", label: "Risk Monitor", icon: Shield, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit", label: "Audit Log", icon: FileText, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {

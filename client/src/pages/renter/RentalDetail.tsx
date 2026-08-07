@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   FileText,
   Shield,
@@ -9,11 +9,12 @@ import {
   FileSignature,
   Calendar,
   Package,
+  AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { rentalsApi, formatSar } from "@/lib/api";
+import { rentalsApi, disputesApi, formatSar } from "@/lib/api";
 import { getRentalStatusColor, humanizeStatus, formatDate } from "@/lib/utils";
 
 export default function RentalDetail({ id }: { id: number }) {
@@ -228,6 +229,10 @@ export default function RentalDetail({ id }: { id: number }) {
               </Button>
             </Link>
           )}
+
+          {["active", "closed", "closed_with_penalty"].includes(rental.status) && (
+            <DisputeForm rentalId={rental.id} />
+          )}
         </div>
       </div>
     </div>
@@ -250,5 +255,93 @@ function TimelineItem({ label, date }: { label: string; date: string }) {
       <span className="text-neutral-600 w-24">{label}</span>
       <span className="text-neutral-500">{formatDate(date)}</span>
     </div>
+  );
+}
+
+const DISPUTE_CATEGORIES = [
+  { value: "damage", label: "Damage" },
+  { value: "loss", label: "Loss" },
+  { value: "fraud", label: "Fraud" },
+  { value: "service", label: "Service issue" },
+  { value: "billing", label: "Billing issue" },
+] as const;
+
+function DisputeForm({ rentalId }: { rentalId: number }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [category, setCategory] = useState<string>("service");
+  const [summary, setSummary] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      disputesApi.open({
+        rentalId,
+        category: category as "damage" | "loss" | "fraud" | "service" | "billing",
+        summary,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["rental", rentalId] });
+      setOpen(false);
+      setSummary("");
+    },
+  });
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full flex items-center justify-center gap-2 text-sm text-red-600 hover:text-red-700 border border-red-200 rounded-lg py-2 hover:bg-red-50 transition-colors"
+      >
+        <AlertTriangle className="w-4 h-4" />
+        Report a problem
+      </button>
+    );
+  }
+
+  return (
+    <Card className="border-red-200">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-red-700">
+          <AlertTriangle className="w-4 h-4" />
+          Open a dispute
+        </div>
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="w-full text-sm border rounded-lg px-3 py-2"
+        >
+          {DISPUTE_CATEGORIES.map((c) => (
+            <option key={c.value} value={c.value}>{c.label}</option>
+          ))}
+        </select>
+        <textarea
+          value={summary}
+          onChange={(e) => setSummary(e.target.value)}
+          placeholder="Describe the issue…"
+          className="w-full text-sm border rounded-lg px-3 py-2 h-24 resize-none"
+        />
+        <div className="flex gap-2">
+          <Button
+            onClick={() => mutation.mutate()}
+            disabled={!summary.trim() || mutation.isPending}
+            className="flex-1 bg-red-600 text-white hover:bg-red-700 text-sm"
+          >
+            {mutation.isPending ? "Submitting…" : "Submit"}
+          </Button>
+          <Button
+            onClick={() => setOpen(false)}
+            variant="outline"
+            className="text-sm"
+          >
+            Cancel
+          </Button>
+        </div>
+        {mutation.isError && (
+          <p className="text-xs text-red-600">
+            {(mutation.error as Error).message}
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
