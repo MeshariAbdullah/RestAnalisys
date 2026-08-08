@@ -189,4 +189,50 @@ router.get(
   })
 );
 
+router.patch(
+  "/me",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const { fullName, phoneE164 } = req.body as {
+      fullName?: string;
+      phoneE164?: string;
+    };
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (fullName && fullName.length >= 2) updates.fullName = fullName;
+    if (phoneE164) updates.phoneE164 = phoneE164;
+
+    const [updated] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning();
+
+    await recordAudit({
+      req,
+      action: "auth.profile_update",
+      entityType: "user",
+      entityId: userId,
+      after: { fullName: updated.fullName, phoneE164: updated.phoneE164 },
+    });
+
+    return res.json({
+      id: updated.id,
+      email: updated.email,
+      fullName: updated.fullName,
+      role: updated.role,
+      phoneE164: updated.phoneE164,
+      nationalId: updated.nationalId,
+      nafathVerified: updated.nafathVerified,
+      kycStatus: updated.kycStatus,
+      phoneVerified: updated.phoneVerified,
+      emailVerified: updated.emailVerified,
+      trustScore: updated.trustScore,
+      riskCategory: updated.riskCategory,
+      isBlocked: updated.isBlocked,
+    });
+  })
+);
+
 export default router;

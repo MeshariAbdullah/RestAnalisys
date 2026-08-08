@@ -63,6 +63,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "rental.read.own",
     "rental.cancel",
     "legal.sign",
+    "payment.charge",
     "payment.read",
     "dispute.open",
   ],
