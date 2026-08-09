@@ -40,6 +40,7 @@ import {
   RentalQuoteRequestSchema,
   RentalCreateSchema,
   RentalCancelSchema,
+  RentalCloseSchema,
 } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
@@ -56,6 +57,8 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
+import { recalculateTrustScore } from "../services/trustScoreService.js";
 
 const router = Router();
 
@@ -78,16 +81,16 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) throw new NotFoundError("User");
 
-  // Aggregate rental history.
   const stats = await db
     .select({
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      lateReturns: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty') and returned_at > (end_date::timestamp + interval '1 day'))`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, lateReturns: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +102,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.lateReturns ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +283,15 @@ router.post(
       after: { rental, decision },
     });
 
+    await notify({
+      userId: asset.ownerId,
+      title: "New rental request",
+      body: `Your asset "${asset.title}" has a new rental request (${rental.reference}).`,
+      category: "rental",
+      referenceType: "rental",
+      referenceId: rental.id,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -306,6 +318,21 @@ router.get(
       .select()
       .from(rentals)
       .where(eq(rentals.renterId, req.user!.userId))
+      .orderBy(desc(rentals.createdAt));
+    res.json(rows);
+  })
+);
+
+// ── Owner: view rentals of my assets ───────────────────────────────────────
+router.get(
+  "/owner",
+  authenticate,
+  requirePermission("asset.read.own"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const rows = await db
+      .select()
+      .from(rentals)
+      .where(eq(rentals.ownerId, req.user!.userId))
       .orderBy(desc(rentals.createdAt));
     res.json(rows);
   })
@@ -433,6 +460,15 @@ router.post(
       .set({ status: "rented_out", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
 
+    await notify({
+      userId: rental.renterId,
+      title: "Item delivered",
+      body: `Your rental ${rental.reference} has been delivered. Enjoy!`,
+      category: "rental",
+      referenceType: "rental",
+      referenceId: id,
+    });
+
     await recordAudit({
       req,
       action: "rental.delivered",
@@ -488,10 +524,7 @@ router.post(
   requirePermission("rental.close"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { outcome, penaltyHalalas } = req.body as {
-      outcome: "clean" | "penalty" | "major_damage" | "loss";
-      penaltyHalalas?: number;
-    };
+    const { outcome, penaltyHalalas } = RentalCloseSchema.parse(req.body);
 
     const [rental] = await db.select().from(rentals).where(eq(rentals.id, id)).limit(1);
     if (!rental) throw new NotFoundError("Rental");
@@ -509,6 +542,26 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      await recalculateTrustScore(rental.renterId);
+
+      await notify({
+        userId: rental.renterId,
+        title: "Rental closed",
+        body: `Your rental ${rental.reference} has been closed successfully.`,
+        category: "rental",
+        referenceType: "rental",
+        referenceId: id,
+      });
+      await notify({
+        userId: rental.ownerId,
+        title: "Asset returned",
+        body: `Your asset from rental ${rental.reference} has been returned in good condition and is listed again.`,
+        category: "asset",
+        referenceType: "rental",
+        referenceId: id,
+      });
+
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -540,6 +593,18 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      await recalculateTrustScore(rental.renterId);
+
+      await notify({
+        userId: rental.renterId,
+        title: "Rental closed with penalty",
+        body: `Your rental ${rental.reference} was closed with a minor damage penalty.`,
+        category: "rental",
+        referenceType: "rental",
+        referenceId: id,
+      });
+
       await recordAudit({
         req,
         action: "rental.close_penalty",
