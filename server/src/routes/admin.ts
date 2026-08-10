@@ -21,6 +21,12 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
 import { generateLegalCommitment } from "../services/legalService.js";
+import {
+  AdminRiskReviewSchema,
+  AdminBlockUserSchema,
+  AdminCreateStaffSchema,
+} from "../utils/schemas.js";
+import bcrypt from "bcryptjs";
 
 const router = Router();
 
@@ -150,7 +156,7 @@ router.post(
   requirePermission("user.block"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { reason, block } = req.body as { reason?: string; block: boolean };
+    const { reason, block } = AdminBlockUserSchema.parse(req.body);
     const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
     if (!user) throw new NotFoundError("User");
     const [updated] = await db
@@ -180,12 +186,8 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
-      email: string;
-      fullName: string;
-      role: "admin" | "operations" | "inspector";
-      passwordHash: string;
-    };
+    const { email, fullName, role, password } = AdminCreateStaffSchema.parse(req.body);
+    const passwordHash = await bcrypt.hash(password, 12);
     const [user] = await db
       .insert(users)
       .values({
@@ -250,11 +252,7 @@ router.post(
   authenticate,
   requirePermission("finance.read"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { rentalId, approved, rejectionReason } = req.body as {
-      rentalId: number;
-      approved: boolean;
-      rejectionReason?: string;
-    };
+    const { rentalId, approved, rejectionReason } = AdminRiskReviewSchema.parse(req.body);
 
     const [rental] = await db
       .select()

@@ -213,6 +213,7 @@ export const users = pgTable(
     emailIdx: uniqueIndex("users_email_idx").on(t.email),
     nationalIdIdx: index("users_national_id_idx").on(t.nationalId),
     roleIdx: index("users_role_idx").on(t.role),
+    nafathTxIdx: index("users_nafath_tx_idx").on(t.nafathTransactionId),
   })
 );
 
@@ -515,6 +516,7 @@ export const sanadRecords = pgTable(
   (t) => ({
     rentalIdx: index("sanad_records_rental_idx").on(t.rentalId),
     statusIdx: index("sanad_records_status_idx").on(t.status),
+    nafithRefIdx: index("sanad_records_nafith_ref_idx").on(t.nafithReference),
   })
 );
 
@@ -556,6 +558,7 @@ export const payments = pgTable(
     rentalIdx: index("payments_rental_idx").on(t.rentalId),
     userIdx: index("payments_user_idx").on(t.userId),
     typeIdx: index("payments_type_idx").on(t.type),
+    gatewayTxIdx: index("payments_gateway_tx_idx").on(t.gatewayTransactionId),
   })
 );
 
@@ -634,6 +637,7 @@ export const shipments = pgTable(
   (t) => ({
     assetIdx: index("shipments_asset_idx").on(t.assetId),
     rentalIdx: index("shipments_rental_idx").on(t.rentalId),
+    trackingIdx: index("shipments_tracking_idx").on(t.trackingNumber),
   })
 );
 

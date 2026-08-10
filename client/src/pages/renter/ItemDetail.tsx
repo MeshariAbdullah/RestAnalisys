@@ -50,7 +50,11 @@ export default function ItemDetail({ id }: { id: number }) {
         startDate,
         endDate,
       });
-      navigate(`/legal/${res.legal.commitmentId}`);
+      if (res.legal?.commitmentId) {
+        navigate(`/legal/${res.legal.commitmentId}`);
+      } else {
+        navigate("/my-rentals");
+      }
     } catch (err) {
       setError((err as Error).message ?? "Unable to book");
     } finally {

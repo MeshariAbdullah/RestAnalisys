@@ -20,6 +20,12 @@ import {
   shipments,
 } from "../db/schema.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import {
+  WebhookNafathSchema,
+  WebhookNafithSchema,
+  WebhookPaymentSchema,
+  WebhookCourierSchema,
+} from "../utils/schemas.js";
 
 const router = Router();
 
@@ -58,11 +64,7 @@ async function markProcessed(eventId: number, error?: string) {
 router.post(
   "/nafath",
   asyncHandler(async (req, res) => {
-    const { transactionId, status, nationalId } = req.body as {
-      transactionId: string;
-      status: "verified" | "rejected" | "expired";
-      nationalId?: string;
-    };
+    const { transactionId, status, nationalId } = WebhookNafathSchema.parse(req.body);
 
     const eventId = await logEvent("nafath", `verification.${status}`, transactionId, req.body);
 
@@ -92,11 +94,7 @@ router.post(
 router.post(
   "/nafith",
   asyncHandler(async (req, res) => {
-    const { nafithReference, status, executionCaseNumber } = req.body as {
-      nafithReference: string;
-      status: string;
-      executionCaseNumber?: string;
-    };
+    const { nafithReference, status, executionCaseNumber } = WebhookNafithSchema.parse(req.body);
 
     const eventId = await logEvent("nafith", `sanad.${status}`, nafithReference, req.body);
 
@@ -129,11 +127,7 @@ router.post(
 router.post(
   "/payment",
   asyncHandler(async (req, res) => {
-    const { transactionId, status, failureReason } = req.body as {
-      transactionId: string;
-      status: "captured" | "failed" | "refunded" | "chargeback";
-      failureReason?: string;
-    };
+    const { transactionId, status, failureReason } = WebhookPaymentSchema.parse(req.body);
 
     const eventId = await logEvent("hyperpay", `payment.${status}`, transactionId, req.body);
 
@@ -172,10 +166,7 @@ router.post(
 router.post(
   "/courier",
   asyncHandler(async (req, res) => {
-    const { trackingNumber, status } = req.body as {
-      trackingNumber: string;
-      status: "picked_up" | "in_transit" | "delivered" | "failed" | "returned";
-    };
+    const { trackingNumber, status } = WebhookCourierSchema.parse(req.body);
 
     const eventId = await logEvent("courier", `shipment.${status}`, trackingNumber, req.body);
 

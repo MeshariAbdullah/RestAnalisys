@@ -16,8 +16,22 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  function validatePassword(pw: string): string | null {
+    if (pw.length < 8) return "Password must be at least 8 characters";
+    if (!/[A-Z]/.test(pw)) return "Password must contain an uppercase letter";
+    if (!/[a-z]/.test(pw)) return "Password must contain a lowercase letter";
+    if (!/\d/.test(pw)) return "Password must contain a digit";
+    if (!/[^A-Za-z0-9]/.test(pw)) return "Password must contain a special character";
+    return null;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const pwError = validatePassword(password);
+    if (pwError) {
+      setError(pwError);
+      return;
+    }
     setLoading(true);
     setError("");
     try {

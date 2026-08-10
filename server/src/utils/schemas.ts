@@ -235,3 +235,62 @@ export const ShipmentUpdateSchema = z.object({
   ]),
   trackingNumber: z.string().optional(),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Webhooks
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const WebhookNafathSchema = z.object({
+  transactionId: z.string().min(1),
+  status: z.enum(["verified", "rejected", "expired"]),
+  nationalId: z.string().optional(),
+});
+
+export const WebhookNafithSchema = z.object({
+  nafithReference: z.string().min(1),
+  status: z.enum([
+    "pending_issuance",
+    "issued",
+    "signed",
+    "active",
+    "matured",
+    "discharged",
+    "under_execution",
+    "executed",
+    "cancelled",
+  ]),
+  executionCaseNumber: z.string().optional(),
+});
+
+export const WebhookPaymentSchema = z.object({
+  transactionId: z.string().min(1),
+  status: z.enum(["captured", "failed", "refunded", "chargeback"]),
+  failureReason: z.string().optional(),
+});
+
+export const WebhookCourierSchema = z.object({
+  trackingNumber: z.string().min(1),
+  status: z.enum(["picked_up", "in_transit", "delivered", "failed", "returned"]),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const AdminRiskReviewSchema = z.object({
+  rentalId: z.number().int().positive(),
+  approved: z.boolean(),
+  rejectionReason: z.string().optional(),
+});
+
+export const AdminBlockUserSchema = z.object({
+  block: z.boolean(),
+  reason: z.string().optional(),
+});
+
+export const AdminCreateStaffSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().min(2),
+  role: z.enum(["admin", "operations", "inspector"]),
+  password: PasswordSchema,
+});

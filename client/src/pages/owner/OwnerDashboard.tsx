@@ -119,8 +119,8 @@ export default function OwnerDashboard() {
                     {asset.studioImagesJson?.[0] || asset.submissionImagesJson?.[0] ? (
                       <img
                         src={
-                          asset.studioImagesJson[0] ||
-                          asset.submissionImagesJson[0]
+                          asset.studioImagesJson?.[0] ||
+                          asset.submissionImagesJson?.[0]
                         }
                         alt={asset.title}
                         className="w-full h-full object-cover"
