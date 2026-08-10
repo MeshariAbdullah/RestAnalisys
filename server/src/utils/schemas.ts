@@ -29,9 +29,17 @@ export const HalalasAmount = z.number().int().nonnegative();
 // Auth
 // ─────────────────────────────────────────────────────────────────────────────
 
+export const PasswordSchema = z
+  .string()
+  .min(8, "Password must be at least 8 characters")
+  .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+  .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+  .regex(/\d/, "Password must contain at least one digit")
+  .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character");
+
 export const RegisterSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: PasswordSchema,
   fullName: z.string().min(2),
   phone: SaudiPhone.optional(),
   role: z.enum(["renter", "owner"]).default("renter"),

@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -84,10 +85,11 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      lateReturns: sql<number>`count(*) filter (where returned_at is not null and returned_at::date > end_date::date)`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, lateReturns: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +101,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.lateReturns ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -201,7 +203,7 @@ router.post(
         assetId: asset.id,
         renterId,
         ownerId: asset.ownerId,
-        status: "pending_legal_signing",
+        status: decision.requiresReview ? "pending_risk_review" : "pending_legal_signing",
         startDate: input.startDate,
         endDate: input.endDate,
         durationDays,
@@ -243,54 +245,68 @@ router.post(
       legalCommitmentHalalas: decision.legalCommitmentHalalas,
     });
 
-    // Generate legal commitment draft --------------------------------------
-    const [renter] = await db.select().from(users).where(eq(users.id, renterId)).limit(1);
-    const legal = generateLegalCommitment({
-      rentalReference: rental.reference,
-      renterFullName: renter!.fullName,
-      renterNationalId: renter!.nationalId ?? "UNKNOWN",
-      assetTitle: asset.title,
-      assetEvaluatedValueHalalas: asset.evaluatedValueHalalas ?? 0,
-      commitmentPct: decision.legalCommitmentPct!,
-      commitmentHalalas: decision.legalCommitmentHalalas,
-      rentalStartDate: input.startDate,
-      rentalEndDate: input.endDate,
-      rentalTotalHalalas: quote.totalPayableHalalas,
-    });
-
-    const [legalCommitment] = await db
-      .insert(legalCommitments)
-      .values({
-        rentalId: rental.id,
-        renterId,
-        status: "pending_signature",
-        contractVersion: legal.version,
-        contractTextHash: legal.textHash,
-        clausesJson: legal.clauses as unknown as object,
-        commitmentHalalas: decision.legalCommitmentHalalas,
+    // Generate legal commitment draft (skip if pending manual review)
+    let legalResponse: Record<string, unknown> | null = null;
+    if (!decision.requiresReview) {
+      const [renter] = await db.select().from(users).where(eq(users.id, renterId)).limit(1);
+      const legal = generateLegalCommitment({
+        rentalReference: rental.reference,
+        renterFullName: renter!.fullName,
+        renterNationalId: renter!.nationalId ?? "UNKNOWN",
+        assetTitle: asset.title,
+        assetEvaluatedValueHalalas: asset.evaluatedValueHalalas ?? 0,
         commitmentPct: decision.legalCommitmentPct!,
-      })
-      .returning();
+        commitmentHalalas: decision.legalCommitmentHalalas,
+        rentalStartDate: input.startDate,
+        rentalEndDate: input.endDate,
+        rentalTotalHalalas: quote.totalPayableHalalas,
+      });
 
-    await recordAudit({
-      req,
-      action: "rental.create",
-      entityType: "rental",
-      entityId: rental.id,
-      after: { rental, decision },
-    });
+      const [legalCommitment] = await db
+        .insert(legalCommitments)
+        .values({
+          rentalId: rental.id,
+          renterId,
+          status: "pending_signature",
+          contractVersion: legal.version,
+          contractTextHash: legal.textHash,
+          clausesJson: legal.clauses as unknown as object,
+          commitmentHalalas: decision.legalCommitmentHalalas,
+          commitmentPct: decision.legalCommitmentPct!,
+        })
+        .returning();
 
-    res.status(201).json({
-      rental,
-      risk: decision,
-      legal: {
+      legalResponse = {
         commitmentId: legalCommitment.id,
         status: legalCommitment.status,
         clauses: legal.clauses,
         textHash: legal.textHash,
         commitmentHalalas: decision.legalCommitmentHalalas,
         commitmentPct: decision.legalCommitmentPct,
-      },
+      };
+    }
+
+    await recordAudit({
+      req,
+      action: decision.requiresReview ? "rental.create_pending_review" : "rental.create",
+      entityType: "rental",
+      entityId: rental.id,
+      after: { rental, decision },
+    });
+
+    notify({
+      userId: asset.ownerId,
+      type: "rental_created",
+      title: "New rental request",
+      body: `A renter has requested ${asset.title} (${rental.reference}).`,
+      entityType: "rental",
+      entityId: rental.id,
+    });
+
+    res.status(201).json({
+      rental,
+      risk: decision,
+      legal: legalResponse,
       quote,
     });
   })
@@ -439,6 +455,15 @@ router.post(
       entityType: "rental",
       entityId: id,
       after: updated,
+    });
+
+    notify({
+      userId: rental.renterId,
+      type: "rental_delivered",
+      title: "Item delivered",
+      body: `Your rental ${rental.reference} has been delivered.`,
+      entityType: "rental",
+      entityId: id,
     });
 
     res.json(updated);

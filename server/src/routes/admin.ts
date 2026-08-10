@@ -13,12 +13,14 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  legalCommitments,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { NotFoundError } from "../utils/errors.js";
+import { NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { generateLegalCommitment } from "../services/legalService.js";
 
 const router = Router();
 
@@ -218,6 +220,131 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Rentals pending manual risk review ────────────────────────────────────
+router.get(
+  "/risk/pending-review",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select({
+        rental: rentals,
+        renterName: users.fullName,
+        renterEmail: users.email,
+        renterTrustScore: users.trustScore,
+      })
+      .from(rentals)
+      .innerJoin(users, eq(rentals.renterId, users.id))
+      .where(eq(rentals.status, "pending_risk_review"))
+      .orderBy(desc(rentals.createdAt));
+    res.json(rows);
+  })
+);
+
+// ── Admin: approve or reject a risk-flagged rental ────────────────────────
+router.post(
+  "/risk/review",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const { rentalId, approved, rejectionReason } = req.body as {
+      rentalId: number;
+      approved: boolean;
+      rejectionReason?: string;
+    };
+
+    const [rental] = await db
+      .select()
+      .from(rentals)
+      .where(eq(rentals.id, rentalId))
+      .limit(1);
+    if (!rental) throw new NotFoundError("Rental");
+    if (rental.status !== "pending_risk_review") {
+      throw new LegalStateError(`Rental not pending review (status=${rental.status})`);
+    }
+
+    if (!approved) {
+      const [updated] = await db
+        .update(rentals)
+        .set({
+          status: "cancelled",
+          cancelledAt: new Date(),
+          cancellationReason: rejectionReason ?? "Rejected by admin risk review",
+          updatedAt: new Date(),
+        })
+        .where(eq(rentals.id, rentalId))
+        .returning();
+
+      await db
+        .update(assets)
+        .set({ status: "listed", updatedAt: new Date() })
+        .where(eq(assets.id, rental.assetId));
+
+      await recordAudit({
+        req,
+        action: "admin.risk_review_reject",
+        entityType: "rental",
+        entityId: rentalId,
+        after: { rejectionReason },
+      });
+
+      return res.json(updated);
+    }
+
+    // Approved — generate legal commitment and advance to pending_legal_signing
+    const [renter] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, rental.renterId))
+      .limit(1);
+    const [asset] = await db
+      .select()
+      .from(assets)
+      .where(eq(assets.id, rental.assetId))
+      .limit(1);
+
+    const legal = generateLegalCommitment({
+      rentalReference: rental.reference,
+      renterFullName: renter!.fullName,
+      renterNationalId: renter!.nationalId ?? "UNKNOWN",
+      assetTitle: asset!.title,
+      assetEvaluatedValueHalalas: asset!.evaluatedValueHalalas ?? 0,
+      commitmentPct: rental.legalCommitmentPct as 100 | 150,
+      commitmentHalalas: rental.legalCommitmentHalalas,
+      rentalStartDate: rental.startDate,
+      rentalEndDate: rental.endDate,
+      rentalTotalHalalas: rental.totalPayableHalalas,
+    });
+
+    await db.insert(legalCommitments).values({
+      rentalId: rental.id,
+      renterId: rental.renterId,
+      status: "pending_signature",
+      contractVersion: legal.version,
+      contractTextHash: legal.textHash,
+      clausesJson: legal.clauses as unknown as object,
+      commitmentHalalas: rental.legalCommitmentHalalas,
+      commitmentPct: rental.legalCommitmentPct,
+    });
+
+    const [updated] = await db
+      .update(rentals)
+      .set({ status: "pending_legal_signing", updatedAt: new Date() })
+      .where(eq(rentals.id, rentalId))
+      .returning();
+
+    await recordAudit({
+      req,
+      action: "admin.risk_review_approve",
+      entityType: "rental",
+      entityId: rentalId,
+      after: updated,
+    });
+
+    res.json(updated);
   })
 );
 

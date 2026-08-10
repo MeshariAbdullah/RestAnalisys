@@ -578,6 +578,46 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  pendingRiskReview: () =>
+    request<Array<{
+      rental: Rental;
+      renterName: string;
+      renterEmail: string;
+      renterTrustScore: number;
+    }>>("/admin/risk/pending-review"),
+  riskReview: (rentalId: number, approved: boolean, rejectionReason?: string) =>
+    request<Rental>("/admin/risk/review", {
+      method: "POST",
+      body: JSON.stringify({ rentalId, approved, rejectionReason }),
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (limit = 50) =>
+    request<AppNotification[]>(`/notifications?limit=${limit}`),
+  unreadCount: () =>
+    request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request("/notifications/" + id + "/read", { method: "POST" }),
+  markAllRead: () =>
+    request("/notifications/read-all", { method: "POST" }),
 };
 
 export const healthApi = {
