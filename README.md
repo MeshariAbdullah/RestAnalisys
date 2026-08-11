@@ -89,9 +89,9 @@ Password for all: `Mlr@2024!`
 | admin        | admin2@mlr.sa      |
 | inspector    | inspector@mlr.sa   |
 | operations   | ops@mlr.sa         |
-| owner        | owner@demo.sa      |
-| renter       | renter@demo.sa     |
-| new renter   | newbie@demo.sa     |
+| owner        | owner@mlr.sa       |
+| renter       | renter@mlr.sa      |
+| new renter   | new.renter@mlr.sa  |
 
 ---
 

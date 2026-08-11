@@ -94,12 +94,19 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
   );
 
+  const lateStats = await db
+    .select({
+      count: sql<number>`count(*) filter (where returned_at is not null and returned_at::date > end_date)`,
+    })
+    .from(rentals)
+    .where(eq(rentals.renterId, userId));
+
   return {
     accountAgeDays,
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateStats[0]?.count ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -316,13 +323,34 @@ router.get(
   "/",
   authenticate,
   requirePermission("rental.read.any"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+    const offset = (page - 1) * limit;
+    const status = req.query.status as string | undefined;
+
+    const whereClause = status ? eq(rentals.status, status as any) : undefined;
+
+    const [total] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(rentals)
+      .where(whereClause);
+
     const rows = await db
       .select()
       .from(rentals)
+      .where(whereClause)
       .orderBy(desc(rentals.createdAt))
-      .limit(200);
-    res.json(rows);
+      .limit(limit)
+      .offset(offset);
+
+    res.json({
+      items: rows,
+      total: Number(total?.count ?? 0),
+      page,
+      limit,
+      pages: Math.ceil(Number(total?.count ?? 0) / limit),
+    });
   })
 );
 

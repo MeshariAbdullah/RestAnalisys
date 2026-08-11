@@ -259,6 +259,16 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ nationalId }),
     }),
+  updateProfile: (data: { fullName?: string; phone?: string }) =>
+    request<User>("/auth/profile", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ message: string }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -567,9 +577,12 @@ export const adminApi = {
       "/admin/revenue-trend"
     ),
   lowTrustUsers: () => request<User[]>("/admin/risk/low-trust"),
-  users: (role?: string) => {
-    const qs = role ? `?role=${role}` : "";
-    return request<User[]>(`/admin/users${qs}`);
+  users: (role?: string, page = 1, limit = 50) => {
+    const qs = new URLSearchParams();
+    if (role) qs.set("role", role);
+    qs.set("page", String(page));
+    qs.set("limit", String(limit));
+    return request<{ items: User[]; total: number; page: number; limit: number; pages: number }>(`/admin/users?${qs}`);
   },
   blockUser: (id: number, block: boolean, reason?: string) =>
     request<User>(`/admin/users/${id}/block`, {
