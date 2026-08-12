@@ -198,6 +198,28 @@ export const DisputeResolveSchema = z.object({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// User Profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ProfileUpdateSchema = z.object({
+  fullName: z.string().min(2).optional(),
+  phone: SaudiPhone.optional(),
+  iban: z.string().regex(/^SA\d{22}$/, "Saudi IBAN must be SA followed by 22 digits").optional(),
+  nationalAddress: z.object({
+    city: z.string(),
+    district: z.string(),
+    street: z.string(),
+    buildingNumber: z.string().optional(),
+    postalCode: z.string().optional(),
+  }).optional(),
+});
+
+export const PasswordChangeSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Inventory / Shipments
 // ─────────────────────────────────────────────────────────────────────────────
 

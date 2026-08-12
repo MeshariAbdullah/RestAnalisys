@@ -19,6 +19,8 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  ScrollText,
+  UserCircle,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
@@ -38,6 +40,7 @@ const NAV: NavItem[] = [
   // Owner
   { href: "/owner", label: "Owner Dashboard", icon: LayoutDashboard, roles: ["owner"] },
   { href: "/owner/submit", label: "Submit Asset", icon: Diamond, roles: ["owner"] },
+  { href: "/owner/rentals", label: "Asset Rentals", icon: FileText, roles: ["owner"] },
   { href: "/owner/payouts", label: "Payouts", icon: Wallet, roles: ["owner"] },
 
   // Inspector
@@ -56,6 +59,7 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit-logs", label: "Audit Logs", icon: ScrollText, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
@@ -133,15 +137,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="p-3 border-t border-neutral-800">
           {sidebarOpen ? (
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">
-                <Shield className="w-4 h-4 text-neutral-950" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
-                <p className="text-[11px] text-neutral-400 truncate">
-                  {user ? roleLabel(user.role) : ""}
-                </p>
-              </div>
+              <Link href="/profile">
+                <a className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-opacity">
+                  <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">
+                    <Shield className="w-4 h-4 text-neutral-950" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
+                    <p className="text-[11px] text-neutral-400 truncate">
+                      {user ? roleLabel(user.role) : ""}
+                    </p>
+                  </div>
+                </a>
+              </Link>
               <button
                 onClick={handleLogout}
                 className="p-1.5 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white"

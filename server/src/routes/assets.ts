@@ -13,7 +13,7 @@
 import { Router } from "express";
 import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
+import { assets, inspections, users, inventoryMovements, rentals } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import {
@@ -398,6 +398,38 @@ router.post(
     });
 
     res.json(updated);
+  })
+);
+
+// ── Owner: rentals on my assets ────────────────────────────────────────────
+router.get(
+  "/mine/rentals",
+  authenticate,
+  requirePermission("asset.read.own"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const rows = await db
+      .select({
+        id: rentals.id,
+        reference: rentals.reference,
+        assetId: rentals.assetId,
+        status: rentals.status,
+        startDate: rentals.startDate,
+        endDate: rentals.endDate,
+        durationDays: rentals.durationDays,
+        rentalSubtotalHalalas: rentals.rentalSubtotalHalalas,
+        platformFeeHalalas: rentals.platformFeeHalalas,
+        totalPayableHalalas: rentals.totalPayableHalalas,
+        closedAt: rentals.closedAt,
+        createdAt: rentals.createdAt,
+        assetTitle: assets.title,
+        assetBrand: assets.brand,
+      })
+      .from(rentals)
+      .innerJoin(assets, eq(rentals.assetId, assets.id))
+      .where(eq(rentals.ownerId, req.user!.userId))
+      .orderBy(desc(rentals.createdAt))
+      .limit(200);
+    res.json(rows);
   })
 );
 

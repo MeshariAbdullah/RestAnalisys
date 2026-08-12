@@ -242,6 +242,44 @@ export interface AdminKPIs {
 // Auth
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface UserProfile extends User {
+  nationalAddressJson?: {
+    city: string;
+    district: string;
+    street: string;
+    buildingNumber?: string;
+    postalCode?: string;
+  };
+  createdAt: string;
+}
+
+export interface AuditLogEntry {
+  id: number;
+  actorUserId: number | null;
+  actorRole: string | null;
+  action: string;
+  entityType: string;
+  entityId: number | null;
+  createdAt: string;
+}
+
+export interface OwnerRental {
+  id: number;
+  reference: string;
+  assetId: number;
+  status: string;
+  startDate: string;
+  endDate: string;
+  durationDays: number;
+  rentalSubtotalHalalas: number;
+  platformFeeHalalas: number;
+  totalPayableHalalas: number;
+  closedAt: string | null;
+  createdAt: string;
+  assetTitle: string;
+  assetBrand: string;
+}
+
 export const authApi = {
   login: (email: string, password: string) =>
     request<{ token: string; user: User }>("/auth/login", {
@@ -253,11 +291,31 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email, password, fullName, role }),
     }),
-  me: () => request<User>("/auth/me"),
+  me: () => request<UserProfile>("/auth/me"),
   nafathVerify: (nationalId: string) =>
     request<{ transactionId: string; status: string }>("/auth/nafath/initiate", {
       method: "POST",
       body: JSON.stringify({ nationalId }),
+    }),
+  updateProfile: (data: {
+    fullName?: string;
+    phone?: string;
+    nationalAddress?: {
+      city: string;
+      district: string;
+      street: string;
+      buildingNumber?: string;
+      postalCode?: string;
+    };
+  }) =>
+    request<UserProfile>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
     }),
 };
 
@@ -310,6 +368,7 @@ export const assetsApi = {
   get: (id: number) => request<Asset>(`/assets/${id}`),
   withdraw: (id: number) =>
     request<Asset>(`/assets/${id}/withdraw`, { method: "POST" }),
+  ownerRentals: () => request<OwnerRental[]>("/assets/mine/rentals"),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -578,6 +637,18 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  createStaff: (data: { email: string; fullName: string; role: "admin" | "operations" | "inspector"; password: string }) =>
+    request<{ id: number; email: string; fullName: string; role: string }>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  auditLogs: (params?: { entityType?: string; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    return request<AuditLogEntry[]>(`/admin/audit-logs?${qs}`);
+  },
 };
 
 export const healthApi = {

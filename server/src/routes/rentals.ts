@@ -99,7 +99,20 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(
+      (
+        await db
+          .select({ count: sql<number>`count(*)` })
+          .from(rentals)
+          .where(
+            and(
+              eq(rentals.renterId, userId),
+              sql`returned_at > (end_date::date + interval '1 day')`,
+              sql`status in ('closed','closed_with_penalty')`
+            )
+          )
+      )[0]?.count ?? 0
+    ),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -509,6 +522,33 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      // Auto-discharge Sanad on clean close
+      const [sanad] = await db
+        .select()
+        .from(sanadRecords)
+        .where(eq(sanadRecords.rentalId, id))
+        .limit(1);
+      if (sanad && sanad.status !== "discharged") {
+        await db
+          .update(sanadRecords)
+          .set({ status: "discharged", updatedAt: new Date() })
+          .where(eq(sanadRecords.id, sanad.id));
+      }
+
+      // Auto-create payout for owner
+      const netPayout =
+        rental.rentalSubtotalHalalas - rental.platformFeeHalalas;
+      if (netPayout > 0) {
+        await db.insert(payments).values({
+          rentalId: id,
+          userId: rental.ownerId,
+          type: "payout",
+          status: "pending",
+          amountHalalas: netPayout,
+        });
+      }
+
       await recordAudit({
         req,
         action: "rental.close_clean",
