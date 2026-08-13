@@ -29,14 +29,21 @@ export default function UsersPage() {
     queryFn: () => adminApi.users(role === "all" ? undefined : role),
   });
 
+  const [error, setError] = useState<string | null>(null);
+
   async function toggleBlock(u: User) {
+    setError(null);
     const block = !u.isBlocked;
     const reason = block
       ? prompt("Reason for blocking?") ?? undefined
       : undefined;
     if (block && !reason) return;
-    await adminApi.blockUser(u.id, block, reason);
-    await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    try {
+      await adminApi.blockUser(u.id, block, reason);
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (err) {
+      setError((err as Error).message);
+    }
   }
 
   return (
@@ -61,6 +68,12 @@ export default function UsersPage() {
           </SelectContent>
         </Select>
       </div>
+
+      {error && (
+        <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
+          {error}
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>

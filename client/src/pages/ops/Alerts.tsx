@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,17 +20,30 @@ export default function AlertsPage() {
     queryFn: () => operationsApi.alerts(),
   });
 
+  const [error, setError] = useState<string | null>(null);
+
   async function resolve(id: number) {
-    await operationsApi.resolveAlert(id);
-    await qc.invalidateQueries({ queryKey: ["alerts"] });
+    setError(null);
+    try {
+      await operationsApi.resolveAlert(id);
+      await qc.invalidateQueries({ queryKey: ["alerts"] });
+    } catch (err) {
+      setError((err as Error).message);
+    }
   }
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold mb-2">Operational alerts</h1>
-      <p className="text-neutral-500 mb-8">
+      <p className="text-neutral-500 mb-6">
         Risk events detected by the platform that need human attention.
       </p>
+
+      {error && (
+        <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
+          {error}
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>

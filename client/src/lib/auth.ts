@@ -14,6 +14,10 @@ export function saveSession(token: string, user: User): void {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
+export function setCurrentUser(user: User): void {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
 export function clearSession(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);

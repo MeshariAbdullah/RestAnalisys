@@ -47,6 +47,7 @@ const NAV: NavItem[] = [
   { href: "/ops", label: "Ops Dashboard", icon: LayoutDashboard, roles: ["operations"] },
   { href: "/ops/shipments", label: "Shipments", icon: Truck, roles: ["operations"] },
   { href: "/ops/inventory", label: "Inventory", icon: PackageSearch, roles: ["operations"] },
+  { href: "/ops/rentals", label: "Manage Rentals", icon: FileText, roles: ["operations"] },
   { href: "/ops/alerts", label: "Alerts", icon: AlertTriangle, roles: ["operations"] },
 
   // Admin
@@ -137,10 +138,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <Shield className="w-4 h-4 text-neutral-950" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
-                <p className="text-[11px] text-neutral-400 truncate">
-                  {user ? roleLabel(user.role) : ""}
-                </p>
+                <Link href="/profile">
+                <a className="hover:underline">
+                  <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
+                  <p className="text-[11px] text-neutral-400 truncate">
+                    {user ? roleLabel(user.role) : ""}
+                  </p>
+                </a>
+              </Link>
               </div>
               <button
                 onClick={handleLogout}

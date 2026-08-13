@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Package, CheckCircle, Clock, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -74,7 +75,8 @@ export default function MyRentals() {
       ) : (
         <div className="space-y-4">
           {data.map((r: Rental) => (
-            <Card key={r.id}>
+            <Link key={r.id} href={`/my-rentals/${r.id}`}>
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between gap-6 flex-wrap">
                   <div className="flex-1 min-w-0">
@@ -104,6 +106,7 @@ export default function MyRentals() {
                 </div>
               </CardContent>
             </Card>
+            </Link>
           ))}
         </div>
       )}
