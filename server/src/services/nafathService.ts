@@ -12,9 +12,26 @@
  */
 
 import crypto from "node:crypto";
+import { db } from "../db/index.js";
+import { integrationEvents } from "../db/schema.js";
 
 const NAFATH_API_BASE = process.env.NAFATH_API_BASE ?? "https://api.nafath.sa/v1";
 const NAFATH_API_KEY = process.env.NAFATH_API_KEY ?? "";
+
+async function logIntegrationEvent(
+  eventType: string,
+  referenceId: string,
+  payload: object,
+) {
+  await db.insert(integrationEvents).values({
+    provider: "nafath",
+    eventType,
+    referenceId,
+    payloadJson: payload,
+    processed: true,
+    processedAt: new Date(),
+  });
+}
 
 export interface NafathVerifyRequest {
   nationalId: string;
@@ -40,18 +57,18 @@ export async function initiateNafathVerification(
   req: NafathVerifyRequest
 ): Promise<NafathVerifyResponse> {
   if (!NAFATH_API_KEY) {
-    // Development fallback — auto-verify a test national ID
     const transactionId = `NAFATH-DEV-${crypto.randomBytes(6).toString("hex")}`;
-    return {
+    const result: NafathVerifyResponse = {
       transactionId,
       status: "verified",
       verifiedAt: new Date().toISOString(),
       fullName: req.fullNameHint ?? "Test User",
       provider: "nafath",
     };
+    await logIntegrationEvent("identity.verify", transactionId, { request: req, response: result });
+    return result;
   }
 
-  // Production: replace with a real HTTP POST.
   throw new Error("Nafath production client not configured");
 }
 
@@ -89,12 +106,15 @@ export async function requestNafathSignature(
   req: NafathSignRequest
 ): Promise<NafathSignResponse> {
   if (!NAFATH_API_KEY) {
-    return {
-      transactionId: `NAFATH-SIGN-DEV-${crypto.randomBytes(6).toString("hex")}`,
+    const transactionId = `NAFATH-SIGN-DEV-${crypto.randomBytes(6).toString("hex")}`;
+    const result: NafathSignResponse = {
+      transactionId,
       status: "signed",
       signedAt: new Date().toISOString(),
       signatureCertificate: "DEV-CERT",
     };
+    await logIntegrationEvent("document.sign", transactionId, { request: req, response: result });
+    return result;
   }
   throw new Error("Nafath production client not configured");
 }

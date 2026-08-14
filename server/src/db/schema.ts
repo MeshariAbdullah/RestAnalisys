@@ -201,6 +201,10 @@ export const users = pgTable(
     // Address (National Address integration placeholder)
     nationalAddressJson: jsonb("national_address_json"),
 
+    // Banking (for owner payouts)
+    iban: text("iban"),
+    bankName: text("bank_name"),
+
     // Flags
     isBlocked: boolean("is_blocked").notNull().default(false),
     blockedReason: text("blocked_reason"),

@@ -201,6 +201,12 @@ router.post(
       commissionPct: 20,
     });
 
+    const [owner] = await db
+      .select({ iban: users.iban })
+      .from(users)
+      .where(eq(users.id, rental.ownerId))
+      .limit(1);
+
     const [payout] = await db
       .insert(payouts)
       .values({
@@ -209,6 +215,7 @@ router.post(
         grossHalalas: payoutCalc.grossHalalas,
         commissionHalalas: payoutCalc.commissionHalalas,
         netHalalas: payoutCalc.netHalalas,
+        iban: owner?.iban ?? null,
         status: "processing",
       })
       .returning();

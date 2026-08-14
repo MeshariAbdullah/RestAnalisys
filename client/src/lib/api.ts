@@ -578,6 +578,16 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  createStaff: (data: {
+    email: string;
+    fullName: string;
+    role: "admin" | "operations" | "inspector";
+    password: string;
+  }) =>
+    request<User>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 export const healthApi = {

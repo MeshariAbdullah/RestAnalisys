@@ -160,6 +160,31 @@ router.post(
   })
 );
 
+router.patch(
+  "/profile/banking",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const { iban, bankName } = req.body as { iban: string; bankName?: string };
+    if (!iban || !/^SA\d{22}$/.test(iban)) {
+      return res.status(400).json({ error: "Valid Saudi IBAN required (SA + 22 digits)" });
+    }
+    const [updated] = await db
+      .update(users)
+      .set({ iban, bankName: bankName ?? null, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    await recordAudit({
+      req,
+      action: "user.update_banking",
+      entityType: "user",
+      entityId: userId,
+      after: { iban, bankName },
+    });
+    return res.json({ iban: updated.iban, bankName: updated.bankName });
+  })
+);
+
 router.get(
   "/me",
   authenticate,
@@ -185,6 +210,8 @@ router.get(
       trustScore: user.trustScore,
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
+      iban: user.iban,
+      bankName: user.bankName,
     });
   })
 );

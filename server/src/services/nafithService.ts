@@ -14,9 +14,26 @@
  */
 
 import crypto from "node:crypto";
+import { db } from "../db/index.js";
+import { integrationEvents } from "../db/schema.js";
 
 const NAFITH_API_BASE = process.env.NAFITH_API_BASE ?? "https://api.nafith.moj.gov.sa/v1";
 const NAFITH_API_KEY = process.env.NAFITH_API_KEY ?? "";
+
+async function logIntegrationEvent(
+  eventType: string,
+  referenceId: string,
+  payload: object,
+) {
+  await db.insert(integrationEvents).values({
+    provider: "nafith",
+    eventType,
+    referenceId,
+    payloadJson: payload,
+    processed: true,
+    processedAt: new Date(),
+  });
+}
 
 export interface IssueSanadRequest {
   creditorNationalId: string;         // Platform's national commercial ID
@@ -36,12 +53,14 @@ export interface IssueSanadResponse {
 
 export async function issueSanad(req: IssueSanadRequest): Promise<IssueSanadResponse> {
   if (!NAFITH_API_KEY) {
-    return {
+    const result: IssueSanadResponse = {
       nafithReference: `NFT-${crypto.randomBytes(6).toString("hex").toUpperCase()}`,
       requestId: `REQ-${Date.now()}`,
       status: "issued",
       issuedAt: new Date().toISOString(),
     };
+    await logIntegrationEvent("sanad.issue", result.nafithReference, { request: req, response: result });
+    return result;
   }
   throw new Error("Nafith production client not configured");
 }
@@ -71,11 +90,13 @@ export interface DischargeSanadResponse {
 
 export async function dischargeSanad(nafithReference: string): Promise<DischargeSanadResponse> {
   if (!NAFITH_API_KEY) {
-    return {
+    const result: DischargeSanadResponse = {
       nafithReference,
       status: "discharged",
       dischargedAt: new Date().toISOString(),
     };
+    await logIntegrationEvent("sanad.discharge", nafithReference, { response: result });
+    return result;
   }
   throw new Error("Nafith production client not configured");
 }
@@ -99,12 +120,14 @@ export interface ExecuteSanadResponse {
  */
 export async function executeSanad(req: ExecuteSanadRequest): Promise<ExecuteSanadResponse> {
   if (!NAFITH_API_KEY) {
-    return {
+    const result: ExecuteSanadResponse = {
       nafithReference: req.nafithReference,
       executionCaseNumber: `EXEC-${Date.now()}`,
       status: "under_execution",
       submittedAt: new Date().toISOString(),
     };
+    await logIntegrationEvent("sanad.execute", req.nafithReference, { request: req, response: result });
+    return result;
   }
   throw new Error("Nafith production client not configured");
 }
