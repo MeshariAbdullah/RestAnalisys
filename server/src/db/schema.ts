@@ -230,19 +230,25 @@ export const roles = pgTable("roles", {
 // Owner agreement (consignment contract between owner and platform)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const ownerAgreements = pgTable("owner_agreements", {
-  id: serial("id").primaryKey(),
-  ownerId: integer("owner_id").references(() => users.id).notNull(),
-  version: text("version").notNull().default("1.0"),
-  agreementPdfUrl: text("agreement_pdf_url"),
-  commissionPct: real("commission_pct").notNull().default(20), // platform cut
-  guaranteeAccepted: boolean("guarantee_accepted").notNull().default(false),
-  signedAt: timestamp("signed_at"),
-  signedIp: text("signed_ip"),
-  effectiveFrom: timestamp("effective_from"),
-  effectiveUntil: timestamp("effective_until"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+export const ownerAgreements = pgTable(
+  "owner_agreements",
+  {
+    id: serial("id").primaryKey(),
+    ownerId: integer("owner_id").references(() => users.id).notNull(),
+    version: text("version").notNull().default("1.0"),
+    agreementPdfUrl: text("agreement_pdf_url"),
+    commissionPct: real("commission_pct").notNull().default(20),
+    guaranteeAccepted: boolean("guarantee_accepted").notNull().default(false),
+    signedAt: timestamp("signed_at"),
+    signedIp: text("signed_ip"),
+    effectiveFrom: timestamp("effective_from"),
+    effectiveUntil: timestamp("effective_until"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    ownerIdx: index("owner_agreements_owner_idx").on(t.ownerId),
+  })
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Assets (the luxury items consigned to the platform)
@@ -559,19 +565,27 @@ export const payments = pgTable(
   })
 );
 
-export const payouts = pgTable("payouts", {
-  id: serial("id").primaryKey(),
-  ownerId: integer("owner_id").references(() => users.id).notNull(),
-  rentalId: integer("rental_id").references(() => rentals.id),
-  grossHalalas: bigint("gross_halalas", { mode: "number" }).notNull(),
-  commissionHalalas: bigint("commission_halalas", { mode: "number" }).notNull(),
-  netHalalas: bigint("net_halalas", { mode: "number" }).notNull(),
-  iban: text("iban"),
-  status: text("status").notNull().default("pending"), // pending | processing | paid | failed
-  reference: text("reference"),
-  paidAt: timestamp("paid_at"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+export const payouts = pgTable(
+  "payouts",
+  {
+    id: serial("id").primaryKey(),
+    ownerId: integer("owner_id").references(() => users.id).notNull(),
+    rentalId: integer("rental_id").references(() => rentals.id),
+    grossHalalas: bigint("gross_halalas", { mode: "number" }).notNull(),
+    commissionHalalas: bigint("commission_halalas", { mode: "number" }).notNull(),
+    netHalalas: bigint("net_halalas", { mode: "number" }).notNull(),
+    iban: text("iban"),
+    status: text("status").notNull().default("pending"),
+    reference: text("reference"),
+    paidAt: timestamp("paid_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    ownerIdx: index("payouts_owner_idx").on(t.ownerId),
+    rentalIdx: index("payouts_rental_idx").on(t.rentalId),
+    statusIdx: index("payouts_status_idx").on(t.status),
+  })
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Disputes
@@ -641,18 +655,25 @@ export const shipments = pgTable(
 // Alerts (operational + compliance)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const operationalAlerts = pgTable("operational_alerts", {
-  id: serial("id").primaryKey(),
-  type: text("type").notNull(), // late_return | high_risk_user | payment_failed | sanad_overdue
-  severity: text("severity").notNull().default("medium"),
-  subjectType: text("subject_type").notNull(), // rental | user | asset
-  subjectId: integer("subject_id").notNull(),
-  message: text("message").notNull(),
-  status: text("status").notNull().default("open"), // open | acknowledged | resolved
-  payloadJson: jsonb("payload_json"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  resolvedAt: timestamp("resolved_at"),
-});
+export const operationalAlerts = pgTable(
+  "operational_alerts",
+  {
+    id: serial("id").primaryKey(),
+    type: text("type").notNull(),
+    severity: text("severity").notNull().default("medium"),
+    subjectType: text("subject_type").notNull(),
+    subjectId: integer("subject_id").notNull(),
+    message: text("message").notNull(),
+    status: text("status").notNull().default("open"),
+    payloadJson: jsonb("payload_json"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    resolvedAt: timestamp("resolved_at"),
+  },
+  (t) => ({
+    statusIdx: index("operational_alerts_status_idx").on(t.status),
+    subjectIdx: index("operational_alerts_subject_idx").on(t.subjectType, t.subjectId),
+  })
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Immutable audit logs
