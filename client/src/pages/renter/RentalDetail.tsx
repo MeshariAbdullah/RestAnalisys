@@ -1,5 +1,5 @@
-import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   FileSignature,
   CreditCard,
@@ -8,11 +8,20 @@ import {
   CheckCircle,
   AlertCircle,
   Package,
+  Gavel,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { rentalsApi, legalApi, formatSar } from "@/lib/api";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { rentalsApi, disputesApi, formatSar } from "@/lib/api";
 import { useLocation } from "wouter";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -31,13 +40,42 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-neutral-200 text-neutral-600",
 };
 
+const DISPUTABLE = ["active", "return_in_transit", "under_inspection", "closed_with_penalty"];
+
+type DisputeCategory = "damage" | "loss" | "fraud" | "service" | "billing";
+
 export default function RentalDetail({ id }: { id: number }) {
   const [, navigate] = useLocation();
+  const qc = useQueryClient();
+  const [showDispute, setShowDispute] = useState(false);
+  const [disputeCategory, setDisputeCategory] = useState<DisputeCategory>("damage");
+  const [disputeSummary, setDisputeSummary] = useState("");
+  const [disputeSubmitting, setDisputeSubmitting] = useState(false);
+  const [disputeError, setDisputeError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["rental", id],
     queryFn: () => rentalsApi.get(id),
   });
+
+  async function handleOpenDispute() {
+    setDisputeSubmitting(true);
+    setDisputeError(null);
+    try {
+      await disputesApi.open({
+        rentalId: id,
+        category: disputeCategory,
+        summary: disputeSummary,
+      });
+      setShowDispute(false);
+      setDisputeSummary("");
+      await qc.invalidateQueries({ queryKey: ["rental", id] });
+    } catch (err) {
+      setDisputeError((err as Error).message);
+    } finally {
+      setDisputeSubmitting(false);
+    }
+  }
 
   if (isLoading) return <div className="p-8">Loading...</div>;
   if (!data) return <div className="p-8">Rental not found.</div>;
@@ -251,6 +289,82 @@ export default function RentalDetail({ id }: { id: number }) {
               </div>
             </CardContent>
           </Card>
+
+          {DISPUTABLE.includes(rental.status) && !showDispute && (
+            <Button
+              variant="outline"
+              className="w-full border-red-200 text-red-700 hover:bg-red-50"
+              onClick={() => setShowDispute(true)}
+            >
+              <Gavel className="w-4 h-4 mr-2" /> Open dispute
+            </Button>
+          )}
+
+          {showDispute && (
+            <Card className="border-red-200">
+              <CardContent className="p-5 space-y-3">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <Gavel className="w-4 h-4 text-red-600" /> File a dispute
+                </h3>
+                <Select
+                  value={disputeCategory}
+                  onValueChange={(v) => setDisputeCategory(v as DisputeCategory)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="damage">Damage</SelectItem>
+                    <SelectItem value="loss">Loss</SelectItem>
+                    <SelectItem value="fraud">Fraud</SelectItem>
+                    <SelectItem value="service">Service issue</SelectItem>
+                    <SelectItem value="billing">Billing</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Textarea
+                  placeholder="Describe the issue in detail (min 10 characters)..."
+                  value={disputeSummary}
+                  onChange={(e) => setDisputeSummary(e.target.value)}
+                  rows={4}
+                />
+                {disputeError && (
+                  <p className="text-sm text-red-600">{disputeError}</p>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleOpenDispute}
+                    disabled={disputeSubmitting || disputeSummary.length < 10}
+                    className="flex-1 bg-red-600 hover:bg-red-500 text-white"
+                  >
+                    {disputeSubmitting ? "Submitting..." : "Submit"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowDispute(false);
+                      setDisputeError(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {rental.status === "in_dispute" && (
+            <Card className="border-red-200 bg-red-50/40">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertCircle className="w-5 h-5 text-red-600" />
+                  <p className="font-semibold text-red-900 text-sm">Dispute active</p>
+                </div>
+                <p className="text-sm text-red-800">
+                  This rental is under dispute review. You will be notified once the case is resolved.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           <Button
             variant="outline"

@@ -576,6 +576,11 @@ export const adminApi = {
       method: "POST",
       body: JSON.stringify({ block, reason }),
     }),
+  createStaff: (data: { email: string; fullName: string; role: "admin" | "operations" | "inspector"; password: string }) =>
+    request<User>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
   auditLogs: () =>

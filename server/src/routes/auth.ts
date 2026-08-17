@@ -70,6 +70,8 @@ router.post(
         nafathVerified: user.nafathVerified,
         kycStatus: user.kycStatus,
         trustScore: user.trustScore,
+        riskCategory: user.riskCategory,
+        isBlocked: user.isBlocked,
       },
     });
   })
@@ -115,6 +117,8 @@ router.post(
         nafathVerified: user.nafathVerified,
         kycStatus: user.kycStatus,
         trustScore: user.trustScore,
+        riskCategory: user.riskCategory,
+        isBlocked: user.isBlocked,
       },
     });
   })
