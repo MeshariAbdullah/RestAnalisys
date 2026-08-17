@@ -326,11 +326,14 @@ router.get(
         brand: assets.brand,
         model: assets.model,
         category: assets.category,
+        description: assets.description,
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
+        submissionImagesJson: assets.submissionImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
+        status: assets.status,
       })
       .from(assets)
       .where(and(...conditions))
@@ -357,6 +360,7 @@ router.get(
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
+        submissionImagesJson: assets.submissionImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
         status: assets.status,

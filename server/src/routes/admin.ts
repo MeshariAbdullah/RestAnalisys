@@ -13,6 +13,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -133,7 +134,23 @@ router.get(
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
+    const selectFields = {
+      id: users.id,
+      email: users.email,
+      fullName: users.fullName,
+      phoneE164: users.phoneE164,
+      role: users.role,
+      nationalId: users.nationalId,
+      nafathVerified: users.nafathVerified,
+      kycStatus: users.kycStatus,
+      trustScore: users.trustScore,
+      riskCategory: users.riskCategory,
+      isBlocked: users.isBlocked,
+      blockedReason: users.blockedReason,
+      createdAt: users.createdAt,
+      lastLoginAt: users.lastLoginAt,
+    };
+    const query = db.select(selectFields).from(users);
     const rows = role
       ? await query.where(eq(users.role, role as any)).limit(200)
       : await query.limit(200);
@@ -217,6 +234,21 @@ router.get(
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
+    res.json(rows);
+  })
+);
+
+// ── Audit logs ────────────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(500);
     res.json(rows);
   })
 );

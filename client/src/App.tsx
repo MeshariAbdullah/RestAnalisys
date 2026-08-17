@@ -11,6 +11,7 @@ import Browse from "./pages/renter/Browse";
 import ItemDetail from "./pages/renter/ItemDetail";
 import LegalCommitmentPage from "./pages/renter/LegalCommitment";
 import MyRentals from "./pages/renter/MyRentals";
+import RentalDetail from "./pages/renter/RentalDetail";
 
 // Owner
 import OwnerDashboard from "./pages/owner/OwnerDashboard";
@@ -22,11 +23,15 @@ import Payouts from "./pages/owner/Payouts";
 import InspectorDashboard from "./pages/inspector/InspectorDashboard";
 import InspectionForm from "./pages/inspector/InspectionForm";
 
+// Shared
+import Profile from "./pages/Profile";
+
 // Ops
 import OpsDashboard from "./pages/ops/OpsDashboard";
 import Shipments from "./pages/ops/Shipments";
 import Inventory from "./pages/ops/Inventory";
 import AlertsPage from "./pages/ops/Alerts";
+import RentalManagement from "./pages/ops/RentalManagement";
 
 // Admin
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -35,6 +40,7 @@ import UsersPage from "./pages/admin/Users";
 import DisputesPage from "./pages/admin/Disputes";
 import FinancialOverview from "./pages/admin/FinancialOverview";
 import SanadTracking from "./pages/admin/SanadTracking";
+import AuditLogs from "./pages/admin/AuditLogs";
 
 export default function App() {
   return (
@@ -64,6 +70,20 @@ export default function App() {
       </Route>
       <Route path="/my-rentals">
         <ProtectedRoute roles={["renter"]}><MyRentals /></ProtectedRoute>
+      </Route>
+      <Route path="/my-rentals/:id">
+        {(params) => (
+          <ProtectedRoute roles={["renter"]}>
+            <RentalDetail id={Number(params.id)} />
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      {/* Profile (all authenticated roles) */}
+      <Route path="/profile">
+        <ProtectedRoute roles={["renter", "owner", "inspector", "operations", "admin", "super_admin"]}>
+          <Profile />
+        </ProtectedRoute>
       </Route>
 
       {/* Owner */}
@@ -109,6 +129,9 @@ export default function App() {
       <Route path="/ops/alerts">
         <ProtectedRoute roles={["operations"]}><AlertsPage /></ProtectedRoute>
       </Route>
+      <Route path="/ops/rentals">
+        <ProtectedRoute roles={["operations"]}><RentalManagement /></ProtectedRoute>
+      </Route>
 
       {/* Admin */}
       <Route path="/admin">
@@ -128,6 +151,9 @@ export default function App() {
       </Route>
       <Route path="/admin/sanad">
         <ProtectedRoute roles={["admin", "super_admin"]}><SanadTracking /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/audit">
+        <ProtectedRoute roles={["admin", "super_admin"]}><AuditLogs /></ProtectedRoute>
       </Route>
 
       <Route>
