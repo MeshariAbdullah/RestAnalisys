@@ -1,5 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Package, CheckCircle, Clock, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -74,36 +75,40 @@ export default function MyRentals() {
       ) : (
         <div className="space-y-4">
           {data.map((r: Rental) => (
-            <Card key={r.id}>
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between gap-6 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-mono text-xs text-neutral-500">
-                      {r.reference}
-                    </p>
-                    <p className="font-semibold mt-1">
-                      {r.startDate} → {r.endDate}{" "}
-                      <span className="text-neutral-500 font-normal">
-                        ({r.durationDays} days)
-                      </span>
-                    </p>
-                    <div className="mt-3">
-                      <StatusBadge status={r.status} />
+            <Link key={r.id} href={`/my-rentals/${r.id}`}>
+              <a className="block">
+                <Card className="hover:shadow-md transition-shadow cursor-pointer">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between gap-6 flex-wrap">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-mono text-xs text-neutral-500">
+                          {r.reference}
+                        </p>
+                        <p className="font-semibold mt-1">
+                          {r.startDate} → {r.endDate}{" "}
+                          <span className="text-neutral-500 font-normal">
+                            ({r.durationDays} days)
+                          </span>
+                        </p>
+                        <div className="mt-3">
+                          <StatusBadge status={r.status} />
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-neutral-500 uppercase">Total paid</p>
+                        <p className="font-bold text-lg">
+                          {formatSar(r.totalPayableHalalas)}
+                        </p>
+                        <p className="text-[11px] text-neutral-500 mt-1">
+                          Commitment {formatSar(r.legalCommitmentHalalas)} (
+                          {r.legalCommitmentPct}%)
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-neutral-500 uppercase">Total paid</p>
-                    <p className="font-bold text-lg">
-                      {formatSar(r.totalPayableHalalas)}
-                    </p>
-                    <p className="text-[11px] text-neutral-500 mt-1">
-                      Commitment {formatSar(r.legalCommitmentHalalas)} (
-                      {r.legalCommitmentPct}%)
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+              </a>
+            </Link>
           ))}
         </div>
       )}

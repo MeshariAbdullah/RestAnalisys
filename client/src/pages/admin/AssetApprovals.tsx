@@ -4,38 +4,60 @@ import { CheckCircle2, X as XIcon, Diamond } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toaster";
 import { assetsApi, formatSar, type Asset } from "@/lib/api";
 
 export default function AssetApprovals() {
   const qc = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+  const [rejectTarget, setRejectTarget] = useState<Asset | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["assets-pending"],
     queryFn: () => assetsApi.pending(),
   });
 
-  async function act(id: number, approved: boolean) {
-    setError(null);
+  async function approve(id: number) {
     try {
-      const reason = approved
-        ? undefined
-        : prompt("Rejection reason?") ?? undefined;
-      if (!approved && !reason) return;
-      await assetsApi.review(id, approved, reason);
+      await assetsApi.review(id, true);
       await qc.invalidateQueries({ queryKey: ["assets-pending"] });
+      toast({ description: "Asset approved", variant: "success" });
     } catch (err) {
-      setError((err as Error).message);
+      toast({ description: (err as Error).message, variant: "destructive" });
+    }
+  }
+
+  async function reject() {
+    if (!rejectTarget || !rejectReason) return;
+    try {
+      await assetsApi.review(rejectTarget.id, false, rejectReason);
+      await qc.invalidateQueries({ queryKey: ["assets-pending"] });
+      toast({ description: "Asset rejected", variant: "success" });
+      setRejectTarget(null);
+      setRejectReason("");
+    } catch (err) {
+      toast({ description: (err as Error).message, variant: "destructive" });
     }
   }
 
   async function publish(id: number) {
-    setError(null);
     try {
       await assetsApi.publish(id);
       await qc.invalidateQueries({ queryKey: ["assets-pending"] });
+      toast({ description: "Asset published to listings", variant: "success" });
     } catch (err) {
-      setError((err as Error).message);
+      toast({ description: (err as Error).message, variant: "destructive" });
     }
   }
 
@@ -46,14 +68,8 @@ export default function AssetApprovals() {
         Moderate newly submitted assets and publish ready listings.
       </p>
 
-      {error && (
-        <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
-          {error}
-        </div>
-      )}
-
       {isLoading ? (
-        <p className="text-neutral-500">Loading…</p>
+        <p className="text-neutral-500">Loading...</p>
       ) : !data || data.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">
@@ -100,14 +116,14 @@ export default function AssetApprovals() {
                     <>
                       <Button
                         className="bg-green-600 hover:bg-green-700"
-                        onClick={() => act(asset.id, true)}
+                        onClick={() => approve(asset.id)}
                       >
                         <CheckCircle2 className="w-4 h-4 mr-1" />
                         Approve
                       </Button>
                       <Button
                         variant="outline"
-                        onClick={() => act(asset.id, false)}
+                        onClick={() => setRejectTarget(asset)}
                       >
                         <XIcon className="w-4 h-4 mr-1" />
                         Reject
@@ -129,6 +145,45 @@ export default function AssetApprovals() {
           ))}
         </div>
       )}
+
+      <Dialog
+        open={!!rejectTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRejectTarget(null);
+            setRejectReason("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject asset</DialogTitle>
+            <DialogDescription>
+              {rejectTarget?.title} by {rejectTarget?.brand}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Rejection reason</Label>
+            <Input
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="e.g. Insufficient documentation"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!rejectReason}
+              onClick={reject}
+            >
+              Reject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

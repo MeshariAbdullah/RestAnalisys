@@ -4,7 +4,18 @@ import { FileSignature, AlertOctagon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toaster";
 import { legalApi, formatSar, type SanadRecord } from "@/lib/api";
 
 function statusColor(s: string): string {
@@ -18,7 +29,10 @@ function statusColor(s: string): string {
 
 export default function SanadTracking() {
   const qc = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+  const [executeTarget, setExecuteTarget] = useState<SanadRecord | null>(null);
+  const [executeReason, setExecuteReason] = useState("");
+  const [dischargeTarget, setDischargeTarget] = useState<SanadRecord | null>(null);
 
   const allQuery = useQuery({
     queryKey: ["sanads"],
@@ -30,27 +44,29 @@ export default function SanadTracking() {
     queryFn: () => legalApi.pendingEnforcement(),
   });
 
-  async function execute(s: SanadRecord) {
-    const reason = prompt("Reason to file execution?");
-    if (!reason) return;
-    setError(null);
+  async function confirmExecute() {
+    if (!executeTarget || !executeReason) return;
     try {
-      await legalApi.executeSanad(s.id, reason);
+      await legalApi.executeSanad(executeTarget.id, executeReason);
       await qc.invalidateQueries({ queryKey: ["sanads"] });
       await qc.invalidateQueries({ queryKey: ["sanads-enforcement"] });
+      toast({ description: "Sanad execution filed", variant: "success" });
+      setExecuteTarget(null);
+      setExecuteReason("");
     } catch (err) {
-      setError((err as Error).message);
+      toast({ description: (err as Error).message, variant: "destructive" });
     }
   }
 
-  async function discharge(s: SanadRecord) {
-    if (!confirm("Mark this Sanad as discharged?")) return;
-    setError(null);
+  async function confirmDischarge() {
+    if (!dischargeTarget) return;
     try {
-      await legalApi.dischargeSanad(s.id);
+      await legalApi.dischargeSanad(dischargeTarget.id);
       await qc.invalidateQueries({ queryKey: ["sanads"] });
+      toast({ description: "Sanad discharged", variant: "success" });
+      setDischargeTarget(null);
     } catch (err) {
-      setError((err as Error).message);
+      toast({ description: (err as Error).message, variant: "destructive" });
     }
   }
 
@@ -68,7 +84,7 @@ export default function SanadTracking() {
             <p className="text-xs text-neutral-500 font-mono">
               {s.nafithReference ?? "—"}
             </p>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
               <Badge className={`border-0 ${statusColor(s.status)}`}>
                 {s.status.replace(/_/g, " ")}
               </Badge>
@@ -92,7 +108,7 @@ export default function SanadTracking() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => discharge(s)}
+                onClick={() => setDischargeTarget(s)}
               >
                 Discharge
               </Button>
@@ -101,7 +117,7 @@ export default function SanadTracking() {
               <Button
                 size="sm"
                 className="bg-red-600 hover:bg-red-700"
-                onClick={() => execute(s)}
+                onClick={() => setExecuteTarget(s)}
               >
                 <AlertOctagon className="w-4 h-4 mr-1" />
                 File execution
@@ -120,12 +136,6 @@ export default function SanadTracking() {
         Electronic promissory notes issued via Nafith.
       </p>
 
-      {error && (
-        <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
-          {error}
-        </div>
-      )}
-
       <Tabs defaultValue="all">
         <TabsList className="mb-5">
           <TabsTrigger value="all">All Sanads</TabsTrigger>
@@ -134,7 +144,7 @@ export default function SanadTracking() {
 
         <TabsContent value="all">
           {allQuery.isLoading ? (
-            <p className="text-neutral-500">Loading…</p>
+            <p className="text-neutral-500">Loading...</p>
           ) : !allQuery.data || allQuery.data.length === 0 ? (
             <Card>
               <CardContent className="p-12 text-center text-neutral-500">
@@ -152,7 +162,7 @@ export default function SanadTracking() {
 
         <TabsContent value="enforcement">
           {enforceQuery.isLoading ? (
-            <p className="text-neutral-500">Loading…</p>
+            <p className="text-neutral-500">Loading...</p>
           ) : !enforceQuery.data || enforceQuery.data.length === 0 ? (
             <Card>
               <CardContent className="p-12 text-center text-neutral-500">
@@ -168,6 +178,68 @@ export default function SanadTracking() {
           )}
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={!!executeTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setExecuteTarget(null);
+            setExecuteReason("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>File Sanad execution</DialogTitle>
+            <DialogDescription>
+              This will submit the Sanad for court execution via Najiz. This action is irreversible.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Reason for execution</Label>
+            <Input
+              value={executeReason}
+              onChange={(e) => setExecuteReason(e.target.value)}
+              placeholder="e.g. Renter failed to return asset after grace period"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExecuteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!executeReason}
+              onClick={confirmExecute}
+            >
+              File Execution
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!dischargeTarget}
+        onOpenChange={(open) => {
+          if (!open) setDischargeTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Discharge Sanad</DialogTitle>
+            <DialogDescription>
+              Sanad #{dischargeTarget?.id} — Rental #{dischargeTarget?.rentalId}.
+              This marks the promissory note as fulfilled.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDischargeTarget(null)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmDischarge}>Confirm Discharge</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

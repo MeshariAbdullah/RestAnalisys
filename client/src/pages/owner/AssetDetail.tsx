@@ -4,11 +4,21 @@ import { Diamond, CheckCircle2, X as XIcon, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toaster";
 import { assetsApi, formatSar } from "@/lib/api";
 
 export default function AssetDetail({ id }: { id: number }) {
   const qc = useQueryClient();
-  const [actionError, setActionError] = useState<string | null>(null);
+  const { toast } = useToast();
+  const [showWithdraw, setShowWithdraw] = useState(false);
 
   const { data: asset, isLoading } = useQuery({
     queryKey: ["asset", id],
@@ -16,7 +26,6 @@ export default function AssetDetail({ id }: { id: number }) {
   });
 
   async function respondValuation(approved: boolean) {
-    setActionError(null);
     try {
       await assetsApi.valuationResponse(
         id,
@@ -24,23 +33,27 @@ export default function AssetDetail({ id }: { id: number }) {
         approved ? undefined : "Owner rejected the proposed valuation"
       );
       await qc.invalidateQueries({ queryKey: ["asset", id] });
+      toast({
+        description: approved ? "Valuation approved" : "Valuation rejected",
+        variant: approved ? "success" : "default",
+      });
     } catch (err) {
-      setActionError((err as Error).message);
+      toast({ description: (err as Error).message, variant: "destructive" });
     }
   }
 
-  async function withdraw() {
-    if (!confirm("Withdraw this asset? It will no longer be rentable.")) return;
-    setActionError(null);
+  async function confirmWithdraw() {
     try {
       await assetsApi.withdraw(id);
       await qc.invalidateQueries({ queryKey: ["asset", id] });
+      toast({ description: "Asset withdrawn from listing", variant: "success" });
+      setShowWithdraw(false);
     } catch (err) {
-      setActionError((err as Error).message);
+      toast({ description: (err as Error).message, variant: "destructive" });
     }
   }
 
-  if (isLoading || !asset) return <div className="p-8">Loading…</div>;
+  if (isLoading || !asset) return <div className="p-8">Loading...</div>;
 
   const images = [
     ...(asset.studioImagesJson ?? []),
@@ -172,19 +185,32 @@ export default function AssetDetail({ id }: { id: number }) {
             <Button
               variant="outline"
               className="w-full"
-              onClick={withdraw}
+              onClick={() => setShowWithdraw(true)}
             >
               Withdraw from listing
             </Button>
           )}
-
-          {actionError && (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
-              {actionError}
-            </div>
-          )}
         </div>
       </div>
+
+      <Dialog open={showWithdraw} onOpenChange={setShowWithdraw}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Withdraw asset</DialogTitle>
+            <DialogDescription>
+              This will remove "{asset.title}" from listings. It will no longer be rentable.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowWithdraw(false)}>
+              Keep Listed
+            </Button>
+            <Button variant="destructive" onClick={confirmWithdraw}>
+              Withdraw
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
