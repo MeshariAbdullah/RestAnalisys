@@ -122,6 +122,6 @@ VAT is fixed at 15% (`VAT_RATE = 0.15`).
 cd server && npm run db:push && npm run db:seed
 cd .. && npm run dev
 # Open http://localhost:5173
-# Sign in as renter@demo.sa / Mlr@2024!
+# Sign in as renter@mlr.sa / Mlr@2024!
 # Browse → pick an asset → book → sign → pay → view in My rentals
 ```
