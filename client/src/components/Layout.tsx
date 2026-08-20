@@ -39,6 +39,7 @@ const NAV: NavItem[] = [
   { href: "/owner", label: "Owner Dashboard", icon: LayoutDashboard, roles: ["owner"] },
   { href: "/owner/submit", label: "Submit Asset", icon: Diamond, roles: ["owner"] },
   { href: "/owner/payouts", label: "Payouts", icon: Wallet, roles: ["owner"] },
+  { href: "/owner/agreement", label: "Agreement", icon: FileSignature, roles: ["owner"] },
 
   // Inspector
   { href: "/inspector", label: "Inspection Queue", icon: ClipboardCheck, roles: ["inspector"] },
