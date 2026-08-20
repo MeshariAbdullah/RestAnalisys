@@ -52,27 +52,44 @@ export function getSeverityLabel(severity: string) {
 
 export function getStatusLabel(status: string) {
   const labels: Record<string, string> = {
-    uploaded: "تم الرفع",
-    extracting_frames: "استخراج الإطارات",
-    analyzing_gpt: "تحليل GPT-4o",
-    analyzing_gemini: "تحليل Gemini",
-    saving_results: "حفظ النتائج",
-    done: "مكتمل",
-    error: "خطأ",
-    queued: "في الانتظار",
+    pending_approval: "بانتظار الموافقة",
+    rejected: "مرفوض",
+    awaiting_shipment: "بانتظار الشحن",
+    in_inspection: "تحت الفحص",
+    inspection_reported: "تقرير الفحص",
+    owner_rejected_valuation: "رفض التقييم",
+    ready_for_listing: "جاهز للعرض",
+    listed: "معروض",
+    reserved: "محجوز",
+    rented_out: "مؤجر",
+    returned_under_inspection: "مرتجع تحت الفحص",
+    completed: "مكتمل",
+    withdrawn: "تم السحب",
+    lost_or_destroyed: "مفقود أو تالف",
+    pending_risk_review: "مراجعة المخاطر",
+    pending_legal_signing: "بانتظار التوقيع",
+    pending_payment: "بانتظار الدفع",
+    confirmed: "مؤكد",
+    out_for_delivery: "قيد التوصيل",
+    active: "نشط",
+    return_in_transit: "مرتجع في الطريق",
+    under_inspection: "تحت الفحص",
+    closed: "مغلق",
+    closed_with_penalty: "مغلق مع غرامة",
+    in_dispute: "نزاع",
+    enforcement: "تنفيذ",
+    cancelled: "ملغي",
+    open: "مفتوح",
+    investigating: "تحت التحقيق",
+    resolved_for_renter: "لصالح المستأجر",
+    resolved_for_platform: "لصالح المنصة",
+    resolved_for_owner: "لصالح المالك",
+    scheduled: "مجدول",
+    picked_up: "تم الاستلام",
+    in_transit: "في الطريق",
+    delivered: "تم التسليم",
+    failed: "فشل",
+    returned: "مرتجع",
   };
-  return labels[status] ?? status;
-}
-
-export function getStatusIcon(status: string) {
-  switch (status) {
-    case "done": return "✅";
-    case "error": return "❌";
-    case "uploaded": return "📤";
-    case "extracting_frames": return "🎞️";
-    case "analyzing_gpt": return "🤖";
-    case "analyzing_gemini": return "💎";
-    case "saving_results": return "💾";
-    default: return "⏳";
-  }
+  return labels[status] ?? status.replace(/_/g, " ");
 }
