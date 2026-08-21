@@ -5,6 +5,8 @@
  * we clear the token so `ProtectedRoute` redirects to /login.
  */
 
+import { toast } from "./toast";
+
 const API_BASE = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
   : "/api";
@@ -28,6 +30,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (res.status === 401) {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_user");
+    toast({
+      title: "انتهت الجلسة",
+      description: "Session expired, please log in again",
+      variant: "destructive",
+    });
   }
 
   if (!res.ok) {
@@ -45,6 +52,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     e.code = err.code;
     e.details = err.details;
     e.status = res.status;
+
+    if (res.status !== 401) {
+      toast({
+        title: "خطأ",
+        description: err.error ?? res.statusText,
+        variant: "destructive",
+      });
+    }
+
     throw e;
   }
 
