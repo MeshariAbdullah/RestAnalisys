@@ -9,8 +9,9 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
-import { LoginSchema, RegisterSchema, NafathVerifySchema } from "../utils/schemas.js";
-import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors.js";
+import { LoginSchema, RegisterSchema, NafathVerifySchema, ForgotPasswordSchema, ResetPasswordSchema } from "../utils/schemas.js";
+import { UnauthorizedError, ConflictError, NotFoundError, ValidationError } from "../utils/errors.js";
+import jwt from "jsonwebtoken";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
@@ -157,6 +158,88 @@ router.post(
       transactionId: result.transactionId,
       status: result.status,
     });
+  })
+);
+
+const RESET_SECRET = process.env.JWT_SECRET
+  ? `${process.env.JWT_SECRET}-reset`
+  : "mlr-platform-dev-reset-secret";
+
+router.post(
+  "/forgot-password",
+  asyncHandler(async (req, res) => {
+    const { email } = ForgotPasswordSchema.parse(req.body);
+    const [user] = await db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (user) {
+      const resetToken = jwt.sign(
+        { userId: user.id, email: user.email, purpose: "password_reset" },
+        RESET_SECRET,
+        { expiresIn: "1h" }
+      );
+
+      await recordAudit({
+        req,
+        actorUserId: user.id,
+        action: "auth.forgot_password",
+        entityType: "user",
+        entityId: user.id,
+        after: { email },
+      });
+
+      // In production, send this token via email.
+      // In dev mode, return it in the response for testing.
+      if (process.env.NODE_ENV === "production") {
+        return res.json({ message: "If that email exists, a reset link has been sent." });
+      }
+      return res.json({
+        message: "If that email exists, a reset link has been sent.",
+        resetToken,
+      });
+    }
+
+    res.json({ message: "If that email exists, a reset link has been sent." });
+  })
+);
+
+router.post(
+  "/reset-password",
+  asyncHandler(async (req, res) => {
+    const { token, newPassword } = ResetPasswordSchema.parse(req.body);
+
+    let payload: { userId: number; purpose: string };
+    try {
+      payload = jwt.verify(token, RESET_SECRET) as typeof payload;
+    } catch {
+      throw new ValidationError("Invalid or expired reset token");
+    }
+
+    if (payload.purpose !== "password_reset") {
+      throw new ValidationError("Invalid token purpose");
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const [updated] = await db
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(users.id, payload.userId))
+      .returning({ id: users.id, email: users.email });
+
+    if (!updated) throw new NotFoundError("User");
+
+    await recordAudit({
+      req,
+      actorUserId: payload.userId,
+      action: "auth.reset_password",
+      entityType: "user",
+      entityId: payload.userId,
+    });
+
+    res.json({ message: "Password has been reset successfully" });
   })
 );
 
