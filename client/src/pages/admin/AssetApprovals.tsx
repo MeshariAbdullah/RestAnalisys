@@ -4,38 +4,59 @@ import { CheckCircle2, X as XIcon, Diamond } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { assetsApi, formatSar, type Asset } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 export default function AssetApprovals() {
   const qc = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<Asset | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["assets-pending"],
     queryFn: () => assetsApi.pending(),
   });
 
-  async function act(id: number, approved: boolean) {
-    setError(null);
+  async function approve(id: number) {
     try {
-      const reason = approved
-        ? undefined
-        : prompt("Rejection reason?") ?? undefined;
-      if (!approved && !reason) return;
-      await assetsApi.review(id, approved, reason);
+      await assetsApi.review(id, true);
       await qc.invalidateQueries({ queryKey: ["assets-pending"] });
+      toast({ title: "تمت الموافقة", variant: "success" });
     } catch (err) {
-      setError((err as Error).message);
+      toast({ title: "خطأ", description: (err as Error).message, variant: "destructive" });
+    }
+  }
+
+  async function confirmReject() {
+    if (!rejectTarget || !rejectReason.trim()) return;
+    try {
+      await assetsApi.review(rejectTarget.id, false, rejectReason.trim());
+      await qc.invalidateQueries({ queryKey: ["assets-pending"] });
+      toast({ title: "تم الرفض", variant: "success" });
+    } catch (err) {
+      toast({ title: "خطأ", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setRejectTarget(null);
+      setRejectReason("");
     }
   }
 
   async function publish(id: number) {
-    setError(null);
     try {
       await assetsApi.publish(id);
       await qc.invalidateQueries({ queryKey: ["assets-pending"] });
+      toast({ title: "تم النشر", variant: "success" });
     } catch (err) {
-      setError((err as Error).message);
+      toast({ title: "خطأ", description: (err as Error).message, variant: "destructive" });
     }
   }
 
@@ -45,12 +66,6 @@ export default function AssetApprovals() {
       <p className="text-neutral-500 mb-8">
         Moderate newly submitted assets and publish ready listings.
       </p>
-
-      {error && (
-        <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
-          {error}
-        </div>
-      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>
@@ -100,35 +115,64 @@ export default function AssetApprovals() {
                     <>
                       <Button
                         className="bg-green-600 hover:bg-green-700"
-                        onClick={() => act(asset.id, true)}
+                        onClick={() => approve(asset.id)}
                       >
                         <CheckCircle2 className="w-4 h-4 mr-1" />
                         Approve
                       </Button>
                       <Button
                         variant="outline"
-                        onClick={() => act(asset.id, false)}
+                        onClick={() => setRejectTarget(asset)}
                       >
                         <XIcon className="w-4 h-4 mr-1" />
                         Reject
                       </Button>
                     </>
                   )}
-                  {asset.status === "in_inspection" ||
-                  asset.status === "in_vault" ? (
+                  {(asset.status === "in_inspection" ||
+                    asset.status === "in_vault") && (
                     <Button
                       className="bg-amber-500 text-neutral-950 hover:bg-amber-400"
                       onClick={() => publish(asset.id)}
                     >
                       Publish listing
                     </Button>
-                  ) : null}
+                  )}
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      <Dialog open={!!rejectTarget} onOpenChange={(o) => { if (!o) { setRejectTarget(null); setRejectReason(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>رفض الأصل</DialogTitle>
+            <DialogDescription>
+              {rejectTarget?.brand} — {rejectTarget?.title}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            placeholder="سبب الرفض…"
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            className="min-h-[100px]"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setRejectTarget(null); setRejectReason(""); }}>
+              إلغاء
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!rejectReason.trim()}
+              onClick={confirmReject}
+            >
+              تأكيد الرفض
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

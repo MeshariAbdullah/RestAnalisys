@@ -50,29 +50,43 @@ export function getSeverityLabel(severity: string) {
   }
 }
 
-export function getStatusLabel(status: string) {
+export function getAssetStatusLabel(status: string) {
   const labels: Record<string, string> = {
-    uploaded: "تم الرفع",
-    extracting_frames: "استخراج الإطارات",
-    analyzing_gpt: "تحليل GPT-4o",
-    analyzing_gemini: "تحليل Gemini",
-    saving_results: "حفظ النتائج",
-    done: "مكتمل",
-    error: "خطأ",
-    queued: "في الانتظار",
+    pending_approval: "بانتظار الموافقة",
+    approved: "موافق عليه",
+    in_inspection: "قيد الفحص",
+    in_vault: "في المستودع",
+    ready_for_listing: "جاهز للعرض",
+    listed: "معروض",
+    reserved: "محجوز",
+    rented_out: "مؤجر",
+    under_return_inspection: "قيد فحص الإرجاع",
+    returned_clean: "مرجع بحالة سليمة",
+    returned_damaged: "مرجع بأضرار",
+    withdrawn: "مسحوب",
+    lost_or_destroyed: "مفقود أو تالف",
+    rejected: "مرفوض",
   };
-  return labels[status] ?? status;
+  return labels[status] ?? status.replace(/_/g, " ");
 }
 
-export function getStatusIcon(status: string) {
-  switch (status) {
-    case "done": return "✅";
-    case "error": return "❌";
-    case "uploaded": return "📤";
-    case "extracting_frames": return "🎞️";
-    case "analyzing_gpt": return "🤖";
-    case "analyzing_gemini": return "💎";
-    case "saving_results": return "💾";
-    default: return "⏳";
-  }
+export function getRentalStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    pending_risk_review: "مراجعة المخاطر",
+    risk_approved: "موافق عليه",
+    pending_signature: "بانتظار التوقيع",
+    pending_payment: "بانتظار الدفع",
+    confirmed: "مؤكد",
+    out_for_delivery: "قيد التوصيل",
+    active: "نشط",
+    under_inspection: "قيد الفحص",
+    closed_clean: "مغلق - سليم",
+    closed_penalty: "مغلق - غرامة",
+    closed_major_damage: "مغلق - أضرار جسيمة",
+    closed_loss: "مغلق - فقدان",
+    in_dispute: "متنازع عليه",
+    enforcement: "تنفيذ قضائي",
+    cancelled: "ملغي",
+  };
+  return labels[status] ?? status.replace(/_/g, " ");
 }

@@ -4,8 +4,28 @@ import { FileSignature, AlertOctagon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { legalApi, formatSar, type SanadRecord } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 function statusColor(s: string): string {
   if (s === "issued" || s === "active") return "bg-blue-100 text-blue-700";
@@ -18,7 +38,9 @@ function statusColor(s: string): string {
 
 export default function SanadTracking() {
   const qc = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
+  const [executeTarget, setExecuteTarget] = useState<SanadRecord | null>(null);
+  const [executeReason, setExecuteReason] = useState("");
+  const [dischargeTarget, setDischargeTarget] = useState<SanadRecord | null>(null);
 
   const allQuery = useQuery({
     queryKey: ["sanads"],
@@ -30,27 +52,31 @@ export default function SanadTracking() {
     queryFn: () => legalApi.pendingEnforcement(),
   });
 
-  async function execute(s: SanadRecord) {
-    const reason = prompt("Reason to file execution?");
-    if (!reason) return;
-    setError(null);
+  async function confirmExecute() {
+    if (!executeTarget || !executeReason.trim()) return;
     try {
-      await legalApi.executeSanad(s.id, reason);
+      await legalApi.executeSanad(executeTarget.id, executeReason.trim());
       await qc.invalidateQueries({ queryKey: ["sanads"] });
       await qc.invalidateQueries({ queryKey: ["sanads-enforcement"] });
+      toast({ title: "تم رفع طلب التنفيذ", variant: "success" });
     } catch (err) {
-      setError((err as Error).message);
+      toast({ title: "خطأ", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setExecuteTarget(null);
+      setExecuteReason("");
     }
   }
 
-  async function discharge(s: SanadRecord) {
-    if (!confirm("Mark this Sanad as discharged?")) return;
-    setError(null);
+  async function confirmDischarge() {
+    if (!dischargeTarget) return;
     try {
-      await legalApi.dischargeSanad(s.id);
+      await legalApi.dischargeSanad(dischargeTarget.id);
       await qc.invalidateQueries({ queryKey: ["sanads"] });
+      toast({ title: "تم إخلاء السند", variant: "success" });
     } catch (err) {
-      setError((err as Error).message);
+      toast({ title: "خطأ", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setDischargeTarget(null);
     }
   }
 
@@ -92,7 +118,7 @@ export default function SanadTracking() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => discharge(s)}
+                onClick={() => setDischargeTarget(s)}
               >
                 Discharge
               </Button>
@@ -101,7 +127,7 @@ export default function SanadTracking() {
               <Button
                 size="sm"
                 className="bg-red-600 hover:bg-red-700"
-                onClick={() => execute(s)}
+                onClick={() => setExecuteTarget(s)}
               >
                 <AlertOctagon className="w-4 h-4 mr-1" />
                 File execution
@@ -119,12 +145,6 @@ export default function SanadTracking() {
       <p className="text-neutral-500 mb-6">
         Electronic promissory notes issued via Nafith.
       </p>
-
-      {error && (
-        <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
-          {error}
-        </div>
-      )}
 
       <Tabs defaultValue="all">
         <TabsList className="mb-5">
@@ -168,6 +188,54 @@ export default function SanadTracking() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Execute Sanad dialog */}
+      <Dialog open={!!executeTarget} onOpenChange={(o) => { if (!o) { setExecuteTarget(null); setExecuteReason(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>رفع طلب تنفيذ</DialogTitle>
+            <DialogDescription>
+              Sanad #{executeTarget?.id} — {formatSar(executeTarget?.dueHalalas)}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            placeholder="سبب طلب التنفيذ…"
+            value={executeReason}
+            onChange={(e) => setExecuteReason(e.target.value)}
+            className="min-h-[100px]"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setExecuteTarget(null); setExecuteReason(""); }}>
+              إلغاء
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!executeReason.trim()}
+              onClick={confirmExecute}
+            >
+              تأكيد التنفيذ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Discharge confirmation */}
+      <AlertDialog open={!!dischargeTarget} onOpenChange={(o) => { if (!o) setDischargeTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>إخلاء السند</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من إخلاء السند #{dischargeTarget?.id}؟ لا يمكن التراجع عن هذا الإجراء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDischarge}>
+              تأكيد الإخلاء
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
