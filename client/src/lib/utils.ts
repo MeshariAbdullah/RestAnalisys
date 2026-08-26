@@ -52,27 +52,41 @@ export function getSeverityLabel(severity: string) {
 
 export function getStatusLabel(status: string) {
   const labels: Record<string, string> = {
-    uploaded: "تم الرفع",
-    extracting_frames: "استخراج الإطارات",
-    analyzing_gpt: "تحليل GPT-4o",
-    analyzing_gemini: "تحليل Gemini",
-    saving_results: "حفظ النتائج",
-    done: "مكتمل",
-    error: "خطأ",
-    queued: "في الانتظار",
+    pending_approval: "بانتظار الموافقة",
+    rejected: "مرفوض",
+    awaiting_shipment: "بانتظار الشحن",
+    in_inspection: "تحت الفحص",
+    inspection_reported: "تم الفحص",
+    owner_rejected_valuation: "رفض المالك التقييم",
+    ready_for_listing: "جاهز للعرض",
+    listed: "معروض",
+    reserved: "محجوز",
+    rented_out: "مؤجر",
+    returned_under_inspection: "مرتجع تحت الفحص",
+    completed: "مكتمل",
+    withdrawn: "مسحوب",
+    lost_or_destroyed: "مفقود أو تالف",
+    active: "نشط",
+    closed: "مغلق",
+    cancelled: "ملغي",
+    open: "مفتوح",
+    investigating: "قيد التحقيق",
   };
-  return labels[status] ?? status;
+  return labels[status] ?? status.replace(/_/g, " ");
 }
 
 export function getStatusIcon(status: string) {
   switch (status) {
-    case "done": return "✅";
-    case "error": return "❌";
-    case "uploaded": return "📤";
-    case "extracting_frames": return "🎞️";
-    case "analyzing_gpt": return "🤖";
-    case "analyzing_gemini": return "💎";
-    case "saving_results": return "💾";
-    default: return "⏳";
+    case "completed":
+    case "closed": return "check-circle";
+    case "rejected":
+    case "cancelled": return "x-circle";
+    case "listed":
+    case "active": return "circle-dot";
+    case "in_inspection":
+    case "investigating": return "search";
+    case "pending_approval":
+    case "reserved": return "clock";
+    default: return "circle";
   }
 }
