@@ -115,7 +115,7 @@ export default function AssetApprovals() {
                     </>
                   )}
                   {asset.status === "in_inspection" ||
-                  asset.status === "in_vault" ? (
+                  asset.status === "inspection_reported" ? (
                     <Button
                       className="bg-amber-500 text-neutral-950 hover:bg-amber-400"
                       onClick={() => publish(asset.id)}

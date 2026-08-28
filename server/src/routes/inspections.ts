@@ -5,7 +5,7 @@
  */
 
 import { Router } from "express";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   assets,
@@ -151,6 +151,29 @@ router.post(
       inspection,
       hint: "Call POST /rentals/:id/close with outcome=clean|penalty|major_damage",
     });
+  })
+);
+
+// ── Find active rental for asset (used by return inspection UI) ────────────
+router.get(
+  "/asset/:assetId/active-rental",
+  authenticate,
+  requirePermission("inspection.create"),
+  asyncHandler(async (req, res) => {
+    const assetId = Number(req.params.assetId);
+    const [rental] = await db
+      .select()
+      .from(rentals)
+      .where(
+        and(
+          eq(rentals.assetId, assetId),
+          eq(rentals.status, "under_inspection")
+        )
+      )
+      .orderBy(desc(rentals.createdAt))
+      .limit(1);
+    if (!rental) throw new NotFoundError("No rental under inspection for this asset");
+    res.json(rental);
   })
 );
 

@@ -18,9 +18,13 @@ import SubmitAsset from "./pages/owner/SubmitAsset";
 import AssetDetail from "./pages/owner/AssetDetail";
 import Payouts from "./pages/owner/Payouts";
 
+// Renter detail
+import RentalDetail from "./pages/renter/RentalDetail";
+
 // Inspector
 import InspectorDashboard from "./pages/inspector/InspectorDashboard";
 import InspectionForm from "./pages/inspector/InspectionForm";
+import ReturnInspectionForm from "./pages/inspector/ReturnInspectionForm";
 
 // Ops
 import OpsDashboard from "./pages/ops/OpsDashboard";
@@ -65,6 +69,13 @@ export default function App() {
       <Route path="/my-rentals">
         <ProtectedRoute roles={["renter"]}><MyRentals /></ProtectedRoute>
       </Route>
+      <Route path="/my-rentals/:id">
+        {(params) => (
+          <ProtectedRoute roles={["renter"]}>
+            <RentalDetail id={Number(params.id)} />
+          </ProtectedRoute>
+        )}
+      </Route>
 
       {/* Owner */}
       <Route path="/owner">
@@ -92,6 +103,16 @@ export default function App() {
         {(params) => (
           <ProtectedRoute roles={["inspector"]}>
             <InspectionForm assetId={Number(params.assetId)} />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/inspector/return/:assetId/:rentalId">
+        {(params) => (
+          <ProtectedRoute roles={["inspector"]}>
+            <ReturnInspectionForm
+              assetId={Number(params.assetId)}
+              rentalId={Number(params.rentalId)}
+            />
           </ProtectedRoute>
         )}
       </Route>

@@ -356,6 +356,8 @@ export const inspectionsApi = {
     }),
   forAsset: (assetId: number) =>
     request<Inspection[]>(`/inspections/asset/${assetId}`),
+  activeRentalForAsset: (assetId: number) =>
+    request<Rental>(`/inspections/asset/${assetId}/active-rental`),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

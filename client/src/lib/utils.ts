@@ -52,27 +52,26 @@ export function getSeverityLabel(severity: string) {
 
 export function getStatusLabel(status: string) {
   const labels: Record<string, string> = {
-    uploaded: "تم الرفع",
-    extracting_frames: "استخراج الإطارات",
-    analyzing_gpt: "تحليل GPT-4o",
-    analyzing_gemini: "تحليل Gemini",
-    saving_results: "حفظ النتائج",
-    done: "مكتمل",
-    error: "خطأ",
-    queued: "في الانتظار",
+    pending_approval: "في انتظار الموافقة",
+    approved: "تمت الموافقة",
+    in_inspection: "قيد الفحص",
+    inspection_reported: "تم رفع تقرير الفحص",
+    listed: "معروض",
+    reserved: "محجوز",
+    rented_out: "مؤجر",
+    return_initiated: "بدء الإرجاع",
+    returned_under_inspection: "مُرجع قيد الفحص",
+    available_again: "متاح مجدداً",
+    withdrawn: "مسحوب",
+    delisted: "محذوف من القائمة",
+    lost_or_destroyed: "مفقود أو تالف",
+    active: "نشط",
+    closed: "مغلق",
+    cancelled: "ملغي",
+    confirmed: "مؤكد",
+    pending_legal_signing: "بانتظار التوقيع",
+    pending_payment: "بانتظار الدفع",
+    in_dispute: "في نزاع",
   };
-  return labels[status] ?? status;
-}
-
-export function getStatusIcon(status: string) {
-  switch (status) {
-    case "done": return "✅";
-    case "error": return "❌";
-    case "uploaded": return "📤";
-    case "extracting_frames": return "🎞️";
-    case "analyzing_gpt": return "🤖";
-    case "analyzing_gemini": return "💎";
-    case "saving_results": return "💾";
-    default: return "⏳";
-  }
+  return labels[status] ?? status.replace(/_/g, " ");
 }

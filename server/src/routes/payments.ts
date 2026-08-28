@@ -8,7 +8,7 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { payments, rentals, users, assets, payouts } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
-import { requirePermission } from "../middleware/rbac.js";
+import { requirePermission, requireNafath } from "../middleware/rbac.js";
 import { PaymentChargeSchema, PaymentRefundSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
@@ -26,7 +26,8 @@ const router = Router();
 router.post(
   "/charge",
   authenticate,
-  requirePermission("rental.create"),
+  requirePermission("payment.charge"),
+  requireNafath,
   asyncHandler(async (req: AuthedRequest, res) => {
     const { rentalId, paymentMethodToken } = PaymentChargeSchema.parse(req.body);
 
