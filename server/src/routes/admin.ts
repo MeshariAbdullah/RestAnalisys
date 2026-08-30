@@ -3,7 +3,7 @@
  */
 
 import { Router } from "express";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   users,
@@ -133,11 +133,43 @@ router.get(
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
-    const rows = role
-      ? await query.where(eq(users.role, role as any)).limit(200)
-      : await query.limit(200);
-    res.json(rows);
+    const search = (req.query.search as string | undefined) ?? undefined;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+
+    const conditions = [];
+    if (role) conditions.push(eq(users.role, role as any));
+    if (search) {
+      const term = `%${search}%`;
+      conditions.push(
+        or(
+          ilike(users.fullName, term),
+          ilike(users.email, term),
+        )!
+      );
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [totalResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(users)
+      .where(whereClause);
+    const total = Number(totalResult?.count ?? 0);
+
+    const rows = await db
+      .select()
+      .from(users)
+      .where(whereClause)
+      .orderBy(desc(users.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    res.json({
+      users: rows,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
   })
 );
 

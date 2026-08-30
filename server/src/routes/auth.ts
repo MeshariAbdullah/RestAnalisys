@@ -14,6 +14,8 @@ import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
+import { validateNationalAddress } from "../services/splService.js";
+import { sendNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -153,10 +155,54 @@ router.post(
       });
     }
 
+    if (result.status === "verified") {
+      const [verifiedUser] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      if (verifiedUser) {
+        sendNotification({
+          type: "nafath_verified",
+          channel: "email",
+          recipientEmail: verifiedUser.email,
+          recipientName: verifiedUser.fullName,
+          data: {},
+        }).catch(() => {});
+      }
+    }
+
     return res.json({
       transactionId: result.transactionId,
       status: result.status,
     });
+  })
+);
+
+// ── Address validation (SPL National Address) ──────────────────────────────
+router.post(
+  "/address/validate",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const { buildingNumber, postalCode, additionalCode } = req.body as {
+      buildingNumber: string;
+      postalCode: string;
+      additionalCode: string;
+    };
+
+    const result = await validateNationalAddress({
+      buildingNumber,
+      postalCode,
+      additionalCode,
+    });
+
+    if (result.valid && result.address) {
+      await db
+        .update(users)
+        .set({
+          nationalAddressJson: result.address as unknown as object,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, req.user!.userId));
+    }
+
+    return res.json(result);
   })
 );
 
@@ -185,6 +231,7 @@ router.get(
       trustScore: user.trustScore,
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
+      nationalAddressJson: user.nationalAddressJson,
     });
   })
 );

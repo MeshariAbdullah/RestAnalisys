@@ -259,6 +259,16 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ nationalId }),
     }),
+  validateAddress: (data: { buildingNumber: string; postalCode: string; additionalCode: string }) =>
+    request<{
+      valid: boolean;
+      address?: Record<string, unknown>;
+      confidence: number;
+      requestId: string;
+    }>("/auth/address/validate", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -266,12 +276,30 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: {
+    category?: string;
+    brand?: string;
+    search?: string;
+    sort?: "price_asc" | "price_desc" | "newest" | "value_asc" | "value_desc";
+    minDaily?: number;
+    maxDaily?: number;
+    minValue?: number;
+    maxValue?: number;
+    cursor?: number;
+    limit?: number;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.sort) qs.set("sort", params.sort);
+    if (params?.minDaily) qs.set("minDaily", String(params.minDaily));
+    if (params?.maxDaily) qs.set("maxDaily", String(params.maxDaily));
+    if (params?.minValue) qs.set("minValue", String(params.minValue));
+    if (params?.maxValue) qs.set("maxValue", String(params.maxValue));
+    if (params?.cursor) qs.set("cursor", String(params.cursor));
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    return request<{ items: Asset[]; count: number; total: number; hasMore: boolean }>(`/assets/listings?${qs}`);
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
@@ -567,9 +595,13 @@ export const adminApi = {
       "/admin/revenue-trend"
     ),
   lowTrustUsers: () => request<User[]>("/admin/risk/low-trust"),
-  users: (role?: string) => {
-    const qs = role ? `?role=${role}` : "";
-    return request<User[]>(`/admin/users${qs}`);
+  users: (role?: string, search?: string, page?: number) => {
+    const qs = new URLSearchParams();
+    if (role) qs.set("role", role);
+    if (search) qs.set("search", search);
+    if (page) qs.set("page", String(page));
+    const query = qs.toString();
+    return request<{ users: User[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>(`/admin/users${query ? `?${query}` : ""}`);
   },
   blockUser: (id: number, block: boolean, reason?: string) =>
     request<User>(`/admin/users/${id}/block`, {

@@ -22,6 +22,7 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | POST   | `/register`          | public          | Create a renter or owner account       |
 | POST   | `/login`             | public          | Email + password → JWT                 |
 | POST   | `/nafath/initiate`   | authenticated   | Begin Nafath identity verification     |
+| POST   | `/address/validate`  | authenticated   | Validate SPL National Address          |
 | GET    | `/me`                | authenticated   | Current user profile                   |
 
 ## Assets — `/api/assets`

@@ -27,6 +27,7 @@ import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { globalRateLimit, authRateLimit } from "./middleware/rateLimiter.js";
 
 dotenv.config();
 
@@ -42,23 +43,31 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
+// Global rate limiting
+app.use("/api", globalRateLimit);
+
 // Health
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     service: "mlr-platform",
-    version: "1.0.0",
+    version: "1.1.0",
+    uptime: Math.floor(process.uptime()),
     integrations: {
       nafath: !!process.env.NAFATH_API_KEY,
       nafith: !!process.env.NAFITH_API_KEY,
       paymentGateway: !!process.env.PAYMENT_GATEWAY_API_KEY,
       zatca: !!process.env.ZATCA_API_KEY,
+      spl: !!process.env.SPL_API_KEY,
+      email: !!process.env.EMAIL_API_KEY,
+      sms: !!process.env.SMS_API_KEY,
     },
     timestamp: new Date().toISOString(),
   });
 });
 
-app.use("/api/auth", authRouter);
+// Stricter rate limit on auth endpoints
+app.use("/api/auth", authRateLimit, authRouter);
 app.use("/api/assets", assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
 app.use("/api/rentals", rentalsRouter);
@@ -81,6 +90,9 @@ app.listen(PORT, () => {
   console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   SPL:      ${process.env.SPL_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   Email:    ${process.env.EMAIL_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   SMS:      ${process.env.SMS_API_KEY ? "live" : "placeholder"}`);
 });
 
 export default app;

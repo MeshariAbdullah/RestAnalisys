@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { sendNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -84,10 +85,11 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      lateReturns: sql<number>`count(*) filter (where returned_at is not null and returned_at::date > end_date::date)`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, lateReturns: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +101,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.lateReturns ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +282,14 @@ router.post(
       after: { rental, decision },
     });
 
+    sendNotification({
+      type: "rental_created",
+      channel: "email",
+      recipientEmail: renter!.email,
+      recipientName: renter!.fullName,
+      data: { reference: rental.reference, assetTitle: asset.title },
+    }).catch(() => {});
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -316,13 +326,34 @@ router.get(
   "/",
   authenticate,
   requirePermission("rental.read.any"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+    const status = req.query.status as string | undefined;
+
+    const conditions = [];
+    if (status) conditions.push(eq(rentals.status, status as any));
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [totalResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(rentals)
+      .where(whereClause);
+    const total = Number(totalResult?.count ?? 0);
+
     const rows = await db
       .select()
       .from(rentals)
+      .where(whereClause)
       .orderBy(desc(rentals.createdAt))
-      .limit(200);
-    res.json(rows);
+      .limit(limit)
+      .offset(offset);
+
+    res.json({
+      rentals: rows,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
   })
 );
 
@@ -440,6 +471,18 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    const [deliveryRenter] = await db.select().from(users).where(eq(users.id, rental.renterId)).limit(1);
+    if (deliveryRenter) {
+      sendNotification({
+        type: "rental_delivered",
+        channel: "both",
+        recipientEmail: deliveryRenter.email,
+        recipientPhone: deliveryRenter.phoneE164 ?? undefined,
+        recipientName: deliveryRenter.fullName,
+        data: { reference: rental.reference },
+      }).catch(() => {});
+    }
 
     res.json(updated);
   })
