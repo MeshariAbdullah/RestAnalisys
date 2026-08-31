@@ -96,7 +96,7 @@ export default function Register() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 bg-neutral-950 border-neutral-800 text-white"
-                placeholder="Min 8 chars, upper + lower + digit"
+                placeholder="Min 8 characters"
                 required
               />
             </div>

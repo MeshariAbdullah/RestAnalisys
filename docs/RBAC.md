@@ -16,45 +16,51 @@ functions from `server/src/middleware/rbac.ts`:
 | `inspector`   | Can view the inspection queue and submit intake/return reports |
 | `operations`  | Can manage shipments, inventory, ops alerts, progress rentals |
 | `admin`       | Full moderation (assets, disputes, Sanads, users)           |
-| `super_admin` | Admin + ability to create staff users                       |
+| `super_admin` | Admin + every permission (computed as union of all roles)   |
 
 ## Permission matrix
 
 This is the source of truth. A ✓ means that role has the permission. Blank
-means denied.
+means denied. `super_admin` inherits all permissions from every role plus
+`system.impersonate`.
 
 | Permission                     | renter | owner | inspector | operations | admin | super_admin |
 | ------------------------------ | :----: | :---: | :-------: | :--------: | :---: | :---------: |
-| `asset:submit`                 |        |   ✓   |           |            |       |             |
-| `asset:withdraw_own`           |        |   ✓   |           |            |       |             |
-| `asset:approve_valuation`      |        |   ✓   |           |            |       |             |
-| `asset:review`                 |        |       |           |            |   ✓   |      ✓      |
-| `asset:publish`                |        |       |           |            |   ✓   |      ✓      |
-| `asset:receive`                |        |       |           |     ✓      |       |             |
-| `asset:browse`                 |   ✓    |       |           |            |       |             |
-| `inspection:queue`             |        |       |     ✓     |            |   ✓   |      ✓      |
-| `inspection:create`            |        |       |     ✓     |            |       |             |
-| `rental:quote`                 |   ✓    |       |           |            |       |             |
-| `rental:create`                |   ✓    |       |           |            |       |             |
-| `rental:view_own`              |   ✓    |       |           |            |       |             |
-| `rental:view_all`              |        |       |           |     ✓      |   ✓   |      ✓      |
-| `rental:progress`              |        |       |           |     ✓      |       |             |
-| `rental:close`                 |        |       |           |            |   ✓   |      ✓      |
-| `legal:sign`                   |   ✓    |       |           |            |       |             |
-| `legal:enforce`                |        |       |           |            |   ✓   |      ✓      |
-| `payment:charge`               |   ✓    |       |           |            |       |             |
-| `payment:refund`               |        |       |           |            |   ✓   |      ✓      |
-| `payout:release`               |        |       |           |            |   ✓   |      ✓      |
-| `payout:view_own`              |        |   ✓   |           |            |       |             |
-| `dispute:open`                 |   ✓    |   ✓   |           |            |       |             |
-| `dispute:resolve`              |        |       |           |            |   ✓   |      ✓      |
-| `ops:shipment`                 |        |       |           |     ✓      |       |             |
-| `ops:inventory`                |        |       |           |     ✓      |       |             |
-| `ops:alerts`                   |        |       |           |     ✓      |       |             |
-| `admin:users`                  |        |       |           |            |   ✓   |      ✓      |
-| `admin:block_user`             |        |       |           |            |   ✓   |      ✓      |
-| `admin:create_staff`           |        |       |           |            |       |      ✓      |
-| `admin:kpis`                   |        |       |           |            |   ✓   |      ✓      |
+| `asset.submit`                 |        |   ✓   |           |            |       |      ✓      |
+| `asset.read.own`               |        |   ✓   |           |            |       |      ✓      |
+| `asset.read.any`               |        |       |     ✓     |     ✓      |   ✓   |      ✓      |
+| `asset.approve`                |        |       |           |            |   ✓   |      ✓      |
+| `asset.reject`                 |        |       |           |            |   ✓   |      ✓      |
+| `asset.withdraw`               |        |   ✓   |           |            |       |      ✓      |
+| `asset.list`                   |   ✓    |       |           |            |       |      ✓      |
+| `inspection.create`            |        |       |     ✓     |            |       |      ✓      |
+| `inspection.update`            |        |       |     ✓     |            |       |      ✓      |
+| `inspection.read`              |        |       |     ✓     |     ✓      |   ✓   |      ✓      |
+| `rental.create`                |   ✓    |       |           |            |       |      ✓      |
+| `rental.read.own`              |   ✓    |   ✓   |           |            |       |      ✓      |
+| `rental.read.any`              |        |       |           |     ✓      |   ✓   |      ✓      |
+| `rental.cancel`                |   ✓    |       |           |            |   ✓   |      ✓      |
+| `rental.fulfill`               |        |       |           |     ✓      |       |      ✓      |
+| `rental.close`                 |        |       |           |     ✓      |       |      ✓      |
+| `legal.sign`                   |   ✓    |       |           |            |       |      ✓      |
+| `legal.enforce`                |        |       |           |            |   ✓   |      ✓      |
+| `legal.read.any`               |        |       |           |            |   ✓   |      ✓      |
+| `payment.charge`               |        |       |           |            |       |      ✓      |
+| `payment.refund`               |        |       |           |            |   ✓   |      ✓      |
+| `payment.read`                 |   ✓    |   ✓   |           |            |   ✓   |      ✓      |
+| `payout.release`               |        |       |           |            |   ✓   |      ✓      |
+| `user.read`                    |        |       |           |            |   ✓   |      ✓      |
+| `user.block`                   |        |       |           |            |   ✓   |      ✓      |
+| `user.create_staff`            |        |       |           |            |   ✓   |      ✓      |
+| `finance.read`                 |        |       |           |            |   ✓   |      ✓      |
+| `finance.export`               |        |       |           |            |   ✓   |      ✓      |
+| `dispute.open`                 |   ✓    |   ✓   |           |     ✓      |       |      ✓      |
+| `dispute.assign`               |        |       |           |            |   ✓   |      ✓      |
+| `dispute.resolve`              |        |       |           |            |   ✓   |      ✓      |
+| `operations.read`              |        |       |           |     ✓      |   ✓   |      ✓      |
+| `operations.update`            |        |       |           |     ✓      |       |      ✓      |
+| `system.audit`                 |        |       |           |            |   ✓   |      ✓      |
+| `system.impersonate`           |        |       |           |            |       |      ✓      |
 
 ## The Nafath gate
 
@@ -88,7 +94,7 @@ To add or remove a permission:
 
 1. Add it to the `Permission` union type in `rbac.ts`.
 2. Add it to the appropriate rows in `ROLE_PERMISSIONS`.
-3. Wrap the Express route with `requirePermission("your:permission")`.
+3. Wrap the Express route with `requirePermission("your.permission")`.
 4. Update this doc.
 
 Never hard-code role checks inside a route body — always go through the
