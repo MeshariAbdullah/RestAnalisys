@@ -23,6 +23,7 @@ function riskColor(c: string): string {
 export default function UsersPage() {
   const qc = useQueryClient();
   const [role, setRole] = useState<string>("all");
+  const [error, setError] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users", role],
@@ -30,13 +31,18 @@ export default function UsersPage() {
   });
 
   async function toggleBlock(u: User) {
+    setError("");
     const block = !u.isBlocked;
     const reason = block
       ? prompt("Reason for blocking?") ?? undefined
       : undefined;
     if (block && !reason) return;
-    await adminApi.blockUser(u.id, block, reason);
-    await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    try {
+      await adminApi.blockUser(u.id, block, reason);
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to update user");
+    }
   }
 
   return (
@@ -45,6 +51,12 @@ export default function UsersPage() {
       <p className="text-neutral-500 mb-6">
         All accounts across the platform.
       </p>
+
+      {error && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-4">
+          {error}
+        </p>
+      )}
 
       <div className="flex items-center gap-3 mb-5">
         <Select value={role} onValueChange={setRole}>

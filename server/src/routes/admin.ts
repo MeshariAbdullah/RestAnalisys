@@ -13,6 +13,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -141,6 +142,19 @@ router.get(
   })
 );
 
+// ── Single user detail ────────────────────────────────────────────────────
+router.get(
+  "/users/:id",
+  authenticate,
+  requirePermission("user.read"),
+  asyncHandler(async (_req, res) => {
+    const id = Number(_req.params.id);
+    const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    if (!user) throw new NotFoundError("User");
+    res.json(user);
+  })
+);
+
 // ── Block / unblock a user ─────────────────────────────────────────────────
 router.post(
   "/users/:id/block",
@@ -217,6 +231,37 @@ router.get(
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
+    res.json(rows);
+  })
+);
+
+// ── Audit log query ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const entityType = req.query.entityType as string | undefined;
+    const entityId = req.query.entityId ? Number(req.query.entityId) : undefined;
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+
+    let conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (entityId) conditions.push(eq(auditLogs.entityId, entityId));
+
+    const rows = conditions.length
+      ? await db
+          .select()
+          .from(auditLogs)
+          .where(and(...conditions))
+          .orderBy(desc(auditLogs.createdAt))
+          .limit(limit)
+      : await db
+          .select()
+          .from(auditLogs)
+          .orderBy(desc(auditLogs.createdAt))
+          .limit(limit);
+
     res.json(rows);
   })
 );

@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Gavel } from "lucide-react";
+import { Gavel, UserPlus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -28,9 +29,20 @@ function statusColor(s: string): string {
   return "bg-neutral-200 text-neutral-700";
 }
 
+function isResolved(status: string): boolean {
+  return (
+    status === "resolved_for_renter" ||
+    status === "resolved_for_platform" ||
+    status === "resolved_for_owner" ||
+    status === "escalated_to_legal"
+  );
+}
+
 export default function DisputesPage() {
   const qc = useQueryClient();
   const [openId, setOpenId] = useState<number | null>(null);
+  const [assigningId, setAssigningId] = useState<number | null>(null);
+  const [assigneeUserId, setAssigneeUserId] = useState("");
   const [resolution, setResolution] = useState<Resolution>(
     "resolved_for_renter"
   );
@@ -54,6 +66,23 @@ export default function DisputesPage() {
     }
   }
 
+  async function assign(id: number) {
+    setError(null);
+    const userId = Number(assigneeUserId);
+    if (!userId || userId <= 0) {
+      setError("Please enter a valid staff user ID");
+      return;
+    }
+    try {
+      await disputesApi.assign(id, userId);
+      setAssigningId(null);
+      setAssigneeUserId("");
+      await qc.invalidateQueries({ queryKey: ["disputes"] });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   return (
     <div className="p-8 max-w-5xl mx-auto">
       <h1 className="text-3xl font-bold mb-2">Disputes</h1>
@@ -62,7 +91,7 @@ export default function DisputesPage() {
       </p>
 
       {isLoading ? (
-        <p className="text-neutral-500">Loading…</p>
+        <p className="text-neutral-500">Loading...</p>
       ) : !data || data.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">
@@ -94,22 +123,70 @@ export default function DisputesPage() {
                       {new Date(d.openedAt).toLocaleDateString()}
                     </p>
                   </div>
-                  {d.status !== "resolved_for_renter" &&
-                    d.status !== "resolved_for_platform" &&
-                    d.status !== "resolved_for_owner" &&
-                    d.status !== "escalated_to_legal" && (
+                  {!isResolved(d.status) && (
+                    <div className="flex gap-2 shrink-0">
                       <Button
                         size="sm"
-                        onClick={() =>
-                          setOpenId(openId === d.id ? null : d.id)
-                        }
+                        variant="outline"
+                        onClick={() => {
+                          setAssigningId(assigningId === d.id ? null : d.id);
+                          setOpenId(null);
+                          setAssigneeUserId("");
+                        }}
+                      >
+                        <UserPlus className="w-4 h-4 mr-1" />
+                        Assign
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setOpenId(openId === d.id ? null : d.id);
+                          setAssigningId(null);
+                        }}
                         className="bg-neutral-900 hover:bg-neutral-800"
                       >
                         Resolve
                       </Button>
-                    )}
+                    </div>
+                  )}
                 </div>
 
+                {/* Assign form */}
+                {assigningId === d.id && (
+                  <div className="mt-4 pt-4 border-t space-y-3">
+                    <p className="text-sm font-medium text-neutral-700">
+                      Assign to staff member
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min="1"
+                        value={assigneeUserId}
+                        onChange={(e) => setAssigneeUserId(e.target.value)}
+                        placeholder="Staff user ID"
+                        className="max-w-[200px]"
+                      />
+                      <Button
+                        onClick={() => assign(d.id)}
+                        disabled={!assigneeUserId.trim()}
+                        className="bg-amber-500 text-neutral-950 hover:bg-amber-400"
+                      >
+                        Assign dispute
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setAssigningId(null);
+                          setAssigneeUserId("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Resolve form */}
                 {openId === d.id && (
                   <div className="mt-4 pt-4 border-t space-y-3">
                     <Select

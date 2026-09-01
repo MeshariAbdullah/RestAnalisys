@@ -181,6 +181,7 @@ export const PaymentRefundSchema = z.object({
 export const DisputeOpenSchema = z.object({
   rentalId: z.number().int().positive(),
   category: z.enum(["damage", "loss", "fraud", "service", "billing"]),
+  severity: z.enum(["low", "medium", "high", "critical"]).default("medium"),
   summary: z.string().min(10),
   evidence: z.array(z.string().url()).default([]),
 });

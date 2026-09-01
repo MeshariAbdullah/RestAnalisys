@@ -11,6 +11,7 @@ import Browse from "./pages/renter/Browse";
 import ItemDetail from "./pages/renter/ItemDetail";
 import LegalCommitmentPage from "./pages/renter/LegalCommitment";
 import MyRentals from "./pages/renter/MyRentals";
+import OpenDispute from "./pages/renter/OpenDispute";
 
 // Owner
 import OwnerDashboard from "./pages/owner/OwnerDashboard";
@@ -27,6 +28,7 @@ import OpsDashboard from "./pages/ops/OpsDashboard";
 import Shipments from "./pages/ops/Shipments";
 import Inventory from "./pages/ops/Inventory";
 import AlertsPage from "./pages/ops/Alerts";
+import RentalManagement from "./pages/ops/RentalManagement";
 
 // Admin
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -35,6 +37,7 @@ import UsersPage from "./pages/admin/Users";
 import DisputesPage from "./pages/admin/Disputes";
 import FinancialOverview from "./pages/admin/FinancialOverview";
 import SanadTracking from "./pages/admin/SanadTracking";
+import RiskDashboard from "./pages/admin/RiskDashboard";
 
 export default function App() {
   return (
@@ -64,6 +67,9 @@ export default function App() {
       </Route>
       <Route path="/my-rentals">
         <ProtectedRoute roles={["renter"]}><MyRentals /></ProtectedRoute>
+      </Route>
+      <Route path="/dispute/open">
+        <ProtectedRoute roles={["renter", "owner"]}><OpenDispute /></ProtectedRoute>
       </Route>
 
       {/* Owner */}
@@ -109,6 +115,9 @@ export default function App() {
       <Route path="/ops/alerts">
         <ProtectedRoute roles={["operations"]}><AlertsPage /></ProtectedRoute>
       </Route>
+      <Route path="/ops/rentals">
+        <ProtectedRoute roles={["operations"]}><RentalManagement /></ProtectedRoute>
+      </Route>
 
       {/* Admin */}
       <Route path="/admin">
@@ -128,6 +137,9 @@ export default function App() {
       </Route>
       <Route path="/admin/sanad">
         <ProtectedRoute roles={["admin", "super_admin"]}><SanadTracking /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/risk">
+        <ProtectedRoute roles={["admin", "super_admin"]}><RiskDashboard /></ProtectedRoute>
       </Route>
 
       <Route>

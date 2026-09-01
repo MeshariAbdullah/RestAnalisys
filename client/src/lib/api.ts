@@ -484,6 +484,7 @@ export const disputesApi = {
   open: (data: {
     rentalId: number;
     category: "damage" | "loss" | "fraud" | "service" | "billing";
+    severity?: "low" | "medium" | "high" | "critical";
     summary: string;
     evidence?: string[];
   }) =>
@@ -491,7 +492,9 @@ export const disputesApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  mine: () => request<Dispute[]>("/disputes/mine"),
   list: () => request<Dispute[]>("/disputes"),
+  get: (id: number) => request<Dispute>(`/disputes/${id}`),
   assign: (id: number, assigneeUserId: number) =>
     request<Dispute>(`/disputes/${id}/assign`, {
       method: "POST",
@@ -578,6 +581,22 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  getUser: (id: number) => request<User>(`/admin/users/${id}`),
+  auditLogs: (params?: { entityType?: string; entityId?: number; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.entityId) qs.set("entityId", String(params.entityId));
+    if (params?.limit) qs.set("limit", String(params.limit));
+    return request<Array<{
+      id: number;
+      actorUserId?: number;
+      actorRole?: string;
+      action: string;
+      entityType: string;
+      entityId?: number;
+      createdAt: string;
+    }>>(`/admin/audit-logs?${qs}`);
+  },
 };
 
 export const healthApi = {

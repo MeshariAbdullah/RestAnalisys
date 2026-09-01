@@ -28,6 +28,7 @@ export default function Shipments() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editStatus, setEditStatus] = useState<string>("in_transit");
   const [editTracking, setEditTracking] = useState("");
+  const [error, setError] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["shipments"],
@@ -35,13 +36,18 @@ export default function Shipments() {
   });
 
   async function handleUpdate(id: number) {
-    await operationsApi.updateShipment(id, {
-      status: editStatus,
-      trackingNumber: editTracking || undefined,
-    });
-    setEditingId(null);
-    setEditTracking("");
-    await qc.invalidateQueries({ queryKey: ["shipments"] });
+    setError("");
+    try {
+      await operationsApi.updateShipment(id, {
+        status: editStatus,
+        trackingNumber: editTracking || undefined,
+      });
+      setEditingId(null);
+      setEditTracking("");
+      await qc.invalidateQueries({ queryKey: ["shipments"] });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to update shipment");
+    }
   }
 
   return (
@@ -50,6 +56,12 @@ export default function Shipments() {
       <p className="text-neutral-500 mb-8">
         Outbound deliveries to renters and returns to warehouse.
       </p>
+
+      {error && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-4">
+          {error}
+        </p>
+      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>

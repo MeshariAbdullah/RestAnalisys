@@ -41,7 +41,7 @@ router.post(
         rentalId: rental.id,
         openedByUserId: actorId,
         category: input.category,
-        severity: "medium",
+        severity: input.severity,
         summary: input.summary,
         evidenceJson: input.evidence as unknown as object,
       })
@@ -65,6 +65,19 @@ router.post(
 );
 
 router.get(
+  "/mine",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const rows = await db
+      .select()
+      .from(disputes)
+      .where(eq(disputes.openedByUserId, req.user!.userId))
+      .orderBy(desc(disputes.openedAt));
+    res.json(rows);
+  })
+);
+
+router.get(
   "/",
   authenticate,
   requirePermission("dispute.assign"),
@@ -75,6 +88,23 @@ router.get(
       .orderBy(desc(disputes.openedAt))
       .limit(200);
     res.json(rows);
+  })
+);
+
+router.get(
+  "/:id",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const id = Number(req.params.id);
+    const [dispute] = await db.select().from(disputes).where(eq(disputes.id, id)).limit(1);
+    if (!dispute) throw new NotFoundError("Dispute");
+
+    const canReadAny = ["admin", "super_admin", "operations"].includes(req.user!.role);
+    if (!canReadAny && dispute.openedByUserId !== req.user!.userId) {
+      throw new ForbiddenError();
+    }
+
+    res.json(dispute);
   })
 );
 
