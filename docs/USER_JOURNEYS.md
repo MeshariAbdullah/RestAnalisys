@@ -25,7 +25,7 @@ Every step maps to a real API call and a real page in the SPA.
    - Proposed daily rental price.
    - API: `POST /api/inspections/intake`.
 6. **Owner receives a valuation proposal** on `/owner/assets/:id`.
-   - Approves → status becomes `in_vault`.
+   - Approves → status becomes `ready_for_listing`.
    - Rejects → asset is withdrawn.
    - API: `POST /api/assets/:id/valuation-response`.
 7. **Operations** marks the asset physically received
@@ -75,7 +75,7 @@ Every step maps to a real API call and a real page in the SPA.
    - Assets with status `in_inspection` and rentals awaiting return.
 2. **Intake inspection** (`/inspector/report/:assetId`):
    - Authenticate, grade, value, price, risk category.
-   - On submit the asset advances to `awaiting_owner_approval`.
+   - On submit the asset advances to `inspection_reported`.
 3. **Return inspection**:
    - Same form but tied to a rental.
    - API: `POST /api/inspections/return`.
@@ -125,7 +125,7 @@ Every step maps to a real API call and a real page in the SPA.
 6. **Sanad tracking** at `/admin/sanad`:
    - All Sanads + pending enforcement tab.
    - Discharge happy-path Sanads.
-   - File execution for defaulted ones.
+   - File execution for matured (unpaid) ones.
 
 ---
 
@@ -138,9 +138,9 @@ Every step maps to a real API call and a real page in the SPA.
 3. Admin closes the rental with outcome `major_damage` or `loss`
    (`POST /api/rentals/:id/close`).
 4. Backend:
-   - Calculates the deficit vs. the legal commitment.
-   - If the renter voluntarily pays → `payments/charge` against the penalty.
-   - If not → `sanad_records.status = defaulted`.
+   - Sets rental to `enforcement` status.
+   - Creates a critical operational alert for Sanad execution.
+   - The Sanad (already `active` or `matured`) is ready for execution.
 5. Admin lands on `/admin/sanad` → "Pending enforcement" tab → clicks
    "File execution". This triggers `nafithService.executeSanad()` which
    returns a Najiz case number.

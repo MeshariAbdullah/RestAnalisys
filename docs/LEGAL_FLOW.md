@@ -103,11 +103,10 @@ This gives both parties a tamper-evident record of what was signed.
 
 ## Audit trail
 
-Every legal action is recorded twice:
-
-1. In `audit_logs` with the acting user + before/after JSON.
-2. In `integration_events` with the raw request/response to Nafath or Nafith
-   (for legal defensibility).
+Every legal action is recorded in `audit_logs` with the acting user +
+before/after JSON. The `integration_events` table is defined in the schema
+for storing raw Nafath/Nafith request/response payloads but is not yet
+wired into the services — a future integration step.
 
 ## Dev-mode behavior
 

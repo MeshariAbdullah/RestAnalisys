@@ -46,11 +46,11 @@ export default function App() {
 
       {/* Renter */}
       <Route path="/browse">
-        <ProtectedRoute roles={["renter"]}><Browse /></ProtectedRoute>
+        <ProtectedRoute roles={["renter", "owner", "admin", "super_admin", "operations"]}><Browse /></ProtectedRoute>
       </Route>
       <Route path="/browse/:id">
         {(params) => (
-          <ProtectedRoute roles={["renter"]}>
+          <ProtectedRoute roles={["renter", "owner", "admin", "super_admin", "operations"]}>
             <ItemDetail id={Number(params.id)} />
           </ProtectedRoute>
         )}
