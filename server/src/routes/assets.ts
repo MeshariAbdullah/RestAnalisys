@@ -20,6 +20,7 @@ import {
   AssetSubmissionSchema,
   AssetApprovalSchema,
   AssetListingFilter,
+  OwnerValuationResponseSchema,
 } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
@@ -121,10 +122,10 @@ router.post(
   requirePermission("asset.read.own"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { approved, rejectionReason } = req.body as {
-      approved: boolean;
-      rejectionReason?: string;
-    };
+    const { approved, rejectionReason } = OwnerValuationResponseSchema.parse({
+      ...req.body,
+      inspectionId: id,
+    });
 
     const [asset] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
     if (!asset) throw new NotFoundError("Asset");

@@ -19,6 +19,7 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  ScrollText,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
@@ -45,6 +46,7 @@ const NAV: NavItem[] = [
 
   // Operations
   { href: "/ops", label: "Ops Dashboard", icon: LayoutDashboard, roles: ["operations"] },
+  { href: "/ops/rentals", label: "Rental Management", icon: FileText, roles: ["operations"] },
   { href: "/ops/shipments", label: "Shipments", icon: Truck, roles: ["operations"] },
   { href: "/ops/inventory", label: "Inventory", icon: PackageSearch, roles: ["operations"] },
   { href: "/ops/alerts", label: "Alerts", icon: AlertTriangle, roles: ["operations"] },
@@ -54,8 +56,10 @@ const NAV: NavItem[] = [
   { href: "/admin/approvals", label: "Asset Approvals", icon: ClipboardCheck, roles: ["admin", "super_admin"] },
   { href: "/admin/users", label: "Users", icon: UsersIcon, roles: ["admin", "super_admin"] },
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
+  { href: "/admin/rentals", label: "Rental Management", icon: FileText, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit", label: "Audit Log", icon: ScrollText, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {

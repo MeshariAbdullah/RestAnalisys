@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { trustScoreToCategory } from "../services/riskEngine.js";
 
 const router = Router();
 
@@ -66,6 +67,50 @@ function daysBetween(startIso: string, endIso: string): number {
   const end = new Date(endIso + "T00:00:00Z").getTime();
   if (end <= start) throw new LegalStateError("endDate must be after startDate");
   return Math.round((end - start) / (1000 * 60 * 60 * 24));
+}
+
+async function updateUserTrustScore(userId: number): Promise<void> {
+  const stats = await db
+    .select({
+      completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
+      disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
+      cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+    })
+    .from(rentals)
+    .where(eq(rentals.renterId, userId));
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+
+  const [lateCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`returned_at > (end_date::date + interval '1 day')`,
+        sql`returned_at is not null`
+      )
+    );
+
+  const completed = Number(row.completed ?? 0);
+  const disputed = Number(row.disputed ?? 0);
+  const cancelled = Number(row.cancelled ?? 0);
+  const late = Number(lateCount?.count ?? 0);
+
+  let score = 50;
+  score += Math.min(completed * 3, 30);
+  score -= disputed * 10;
+  score -= late * 5;
+  if (cancelled >= 3) score -= 8;
+  score = Math.max(0, Math.min(100, score));
+
+  await db
+    .update(users)
+    .set({
+      trustScore: score,
+      riskCategory: trustScoreToCategory(score),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId));
 }
 
 function generateRentalReference(): string {
@@ -99,7 +144,20 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(
+      (
+        await db
+          .select({ count: sql<number>`count(*)` })
+          .from(rentals)
+          .where(
+            and(
+              eq(rentals.renterId, userId),
+              sql`returned_at > (end_date::date + interval '1 day')`,
+              sql`returned_at is not null`
+            )
+          )
+      )[0]?.count ?? 0
+    ),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -509,6 +567,7 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await updateUserTrustScore(rental.renterId);
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -540,6 +599,7 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await updateUserTrustScore(rental.renterId);
       await recordAudit({
         req,
         action: "rental.close_penalty",

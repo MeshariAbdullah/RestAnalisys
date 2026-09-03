@@ -6,7 +6,7 @@
  */
 
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   legalCommitments,
@@ -173,7 +173,12 @@ router.get(
     const rows = await db
       .select()
       .from(sanadRecords)
-      .where(eq(sanadRecords.status, "active"))
+      .where(
+        and(
+          eq(sanadRecords.status, "active"),
+          sql`maturity_date <= current_date`
+        )
+      )
       .limit(200);
     res.json(rows);
   })
