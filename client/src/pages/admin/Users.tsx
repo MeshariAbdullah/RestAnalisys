@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users as UsersIcon, ShieldAlert, ShieldCheck } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Users as UsersIcon, ShieldAlert, ShieldCheck, UserPlus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,9 +20,86 @@ function riskColor(c: string): string {
   return "bg-red-100 text-red-700";
 }
 
+function CreateStaffForm({ onCreated }: { onCreated: () => void }) {
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [staffRole, setStaffRole] = useState<"admin" | "operations" | "inspector">("operations");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      adminApi.createStaffUser({ email, fullName, role: staffRole, password }),
+    onSuccess: () => {
+      setEmail("");
+      setFullName("");
+      setPassword("");
+      setError("");
+      onCreated();
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  return (
+    <Card className="mb-6">
+      <CardContent className="p-6">
+        <h3 className="font-semibold mb-4 flex items-center gap-2">
+          <UserPlus className="w-5 h-5" />
+          Create Staff Account
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <input
+            type="text"
+            placeholder="Full name"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="border rounded-lg px-3 py-2 text-sm"
+          />
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="border rounded-lg px-3 py-2 text-sm"
+          />
+          <select
+            value={staffRole}
+            onChange={(e) => setStaffRole(e.target.value as typeof staffRole)}
+            className="border rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="operations">Operations</option>
+            <option value="inspector">Inspector</option>
+            <option value="admin">Admin</option>
+          </select>
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="border rounded-lg px-3 py-2 text-sm"
+          />
+        </div>
+        {error && (
+          <p className="text-sm text-red-600 mt-2">{error}</p>
+        )}
+        <Button
+          size="sm"
+          className="mt-3"
+          disabled={!email || !fullName || !password || mutation.isPending}
+          onClick={() => mutation.mutate()}
+        >
+          <UserPlus className="w-4 h-4 mr-1" />
+          Create
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function UsersPage() {
   const qc = useQueryClient();
   const [role, setRole] = useState<string>("all");
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users", role],
@@ -60,7 +137,24 @@ export default function UsersPage() {
             <SelectItem value="admin">Admin</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setShowCreateForm(!showCreateForm)}
+        >
+          <UserPlus className="w-4 h-4 mr-1" />
+          {showCreateForm ? "Hide" : "New Staff"}
+        </Button>
       </div>
+
+      {showCreateForm && (
+        <CreateStaffForm
+          onCreated={() => {
+            qc.invalidateQueries({ queryKey: ["admin-users"] });
+            setShowCreateForm(false);
+          }}
+        />
+      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>

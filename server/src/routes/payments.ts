@@ -6,7 +6,7 @@
 import { Router } from "express";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { payments, rentals, users, assets, payouts } from "../db/schema.js";
+import { payments, rentals, users, assets, payouts, ownerAgreements } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { PaymentChargeSchema, PaymentRefundSchema } from "../utils/schemas.js";
@@ -196,9 +196,17 @@ router.post(
       throw new LegalStateError("Rental must be closed before payout");
     }
 
+    const [agreement] = await db
+      .select()
+      .from(ownerAgreements)
+      .where(eq(ownerAgreements.ownerId, rental.ownerId))
+      .orderBy(desc(ownerAgreements.createdAt))
+      .limit(1);
+    const commissionPct = agreement?.commissionPct ?? 20;
+
     const payoutCalc = computeOwnerPayout({
       rentalSubtotalHalalas: rental.rentalSubtotalHalalas,
-      commissionPct: 20,
+      commissionPct,
     });
 
     const [payout] = await db
