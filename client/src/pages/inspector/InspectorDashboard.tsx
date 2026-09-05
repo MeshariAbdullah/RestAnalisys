@@ -62,11 +62,19 @@ export default function InspectorDashboard() {
                     </span>
                   </div>
                 </div>
-                <Link href={`/inspector/report/${asset.id}`}>
-                  <Button className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
-                    Inspect
-                  </Button>
-                </Link>
+                {asset.status === "returned_under_inspection" && (asset as Asset & { activeRentalId?: number }).activeRentalId ? (
+                  <Link href={`/inspector/return/${asset.id}/${(asset as Asset & { activeRentalId: number }).activeRentalId}`}>
+                    <Button className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
+                      Return inspect
+                    </Button>
+                  </Link>
+                ) : (
+                  <Link href={`/inspector/report/${asset.id}`}>
+                    <Button className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
+                      Inspect
+                    </Button>
+                  </Link>
+                )}
               </CardContent>
             </Card>
           ))}

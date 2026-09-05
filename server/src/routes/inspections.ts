@@ -5,7 +5,7 @@
  */
 
 import { Router } from "express";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   assets,
@@ -33,7 +33,27 @@ router.get(
       .from(assets)
       .where(inArray(assets.status, ["in_inspection", "returned_under_inspection"]))
       .orderBy(desc(assets.updatedAt));
-    res.json(rows);
+
+    const enriched = await Promise.all(
+      rows.map(async (asset) => {
+        if (asset.status === "returned_under_inspection") {
+          const [rental] = await db
+            .select({ id: rentals.id })
+            .from(rentals)
+            .where(
+              and(
+                eq(rentals.assetId, asset.id),
+                eq(rentals.status, "under_inspection")
+              )
+            )
+            .limit(1);
+          return { ...asset, activeRentalId: rental?.id ?? null };
+        }
+        return { ...asset, activeRentalId: null };
+      })
+    );
+
+    res.json(enriched);
   })
 );
 
