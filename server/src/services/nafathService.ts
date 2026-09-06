@@ -12,6 +12,7 @@
  */
 
 import crypto from "node:crypto";
+import { logIntegrationEvent } from "./integrationLogger.js";
 
 const NAFATH_API_BASE = process.env.NAFATH_API_BASE ?? "https://api.nafath.sa/v1";
 const NAFATH_API_KEY = process.env.NAFATH_API_KEY ?? "";
@@ -40,15 +41,21 @@ export async function initiateNafathVerification(
   req: NafathVerifyRequest
 ): Promise<NafathVerifyResponse> {
   if (!NAFATH_API_KEY) {
-    // Development fallback — auto-verify a test national ID
     const transactionId = `NAFATH-DEV-${crypto.randomBytes(6).toString("hex")}`;
-    return {
+    const response = {
       transactionId,
-      status: "verified",
+      status: "verified" as const,
       verifiedAt: new Date().toISOString(),
       fullName: req.fullNameHint ?? "Test User",
-      provider: "nafath",
+      provider: "nafath" as const,
     };
+    await logIntegrationEvent({
+      provider: "nafath",
+      eventType: "identity_verification",
+      referenceId: transactionId,
+      payload: { nationalId: req.nationalId, result: response },
+    });
+    return response;
   }
 
   // Production: replace with a real HTTP POST.
@@ -89,12 +96,20 @@ export async function requestNafathSignature(
   req: NafathSignRequest
 ): Promise<NafathSignResponse> {
   if (!NAFATH_API_KEY) {
-    return {
-      transactionId: `NAFATH-SIGN-DEV-${crypto.randomBytes(6).toString("hex")}`,
-      status: "signed",
+    const txId = `NAFATH-SIGN-DEV-${crypto.randomBytes(6).toString("hex")}`;
+    const response = {
+      transactionId: txId,
+      status: "signed" as const,
       signedAt: new Date().toISOString(),
       signatureCertificate: "DEV-CERT",
     };
+    await logIntegrationEvent({
+      provider: "nafath",
+      eventType: "e_signature",
+      referenceId: txId,
+      payload: { documentHash: req.documentHash, result: response },
+    });
+    return response;
   }
   throw new Error("Nafath production client not configured");
 }

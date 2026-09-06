@@ -5,6 +5,7 @@
  */
 
 import crypto from "node:crypto";
+import { logIntegrationEvent } from "./integrationLogger.js";
 
 const GATEWAY = process.env.PAYMENT_GATEWAY ?? "hyperpay"; // hyperpay | moyasar | paytabs
 const GATEWAY_API_KEY = process.env.PAYMENT_GATEWAY_API_KEY ?? "";
@@ -29,15 +30,21 @@ export interface ChargeResponse {
 
 export async function chargeCard(req: ChargeRequest): Promise<ChargeResponse> {
   if (!GATEWAY_API_KEY) {
-    // Dev fallback: auto-capture
     const transactionId = `PAY-DEV-${crypto.randomBytes(6).toString("hex")}`;
-    return {
+    const response = {
       gateway: GATEWAY as PaymentGateway,
       transactionId,
-      status: "captured",
+      status: "captured" as const,
       capturedAt: new Date().toISOString(),
       raw: { dev: true, ...req },
     };
+    await logIntegrationEvent({
+      provider: GATEWAY,
+      eventType: "charge_captured",
+      referenceId: transactionId,
+      payload: { rentalReference: req.rentalReference, amountHalalas: req.amountHalalas, result: response },
+    });
+    return response;
   }
   throw new Error("Payment gateway production client not configured");
 }
@@ -47,10 +54,17 @@ export async function refundPayment(
   amountHalalas: number
 ): Promise<{ transactionId: string; refundId: string; status: "refunded" }> {
   if (!GATEWAY_API_KEY) {
+    const refundId = `RFD-DEV-${crypto.randomBytes(6).toString("hex")}`;
+    await logIntegrationEvent({
+      provider: GATEWAY,
+      eventType: "refund",
+      referenceId: transactionId,
+      payload: { amountHalalas, refundId },
+    });
     return {
       transactionId,
-      refundId: `RFD-DEV-${crypto.randomBytes(6).toString("hex")}`,
-      status: "refunded",
+      refundId,
+      status: "refunded" as const,
     };
   }
   throw new Error("Payment gateway production client not configured");
