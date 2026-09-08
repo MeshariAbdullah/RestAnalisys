@@ -1,8 +1,21 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Receipt, TrendingUp } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { adminApi, formatSar } from "@/lib/api";
+
+function halalasToSar(h: number | string): number {
+  return Number(h) / 100;
+}
 
 export default function FinancialOverview() {
   const kpisQuery = useQuery({
@@ -16,11 +29,14 @@ export default function FinancialOverview() {
   });
 
   const kpis = kpisQuery.data;
-  const trend = trendQuery.data ?? [];
-  const maxTotal = Math.max(
-    ...trend.map((t) => Number(t.total_halalas ?? 0)),
-    1
-  );
+  const trend = (trendQuery.data ?? []).map((t) => ({
+    day: new Date(t.day).toLocaleDateString("en-SA", {
+      month: "short",
+      day: "numeric",
+    }),
+    revenue: halalasToSar(t.total_halalas ?? 0),
+    rentals: Number(t.rentals),
+  }));
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -71,33 +87,47 @@ export default function FinancialOverview() {
           {trend.length === 0 ? (
             <p className="text-neutral-500 text-sm">No recent rentals.</p>
           ) : (
-            <div className="space-y-2">
-              {trend.map((t) => {
-                const pct = (Number(t.total_halalas) / maxTotal) * 100;
-                return (
-                  <div
-                    key={t.day}
-                    className="flex items-center gap-3 text-sm"
-                  >
-                    <span className="w-24 text-neutral-500 shrink-0">
-                      {new Date(t.day).toLocaleDateString()}
-                    </span>
-                    <div className="flex-1 h-6 bg-neutral-100 rounded">
-                      <div
-                        className="h-full bg-amber-500 rounded"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="w-24 text-right font-mono">
-                      {formatSar(Number(t.total_halalas))}
-                    </span>
-                    <span className="w-16 text-right text-xs text-neutral-500">
-                      {t.rentals} rentals
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart
+                data={trend}
+                margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 12 }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
+                  tick={{ fontSize: 12 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={48}
+                />
+                <Tooltip
+                  formatter={(value: number) => [
+                    `SAR ${value.toLocaleString("en-SA", {
+                      minimumFractionDigits: 2,
+                    })}`,
+                    "Revenue",
+                  ]}
+                  labelFormatter={(label: string) => label}
+                  contentStyle={{
+                    borderRadius: "8px",
+                    border: "1px solid #e5e5e5",
+                    fontSize: "13px",
+                  }}
+                />
+                <Bar
+                  dataKey="revenue"
+                  fill="#f59e0b"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={40}
+                />
+              </BarChart>
+            </ResponsiveContainer>
           )}
         </CardContent>
       </Card>
