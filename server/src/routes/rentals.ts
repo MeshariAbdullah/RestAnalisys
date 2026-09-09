@@ -20,7 +20,7 @@
  */
 
 import { Router } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   assets,
@@ -95,12 +95,23 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
   );
 
+  const [lateReturnCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        inArray(rentals.status, ["closed", "closed_with_penalty"]),
+        sql`returned_at > end_date::timestamp`
+      )
+    );
+
   return {
     accountAgeDays,
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateReturnCount?.count ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
