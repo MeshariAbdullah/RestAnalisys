@@ -8,7 +8,7 @@ import { db } from "../db/index.js";
 import { disputes, rentals } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
-import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
+import { DisputeOpenSchema, DisputeResolveSchema, DisputeAssignSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
@@ -84,7 +84,7 @@ router.post(
   requirePermission("dispute.assign"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { assigneeUserId } = req.body as { assigneeUserId: number };
+    const { assigneeUserId } = DisputeAssignSchema.parse(req.body);
     const [updated] = await db
       .update(disputes)
       .set({

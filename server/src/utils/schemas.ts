@@ -227,3 +227,49 @@ export const ShipmentUpdateSchema = z.object({
   ]),
   trackingNumber: z.string().optional(),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const AdminCreateStaffSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().min(2),
+  role: z.enum(["admin", "operations", "inspector"]),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+export const AdminBlockUserSchema = z.object({
+  block: z.boolean(),
+  reason: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Assets (additional validation)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const AssetReceivedSchema = z.object({
+  warehouseLocationCode: z.string().min(1, "Warehouse location code is required"),
+});
+
+export const AssetValuationResponseSchema = z.object({
+  approved: z.boolean(),
+  rejectionReason: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rentals (additional validation)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const RentalCloseSchema = z.object({
+  outcome: z.enum(["clean", "penalty", "major_damage", "loss"]),
+  penaltyHalalas: z.number().int().nonnegative().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Disputes (additional validation)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const DisputeAssignSchema = z.object({
+  assigneeUserId: z.number().int().positive(),
+});

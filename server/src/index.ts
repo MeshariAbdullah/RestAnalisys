@@ -16,7 +16,12 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import morgan from "morgan";
+import compression from "compression";
 
+import { pool } from "./db/index.js";
 import authRouter from "./routes/auth.js";
 import assetsRouter from "./routes/assets.js";
 import inspectionsRouter from "./routes/inspections.js";
@@ -42,12 +47,42 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
+// ── Security & observability middleware ──────────────────────────────
+app.use(helmet());
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+app.use(compression());
+
+// Rate limiting — strict on auth, relaxed on other API routes
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use("/api/auth", authLimiter);
+app.use("/api", apiLimiter);
+
 // Health
-app.get("/api/health", (_req, res) => {
-  res.json({
-    ok: true,
+app.get("/api/health", async (_req, res) => {
+  let dbOk = false;
+  try {
+    await pool.query("SELECT 1");
+    dbOk = true;
+  } catch {}
+  res.status(dbOk ? 200 : 503).json({
+    ok: dbOk,
     service: "mlr-platform",
     version: "1.0.0",
+    database: dbOk ? "connected" : "disconnected",
     integrations: {
       nafath: !!process.env.NAFATH_API_KEY,
       nafith: !!process.env.NAFITH_API_KEY,
@@ -82,5 +117,13 @@ app.listen(PORT, () => {
   console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
 });
+
+// ── Graceful shutdown ────────────────────────────────────────────────
+function gracefulShutdown(signal: string) {
+  console.log(`\n${signal} received — shutting down gracefully`);
+  pool.end().then(() => process.exit(0)).catch(() => process.exit(1));
+}
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 export default app;
