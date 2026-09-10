@@ -3,7 +3,7 @@
  */
 
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { disputes, rentals } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -68,13 +68,22 @@ router.get(
   "/",
   authenticate,
   requirePermission("dispute.assign"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+    const cursor = Number(req.query.cursor) || 0;
+    const conditions = cursor > 0 ? [sql`${disputes.id} < ${cursor}`] : [];
     const rows = await db
       .select()
       .from(disputes)
-      .orderBy(desc(disputes.openedAt))
-      .limit(200);
-    res.json(rows);
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(disputes.id))
+      .limit(limit + 1);
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    res.json({
+      items,
+      nextCursor: hasMore ? items[items.length - 1].id : null,
+    });
   })
 );
 

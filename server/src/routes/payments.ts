@@ -4,7 +4,7 @@
  */
 
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { payments, rentals, users, assets, payouts } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -174,12 +174,22 @@ router.get(
   authenticate,
   requirePermission("payment.read"),
   asyncHandler(async (req: AuthedRequest, res) => {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+    const cursor = Number(req.query.cursor) || 0;
+    const conditions = [eq(payments.userId, req.user!.userId)];
+    if (cursor > 0) conditions.push(sql`${payments.id} < ${cursor}`);
     const rows = await db
       .select()
       .from(payments)
-      .where(eq(payments.userId, req.user!.userId))
-      .orderBy(desc(payments.createdAt));
-    res.json(rows);
+      .where(and(...conditions))
+      .orderBy(desc(payments.id))
+      .limit(limit + 1);
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    res.json({
+      items,
+      nextCursor: hasMore ? items[items.length - 1].id : null,
+    });
   })
 );
 

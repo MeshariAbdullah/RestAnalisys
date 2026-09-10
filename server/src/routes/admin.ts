@@ -132,12 +132,24 @@ router.get(
   authenticate,
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+    const cursor = Number(req.query.cursor) || 0;
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
-    const rows = role
-      ? await query.where(eq(users.role, role as any)).limit(200)
-      : await query.limit(200);
-    res.json(rows);
+    const conditions: ReturnType<typeof eq>[] = [];
+    if (role) conditions.push(eq(users.role, role as any));
+    if (cursor > 0) conditions.push(sql`${users.id} < ${cursor}` as any);
+    const rows = await db
+      .select()
+      .from(users)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(users.id))
+      .limit(limit + 1);
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    res.json({
+      items,
+      nextCursor: hasMore ? items[items.length - 1].id : null,
+    });
   })
 );
 

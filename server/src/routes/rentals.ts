@@ -84,10 +84,11 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      lateReturns: sql<number>`count(*) filter (where returned_at is not null and returned_at::date > end_date::date)`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, lateReturns: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +100,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.lateReturns ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -302,12 +303,22 @@ router.get(
   authenticate,
   requirePermission("rental.read.own"),
   asyncHandler(async (req: AuthedRequest, res) => {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+    const cursor = Number(req.query.cursor) || 0;
+    const conditions = [eq(rentals.renterId, req.user!.userId)];
+    if (cursor > 0) conditions.push(sql`${rentals.id} < ${cursor}`);
     const rows = await db
       .select()
       .from(rentals)
-      .where(eq(rentals.renterId, req.user!.userId))
-      .orderBy(desc(rentals.createdAt));
-    res.json(rows);
+      .where(and(...conditions))
+      .orderBy(desc(rentals.id))
+      .limit(limit + 1);
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    res.json({
+      items,
+      nextCursor: hasMore ? items[items.length - 1].id : null,
+    });
   })
 );
 
@@ -316,13 +327,22 @@ router.get(
   "/",
   authenticate,
   requirePermission("rental.read.any"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+    const cursor = Number(req.query.cursor) || 0;
+    const conditions = cursor > 0 ? [sql`${rentals.id} < ${cursor}`] : [];
     const rows = await db
       .select()
       .from(rentals)
-      .orderBy(desc(rentals.createdAt))
-      .limit(200);
-    res.json(rows);
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(rentals.id))
+      .limit(limit + 1);
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    res.json({
+      items,
+      nextCursor: hasMore ? items[items.length - 1].id : null,
+    });
   })
 );
 
