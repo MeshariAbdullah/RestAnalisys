@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -19,8 +20,10 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
+import { notificationsApi } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
 
 interface NavItem {
@@ -67,6 +70,39 @@ function roleLabel(role: Role): string {
     admin: "Admin",
     super_admin: "Super Admin",
   }[role];
+}
+
+function TopBar({ sidebarOpen }: { sidebarOpen: boolean }) {
+  const [location] = useLocation();
+  const { data } = useQuery({
+    queryKey: ["unread-count"],
+    queryFn: () => notificationsApi.unreadCount(),
+    refetchInterval: 30_000,
+  });
+  const count = data?.count ?? 0;
+
+  return (
+    <header className="h-14 border-b bg-white flex items-center justify-end px-6 shrink-0">
+      <Link href="/notifications">
+        <a
+          className={cn(
+            "relative p-2 rounded-lg transition-colors",
+            location === "/notifications"
+              ? "bg-amber-100 text-amber-700"
+              : "hover:bg-neutral-100 text-neutral-500"
+          )}
+          title="Notifications"
+        >
+          <Bell className="w-5 h-5" />
+          {count > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+              {count > 99 ? "99+" : count}
+            </span>
+          )}
+        </a>
+      </Link>
+    </header>
+  );
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -162,7 +198,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <TopBar sidebarOpen={sidebarOpen} />
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
     </div>
   );
 }

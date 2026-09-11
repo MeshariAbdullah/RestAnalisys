@@ -28,6 +28,9 @@ import Shipments from "./pages/ops/Shipments";
 import Inventory from "./pages/ops/Inventory";
 import AlertsPage from "./pages/ops/Alerts";
 
+// Shared
+import Notifications from "./pages/Notifications";
+
 // Admin
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AssetApprovals from "./pages/admin/AssetApprovals";
@@ -43,6 +46,11 @@ export default function App() {
       <Route path="/" component={Landing} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+
+      {/* Notifications (all authenticated roles) */}
+      <Route path="/notifications">
+        <ProtectedRoute><Notifications /></ProtectedRoute>
+      </Route>
 
       {/* Renter */}
       <Route path="/browse">

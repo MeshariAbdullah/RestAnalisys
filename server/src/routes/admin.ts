@@ -3,7 +3,7 @@
  */
 
 import { Router } from "express";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql, lt } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   users,
@@ -13,6 +13,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -218,6 +219,42 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Audit log viewer with cursor pagination ────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const cursor = req.query.cursor ? Number(req.query.cursor) : undefined;
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const entityType = req.query.entityType as string | undefined;
+    const action = req.query.action as string | undefined;
+    const actorId = req.query.actorId ? Number(req.query.actorId) : undefined;
+
+    const conditions = [];
+    if (cursor) conditions.push(lt(auditLogs.id, cursor));
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (action) conditions.push(sql`${auditLogs.action} like ${action + "%"}`);
+    if (actorId) conditions.push(eq(auditLogs.actorUserId, actorId));
+
+    const query = db
+      .select()
+      .from(auditLogs)
+      .orderBy(desc(auditLogs.id))
+      .limit(limit + 1);
+
+    const rows = conditions.length > 0
+      ? await query.where(and(...conditions))
+      : await query;
+
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    const nextCursor = hasMore ? items[items.length - 1].id : null;
+
+    res.json({ items, nextCursor });
   })
 );
 

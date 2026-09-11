@@ -52,27 +52,40 @@ export function getSeverityLabel(severity: string) {
 
 export function getStatusLabel(status: string) {
   const labels: Record<string, string> = {
-    uploaded: "تم الرفع",
-    extracting_frames: "استخراج الإطارات",
-    analyzing_gpt: "تحليل GPT-4o",
-    analyzing_gemini: "تحليل Gemini",
-    saving_results: "حفظ النتائج",
-    done: "مكتمل",
-    error: "خطأ",
-    queued: "في الانتظار",
+    pending_approval: "Pending Approval",
+    rejected: "Rejected",
+    awaiting_shipment: "Awaiting Shipment",
+    in_inspection: "In Inspection",
+    inspection_reported: "Inspection Reported",
+    owner_rejected_valuation: "Owner Rejected Valuation",
+    ready_for_listing: "Ready for Listing",
+    listed: "Listed",
+    reserved: "Reserved",
+    rented_out: "Rented Out",
+    returned_under_inspection: "Return Inspection",
+    completed: "Completed",
+    withdrawn: "Withdrawn",
+    lost_or_destroyed: "Lost / Destroyed",
+    pending_risk_review: "Risk Review",
+    pending_legal_signing: "Pending Signing",
+    pending_payment: "Pending Payment",
+    confirmed: "Confirmed",
+    out_for_delivery: "Out for Delivery",
+    active: "Active",
+    return_in_transit: "Return in Transit",
+    under_inspection: "Under Inspection",
+    closed: "Closed",
+    closed_with_penalty: "Closed (Penalty)",
+    in_dispute: "In Dispute",
+    enforcement: "Enforcement",
+    cancelled: "Cancelled",
+    open: "Open",
+    investigating: "Investigating",
+    awaiting_evidence: "Awaiting Evidence",
+    resolved_for_renter: "Resolved for Renter",
+    resolved_for_platform: "Resolved for Platform",
+    resolved_for_owner: "Resolved for Owner",
+    escalated_to_legal: "Escalated to Legal",
   };
-  return labels[status] ?? status;
-}
-
-export function getStatusIcon(status: string) {
-  switch (status) {
-    case "done": return "✅";
-    case "error": return "❌";
-    case "uploaded": return "📤";
-    case "extracting_frames": return "🎞️";
-    case "analyzing_gpt": return "🤖";
-    case "analyzing_gemini": return "💎";
-    case "saving_results": return "💾";
-    default: return "⏳";
-  }
+  return labels[status] ?? status.replace(/_/g, " ");
 }
