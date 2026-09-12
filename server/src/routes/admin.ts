@@ -13,6 +13,8 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  payouts,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -217,6 +219,102 @@ router.get(
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
+    res.json(rows);
+  })
+);
+
+// ── Owner earnings summary (for admin financial oversight) ────────────────
+router.get(
+  "/owner-earnings/:ownerId",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (req, res) => {
+    const ownerId = Number(req.params.ownerId);
+    const [owner] = await db
+      .select({ id: users.id, fullName: users.fullName, email: users.email })
+      .from(users)
+      .where(eq(users.id, ownerId))
+      .limit(1);
+    if (!owner) throw new NotFoundError("User");
+
+    const payoutStats = await db
+      .select({
+        totalGross: sql<string>`coalesce(sum(gross_halalas), 0)`,
+        totalCommission: sql<string>`coalesce(sum(commission_halalas), 0)`,
+        totalNet: sql<string>`coalesce(sum(net_halalas), 0)`,
+        payoutCount: sql<number>`count(*)`,
+        pendingCount: sql<number>`count(*) filter (where status = 'pending')`,
+        paidCount: sql<number>`count(*) filter (where status = 'paid')`,
+      })
+      .from(payouts)
+      .where(eq(payouts.ownerId, ownerId));
+
+    const [assetStats] = await db
+      .select({
+        totalAssets: sql<number>`count(*)`,
+        listedAssets: sql<number>`count(*) filter (where status = 'listed')`,
+        rentedAssets: sql<number>`count(*) filter (where status = 'rented_out')`,
+      })
+      .from(assets)
+      .where(eq(assets.ownerId, ownerId));
+
+    const [rentalStats] = await db
+      .select({
+        totalRentals: sql<number>`count(*)`,
+        completedRentals: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
+        activeRentals: sql<number>`count(*) filter (where status = 'active')`,
+        totalRevenueHalalas: sql<string>`coalesce(sum(rental_subtotal_halalas) filter (where status in ('closed','closed_with_penalty','active')), 0)`,
+      })
+      .from(rentals)
+      .where(eq(rentals.ownerId, ownerId));
+
+    const row = payoutStats[0];
+    res.json({
+      owner,
+      payouts: {
+        totalGrossHalalas: Number(row?.totalGross ?? 0),
+        totalCommissionHalalas: Number(row?.totalCommission ?? 0),
+        totalNetHalalas: Number(row?.totalNet ?? 0),
+        count: Number(row?.payoutCount ?? 0),
+        pendingCount: Number(row?.pendingCount ?? 0),
+        paidCount: Number(row?.paidCount ?? 0),
+      },
+      assets: {
+        total: Number(assetStats?.totalAssets ?? 0),
+        listed: Number(assetStats?.listedAssets ?? 0),
+        rented: Number(assetStats?.rentedAssets ?? 0),
+      },
+      rentals: {
+        total: Number(rentalStats?.totalRentals ?? 0),
+        completed: Number(rentalStats?.completedRentals ?? 0),
+        active: Number(rentalStats?.activeRentals ?? 0),
+        totalRevenueHalalas: Number(rentalStats?.totalRevenueHalalas ?? 0),
+      },
+    });
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const entityType = req.query.entityType as string | undefined;
+    const entityId = req.query.entityId ? Number(req.query.entityId) : undefined;
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (entityId) conditions.push(eq(auditLogs.entityId, entityId));
+
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit);
+
     res.json(rows);
   })
 );

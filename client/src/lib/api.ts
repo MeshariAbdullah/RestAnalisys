@@ -266,12 +266,22 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: {
+    category?: string;
+    brand?: string;
+    search?: string;
+    limit?: number;
+    cursor?: number;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.search) qs.set("search", params.search);
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    if (params?.cursor) qs.set("cursor", String(params.cursor));
+    return request<{ items: Asset[]; count: number; nextCursor: number | null; hasMore: boolean }>(
+      `/assets/listings?${qs}`
+    );
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
@@ -578,10 +588,90 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  ownerEarnings: (ownerId: number) =>
+    request<{
+      owner: { id: number; fullName: string; email: string };
+      payouts: {
+        totalGrossHalalas: number;
+        totalCommissionHalalas: number;
+        totalNetHalalas: number;
+        count: number;
+        pendingCount: number;
+        paidCount: number;
+      };
+      assets: { total: number; listed: number; rented: number };
+      rentals: { total: number; completed: number; active: number; totalRevenueHalalas: number };
+    }>(`/admin/owner-earnings/${ownerId}`),
+  auditLogs: (params?: { entityType?: string; entityId?: number; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.entityId) qs.set("entityId", String(params.entityId));
+    if (params?.limit) qs.set("limit", String(params.limit));
+    return request<Array<Record<string, unknown>>>(`/admin/audit-logs?${qs}`);
+  },
 };
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (params?: { unread?: boolean; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.unread) qs.set("unread", "true");
+    if (params?.limit) qs.set("limit", String(params.limit));
+    return request<{ items: AppNotification[]; unreadCount: number }>(
+      `/notifications?${qs}`
+    );
+  },
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const profileApi = {
+  update: (data: {
+    fullName?: string;
+    phone?: string;
+    nationalAddress?: {
+      city: string;
+      district: string;
+      street: string;
+      buildingNumber?: string;
+      postalCode?: string;
+    };
+  }) =>
+    request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

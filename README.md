@@ -24,6 +24,11 @@ or full compensation equal to its evaluated value, backed by a Nafith Sanad
 - **VAT 15%** computed and stored on every rental
 - **RBAC** with a declarative permission matrix
 - **Immutable audit logging** of every material action
+- **In-app notification system** for rental lifecycle events, asset status
+  changes, and payout updates
+- **Rate limiting** on auth, payment, and general API endpoints
+- **Text search** on the public catalog with cursor-based pagination
+- **User profile management** with password change
 - **State machines** via Postgres enums for assets, rentals, Sanads, shipments,
   payments and disputes
 

@@ -23,6 +23,8 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | POST   | `/login`             | public          | Email + password → JWT                 |
 | POST   | `/nafath/initiate`   | authenticated   | Begin Nafath identity verification     |
 | GET    | `/me`                | authenticated   | Current user profile                   |
+| PATCH  | `/profile`           | authenticated   | Update name, phone, or address         |
+| POST   | `/change-password`   | authenticated   | Change password (requires current)     |
 
 ## Assets — `/api/assets`
 
@@ -118,6 +120,16 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | GET    | `/users`              | admin / super_admin   | All users (filter by role)             |
 | POST   | `/users/:id/block`    | admin / super_admin   | Block or unblock a user                |
 | POST   | `/users`              | super_admin           | Create staff users                     |
+| GET    | `/owner-earnings/:id` | admin / super_admin   | Owner earnings + asset + rental summary|
+| GET    | `/audit-logs`         | admin / super_admin   | Filterable audit log viewer            |
+
+## Notifications — `/api/notifications`
+
+| Method | Path            | Roles         | Purpose                           |
+| ------ | --------------- | ------------- | --------------------------------- |
+| GET    | `/`             | authenticated | List user notifications (unread filter) |
+| POST   | `/:id/read`     | authenticated | Mark a notification as read       |
+| POST   | `/read-all`     | authenticated | Mark all notifications as read    |
 
 ## Health
 

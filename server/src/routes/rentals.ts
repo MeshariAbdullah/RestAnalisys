@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyRentalParties, createNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -94,12 +95,26 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
   );
 
+  const lateReturnStats = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`returned_at is not null`,
+        sql`returned_at::date > end_date::date`
+      )
+    );
+  const lateReturnCount = Number(lateReturnStats[0]?.count ?? 0);
+
   return {
     accountAgeDays,
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: lateReturnCount,
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +295,17 @@ router.post(
       after: { rental, decision },
     });
 
+    await notifyRentalParties({
+      renterId,
+      ownerId: asset.ownerId,
+      type: "rental_created",
+      title: "New Rental Request",
+      renterBody: `Your rental request for "${asset.title}" has been created. Please sign the legal commitment to proceed.`,
+      ownerBody: `A rental request has been submitted for your asset "${asset.title}" (${rental.reference}).`,
+      entityType: "rental",
+      entityId: rental.id,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -441,6 +467,17 @@ router.post(
       after: updated,
     });
 
+    await notifyRentalParties({
+      renterId: rental.renterId,
+      ownerId: rental.ownerId,
+      type: "rental_delivered",
+      title: "Asset Delivered",
+      renterBody: `Your rented item for rental ${rental.reference} has been delivered. Enjoy!`,
+      ownerBody: `Your asset for rental ${rental.reference} has been delivered to the renter.`,
+      entityType: "rental",
+      entityId: id,
+    });
+
     res.json(updated);
   })
 );
@@ -515,6 +552,16 @@ router.post(
         entityType: "rental",
         entityId: id,
         after: updated,
+      });
+      await notifyRentalParties({
+        renterId: rental.renterId,
+        ownerId: rental.ownerId,
+        type: "rental_closed",
+        title: "Rental Closed",
+        renterBody: `Your rental ${rental.reference} has been closed successfully. Thank you!`,
+        ownerBody: `Rental ${rental.reference} for your asset has been closed. Your payout will be processed soon.`,
+        entityType: "rental",
+        entityId: id,
       });
       return res.json(updated);
     }
