@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -19,8 +20,11 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  Check,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
+import { notificationsApi, type AppNotification } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
 
 interface NavItem {
@@ -67,6 +71,115 @@ function roleLabel(role: Role): string {
     admin: "Admin",
     super_admin: "Super Admin",
   }[role];
+}
+
+function NotificationBell() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+
+  const { data: countData } = useQuery({
+    queryKey: ["notifications-count"],
+    queryFn: () => notificationsApi.unreadCount(),
+    refetchInterval: 30_000,
+  });
+
+  const { data: listData } = useQuery({
+    queryKey: ["notifications-list"],
+    queryFn: () => notificationsApi.list({ limit: 10 }),
+    enabled: open,
+  });
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const count = countData?.count ?? 0;
+  const items = listData?.items ?? [];
+
+  async function handleMarkRead(id: number) {
+    await notificationsApi.markRead(id);
+    queryClient.invalidateQueries({ queryKey: ["notifications-count"] });
+    queryClient.invalidateQueries({ queryKey: ["notifications-list"] });
+  }
+
+  async function handleMarkAllRead() {
+    await notificationsApi.markAllRead();
+    queryClient.invalidateQueries({ queryKey: ["notifications-count"] });
+    queryClient.invalidateQueries({ queryKey: ["notifications-list"] });
+  }
+
+  function timeAgo(iso: string): string {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="relative p-1.5 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white"
+        title="Notifications"
+      >
+        <Bell className="w-4 h-4" />
+        {count > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-amber-500 text-neutral-950 text-[10px] font-bold rounded-full flex items-center justify-center">
+            {count > 9 ? "9+" : count}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-80 bg-neutral-900 border border-neutral-700 rounded-xl shadow-xl z-50 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800">
+            <span className="text-sm font-medium text-white">Notifications</span>
+            {count > 0 && (
+              <button
+                onClick={handleMarkAllRead}
+                className="text-xs text-amber-500 hover:text-amber-400 flex items-center gap-1"
+              >
+                <Check className="w-3 h-3" /> Mark all read
+              </button>
+            )}
+          </div>
+          <div className="max-h-80 overflow-y-auto">
+            {items.length === 0 ? (
+              <p className="p-4 text-sm text-neutral-500 text-center">No notifications</p>
+            ) : (
+              items.map((n: AppNotification) => (
+                <button
+                  key={n.id}
+                  onClick={() => !n.read && handleMarkRead(n.id)}
+                  className={cn(
+                    "w-full text-left px-4 py-3 border-b border-neutral-800 hover:bg-neutral-800/50 transition-colors",
+                    !n.read && "bg-neutral-800/30"
+                  )}
+                >
+                  <div className="flex items-start gap-2">
+                    {!n.read && <span className="mt-1.5 w-2 h-2 bg-amber-500 rounded-full shrink-0" />}
+                    <div className={n.read ? "ml-4" : ""}>
+                      <p className="text-sm font-medium text-white">{n.title}</p>
+                      <p className="text-xs text-neutral-400 mt-0.5 line-clamp-2">{n.message}</p>
+                      <p className="text-[10px] text-neutral-500 mt-1">{timeAgo(n.createdAt)}</p>
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -142,6 +255,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   {user ? roleLabel(user.role) : ""}
                 </p>
               </div>
+              <NotificationBell />
               <button
                 onClick={handleLogout}
                 className="p-1.5 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white"

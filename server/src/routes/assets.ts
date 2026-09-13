@@ -11,7 +11,7 @@
  */
 
 import { Router } from "express";
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { createNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -256,6 +257,17 @@ router.post(
       after: updated,
     });
 
+    await createNotification({
+      userId: asset.ownerId,
+      type: approved ? "asset_approved" : "asset_rejected",
+      title: approved ? "Asset Approved" : "Asset Rejected",
+      message: approved
+        ? `Your asset "${asset.title}" has been approved and is awaiting shipment.`
+        : `Your asset "${asset.title}" was rejected${rejectionReason ? ": " + rejectionReason : "."}`,
+      relatedEntityType: "asset",
+      relatedEntityId: assetId,
+    });
+
     res.json(updated);
   })
 );
@@ -318,6 +330,30 @@ router.get(
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.minValue)
+      conditions.push(gte(assets.evaluatedValueHalalas, filter.minValue));
+    if (filter.maxValue)
+      conditions.push(lte(assets.evaluatedValueHalalas, filter.maxValue));
+    if (filter.search) {
+      const pattern = `%${filter.search}%`;
+      conditions.push(
+        or(
+          ilike(assets.title, pattern),
+          ilike(assets.brand, pattern),
+          ilike(assets.model, pattern),
+          ilike(assets.description, pattern)
+        )!
+      );
+    }
+
+    const orderMap = {
+      newest: desc(assets.createdAt),
+      price_asc: asc(assets.dailyRentalPriceHalalas),
+      price_desc: desc(assets.dailyRentalPriceHalalas),
+      value_asc: asc(assets.evaluatedValueHalalas),
+      value_desc: desc(assets.evaluatedValueHalalas),
+    } as const;
+    const orderBy = orderMap[filter.sortBy] ?? desc(assets.createdAt);
 
     const rows = await db
       .select({
@@ -326,15 +362,18 @@ router.get(
         brand: assets.brand,
         model: assets.model,
         category: assets.category,
+        description: assets.description,
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
+        submissionImagesJson: assets.submissionImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
+        createdAt: assets.createdAt,
       })
       .from(assets)
       .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
+      .orderBy(orderBy)
       .limit(filter.limit);
 
     res.json({ items: rows, count: rows.length });
@@ -395,6 +434,15 @@ router.post(
       entityType: "asset",
       entityId: id,
       after: updated,
+    });
+
+    await createNotification({
+      userId: asset.ownerId,
+      type: "asset_listed",
+      title: "Asset Now Listed",
+      message: `Your asset "${asset.title}" is now live in the catalog and available for rental.`,
+      relatedEntityType: "asset",
+      relatedEntityId: id,
     });
 
     res.json(updated);

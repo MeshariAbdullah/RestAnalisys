@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { createNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -89,6 +90,20 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     .where(eq(rentals.renterId, userId));
   const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
 
+  const lateReturnStats = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`${rentals.returnedAt} IS NOT NULL`,
+        sql`${rentals.returnedAt}::date > ${rentals.endDate}::date`
+      )
+    );
+  const lateReturnCount = Number(lateReturnStats[0]?.count ?? 0);
+
   const accountAgeDays = Math.max(
     0,
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
@@ -99,7 +114,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: lateReturnCount,
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +295,23 @@ router.post(
       after: { rental, decision },
     });
 
+    await createNotification({
+      userId: renterId,
+      type: "rental_created",
+      title: "Rental Created",
+      message: `Your rental ${rental.reference} for "${asset.title}" is pending legal signing.`,
+      relatedEntityType: "rental",
+      relatedEntityId: rental.id,
+    });
+    await createNotification({
+      userId: asset.ownerId,
+      type: "rental_created",
+      title: "New Rental for Your Asset",
+      message: `"${asset.title}" has been reserved by a renter (${rental.reference}).`,
+      relatedEntityType: "rental",
+      relatedEntityId: rental.id,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -441,6 +473,15 @@ router.post(
       after: updated,
     });
 
+    await createNotification({
+      userId: rental.renterId,
+      type: "rental_delivered",
+      title: "Item Delivered",
+      message: `Your rental ${rental.reference} has been delivered. Enjoy!`,
+      relatedEntityType: "rental",
+      relatedEntityId: id,
+    });
+
     res.json(updated);
   })
 );
@@ -475,6 +516,15 @@ router.post(
       entityType: "rental",
       entityId: id,
       after: updated,
+    });
+
+    await createNotification({
+      userId: rental.ownerId,
+      type: "rental_returned",
+      title: "Asset Returned",
+      message: `Your asset from rental ${rental.reference} has been returned and is under inspection.`,
+      relatedEntityType: "rental",
+      relatedEntityId: id,
     });
 
     res.json(updated);
@@ -515,6 +565,22 @@ router.post(
         entityType: "rental",
         entityId: id,
         after: updated,
+      });
+      await createNotification({
+        userId: rental.renterId,
+        type: "rental_closed",
+        title: "Rental Closed",
+        message: `Your rental ${rental.reference} has been closed successfully. Thank you!`,
+        relatedEntityType: "rental",
+        relatedEntityId: id,
+      });
+      await createNotification({
+        userId: rental.ownerId,
+        type: "rental_closed",
+        title: "Rental Completed",
+        message: `Rental ${rental.reference} for your asset has been completed cleanly. Payout will be released shortly.`,
+        relatedEntityType: "rental",
+        relatedEntityId: id,
       });
       return res.json(updated);
     }
@@ -626,6 +692,15 @@ router.post(
       entityType: "rental",
       entityId: id,
       after: updated,
+    });
+
+    await createNotification({
+      userId: rental.ownerId,
+      type: "rental_cancelled",
+      title: "Rental Cancelled",
+      message: `Rental ${rental.reference} for your asset has been cancelled.`,
+      relatedEntityType: "rental",
+      relatedEntityId: id,
     });
 
     res.json(updated);
