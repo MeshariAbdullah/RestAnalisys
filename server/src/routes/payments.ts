@@ -4,7 +4,7 @@
  */
 
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { payments, rentals, users, assets, payouts } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -45,72 +45,74 @@ router.post(
       paymentMethodToken,
     });
 
-    const [payment] = await db
-      .insert(payments)
-      .values({
-        rentalId: rental.id,
-        userId: req.user!.userId,
-        type: "rental_fee",
-        status: result.status,
-        amountHalalas: rental.totalPayableHalalas,
-        gateway: result.gateway,
-        gatewayTransactionId: result.transactionId,
-        gatewayRawJson: result.raw as object,
-        capturedAt: result.capturedAt ? new Date(result.capturedAt) : null,
-      })
-      .returning();
-
-    // ZATCA e-invoice
-    const [user] = await db
-      .select({ fullName: users.fullName })
-      .from(users)
-      .where(eq(users.id, req.user!.userId))
-      .limit(1);
-    const invoice = await generateZatcaInvoice({
-      paymentId: payment.id,
-      rentalReference: rental.reference,
-      customerName: user?.fullName ?? "Customer",
-      lineItems: [
-        {
-          description: "Rental",
-          amountHalalas: rental.rentalSubtotalHalalas,
-          vatHalalas: 0,
-        },
-        {
-          description: "Platform fee",
-          amountHalalas: rental.platformFeeHalalas,
-          vatHalalas: 0,
-        },
-        {
-          description: "VAT 15%",
-          amountHalalas: rental.vatHalalas,
-          vatHalalas: rental.vatHalalas,
-        },
-      ],
-      totalHalalas: rental.totalPayableHalalas,
-    });
-
-    await db
-      .update(payments)
-      .set({
-        invoiceNumber: invoice.invoiceNumber,
-        invoiceXmlUrl: invoice.invoiceXmlUrl,
-        invoiceQrBase64: invoice.invoiceQrBase64,
-        invoicedAt: new Date(invoice.invoicedAt),
-      })
-      .where(eq(payments.id, payment.id));
-
-    // Move rental forward on successful capture
-    if (result.status === "captured") {
-      await db
-        .update(rentals)
-        .set({
-          status: "confirmed",
-          confirmedAt: new Date(),
-          updatedAt: new Date(),
+    const { payment, invoice } = await db.transaction(async (tx) => {
+      const [payment] = await tx
+        .insert(payments)
+        .values({
+          rentalId: rental.id,
+          userId: req.user!.userId,
+          type: "rental_fee",
+          status: result.status,
+          amountHalalas: rental.totalPayableHalalas,
+          gateway: result.gateway,
+          gatewayTransactionId: result.transactionId,
+          gatewayRawJson: result.raw as object,
+          capturedAt: result.capturedAt ? new Date(result.capturedAt) : null,
         })
-        .where(eq(rentals.id, rental.id));
-    }
+        .returning();
+
+      const [user] = await tx
+        .select({ fullName: users.fullName })
+        .from(users)
+        .where(eq(users.id, req.user!.userId))
+        .limit(1);
+      const invoice = await generateZatcaInvoice({
+        paymentId: payment.id,
+        rentalReference: rental.reference,
+        customerName: user?.fullName ?? "Customer",
+        lineItems: [
+          {
+            description: "Rental",
+            amountHalalas: rental.rentalSubtotalHalalas,
+            vatHalalas: 0,
+          },
+          {
+            description: "Platform fee",
+            amountHalalas: rental.platformFeeHalalas,
+            vatHalalas: 0,
+          },
+          {
+            description: "VAT 15%",
+            amountHalalas: rental.vatHalalas,
+            vatHalalas: rental.vatHalalas,
+          },
+        ],
+        totalHalalas: rental.totalPayableHalalas,
+      });
+
+      await tx
+        .update(payments)
+        .set({
+          invoiceNumber: invoice.invoiceNumber,
+          invoiceXmlUrl: invoice.invoiceXmlUrl,
+          invoiceQrBase64: invoice.invoiceQrBase64,
+          invoicedAt: new Date(invoice.invoicedAt),
+        })
+        .where(eq(payments.id, payment.id));
+
+      if (result.status === "captured") {
+        await tx
+          .update(rentals)
+          .set({
+            status: "confirmed",
+            confirmedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(rentals.id, rental.id));
+      }
+
+      return { payment, invoice };
+    });
 
     await recordAudit({
       req,
@@ -190,10 +192,20 @@ router.post(
   requirePermission("payout.release"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const rentalId = Number(req.params.rentalId);
+    if (!Number.isFinite(rentalId) || rentalId < 1) throw new NotFoundError("Rental");
     const [rental] = await db.select().from(rentals).where(eq(rentals.id, rentalId)).limit(1);
     if (!rental) throw new NotFoundError("Rental");
     if (!["closed", "closed_with_penalty"].includes(rental.status)) {
       throw new LegalStateError("Rental must be closed before payout");
+    }
+
+    const existingPayout = await db
+      .select({ id: payouts.id })
+      .from(payouts)
+      .where(and(eq(payouts.rentalId, rentalId), eq(payouts.ownerId, rental.ownerId)))
+      .limit(1);
+    if (existingPayout.length > 0) {
+      throw new LegalStateError("Payout already exists for this rental");
     }
 
     const payoutCalc = computeOwnerPayout({
@@ -229,6 +241,7 @@ router.post(
 router.get(
   "/payouts/mine",
   authenticate,
+  requirePermission("payment.read"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const rows = await db
       .select()

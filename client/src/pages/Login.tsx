@@ -9,8 +9,8 @@ import { saveSession, homeForRole } from "@/lib/auth";
 
 export default function Login() {
   const [, navigate] = useLocation();
-  const [email, setEmail] = useState("renter@demo.sa");
-  const [password, setPassword] = useState("Mlr@2024!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -77,13 +77,6 @@ export default function Login() {
                 {error}
               </p>
             )}
-
-            <div className="text-xs text-neutral-400 bg-neutral-950/60 border border-neutral-800 rounded-md p-3 space-y-1">
-              <p className="font-medium text-neutral-300">Demo credentials:</p>
-              <p>Password for all: <code>Mlr@2024!</code></p>
-              <p>· admin@mlr.sa · owner@demo.sa · renter@demo.sa</p>
-              <p>· inspector@mlr.sa · ops@mlr.sa</p>
-            </div>
 
             <Button
               type="submit"

@@ -28,6 +28,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (res.status === 401) {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_user");
+    if (window.location.pathname !== "/login") {
+      window.location.href = "/login";
+    }
   }
 
   if (!res.ok) {

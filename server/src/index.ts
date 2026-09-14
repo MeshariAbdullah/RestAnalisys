@@ -26,6 +26,8 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import { db } from "./db/index.js";
+import { sql } from "drizzle-orm";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { authRateLimit, apiRateLimit } from "./middleware/rateLimit.js";
 
@@ -44,11 +46,18 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Health
-app.get("/api/health", (_req, res) => {
-  res.json({
-    ok: true,
+app.get("/api/health", async (_req, res) => {
+  let dbOk = false;
+  try {
+    await db.execute(sql`SELECT 1`);
+    dbOk = true;
+  } catch {}
+  const status = dbOk ? 200 : 503;
+  res.status(status).json({
+    ok: dbOk,
     service: "mlr-platform",
     version: "1.0.0",
+    database: dbOk ? "connected" : "unreachable",
     integrations: {
       nafath: !!process.env.NAFATH_API_KEY,
       nafith: !!process.env.NAFITH_API_KEY,

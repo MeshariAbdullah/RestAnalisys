@@ -1,6 +1,7 @@
 import React from "react";
-import { Route, Switch, Redirect } from "wouter";
+import { Route, Switch } from "wouter";
 import ProtectedRoute from "./components/ProtectedRoute";
+import NotFound from "./pages/NotFound";
 
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
@@ -131,7 +132,7 @@ export default function App() {
       </Route>
 
       <Route>
-        <Redirect to="/" />
+        <NotFound />
       </Route>
     </Switch>
   );

@@ -135,7 +135,23 @@ router.get(
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
+    const safeFields = {
+      id: users.id,
+      email: users.email,
+      fullName: users.fullName,
+      role: users.role,
+      phoneE164: users.phoneE164,
+      nationalId: users.nationalId,
+      nafathVerified: users.nafathVerified,
+      kycStatus: users.kycStatus,
+      trustScore: users.trustScore,
+      riskCategory: users.riskCategory,
+      isBlocked: users.isBlocked,
+      blockedReason: users.blockedReason,
+      createdAt: users.createdAt,
+      lastLoginAt: users.lastLoginAt,
+    };
+    const query = db.select(safeFields).from(users);
     const rows = role
       ? await query.where(eq(users.role, role as any)).limit(200)
       : await query.limit(200);
@@ -161,13 +177,21 @@ router.post(
         updatedAt: new Date(),
       })
       .where(eq(users.id, id))
-      .returning();
+      .returning({
+        id: users.id,
+        email: users.email,
+        fullName: users.fullName,
+        role: users.role,
+        isBlocked: users.isBlocked,
+        blockedReason: users.blockedReason,
+        updatedAt: users.updatedAt,
+      });
     await recordAudit({
       req,
       action: block ? "user.block" : "user.unblock",
       entityType: "user",
       entityId: id,
-      before: user,
+      before: { isBlocked: user.isBlocked, blockedReason: user.blockedReason },
       after: updated,
     });
     res.json(updated);
@@ -192,7 +216,15 @@ router.post(
         nafathVerified: true,
         kycStatus: "verified",
       })
-      .returning();
+      .returning({
+        id: users.id,
+        email: users.email,
+        fullName: users.fullName,
+        role: users.role,
+        nafathVerified: users.nafathVerified,
+        kycStatus: users.kycStatus,
+        createdAt: users.createdAt,
+      });
     await recordAudit({
       req,
       action: "user.create_staff",
