@@ -79,6 +79,7 @@ export const AssetApprovalSchema = z.object({
 export const AssetListingFilter = z.object({
   category: AssetCategory.optional(),
   brand: z.string().optional(),
+  search: z.string().max(100).optional(),
   minDaily: HalalasAmount.optional(),
   maxDaily: HalalasAmount.optional(),
   from: IsoDate.optional(),
@@ -226,4 +227,72 @@ export const ShipmentUpdateSchema = z.object({
     "returned",
   ]),
   trackingNumber: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const StaffCreateSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().min(2),
+  role: z.enum(["admin", "operations", "inspector"]),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+export const UserBlockSchema = z.object({
+  block: z.boolean(),
+  reason: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rental close
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const RentalCloseSchema = z.object({
+  outcome: z.enum(["clean", "penalty", "major_damage", "loss"]),
+  penaltyHalalas: HalalasAmount.optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Asset received at warehouse
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const AssetReceivedSchema = z.object({
+  warehouseLocationCode: z.string().min(1),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Owner valuation response
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ValuationResponseSchema = z.object({
+  approved: z.boolean(),
+  rejectionReason: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dispute assign
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const DisputeAssignSchema = z.object({
+  assignedToUserId: z.number().int().positive(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Password reset
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const PasswordResetRequestSchema = z.object({
+  email: z.string().email(),
+});
+
+export const PasswordResetSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+export const PasswordChangeSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
 });

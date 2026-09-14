@@ -27,6 +27,7 @@ import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { authRateLimit, apiRateLimit } from "./middleware/rateLimit.js";
 
 dotenv.config();
 
@@ -58,7 +59,8 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRouter);
+app.use("/api/auth", authRateLimit, authRouter);
+app.use("/api", apiRateLimit);
 app.use("/api/assets", assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
 app.use("/api/rentals", rentalsRouter);

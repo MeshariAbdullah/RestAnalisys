@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Diamond, Watch, Shirt, Gem } from "lucide-react";
@@ -16,22 +16,29 @@ const CATEGORIES = [
   { id: "jewelry", label: "Jewelry", icon: Gem },
 ];
 
+function useDebounce(value: string, delay: number) {
+  const [debounced, setDebounced] = React.useState(value);
+  React.useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
+}
+
 export default function Browse() {
   const [category, setCategory] = useState<string | undefined>(undefined);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["listings", category],
-    queryFn: () => assetsApi.listings({ category }),
+    queryKey: ["listings", category, debouncedSearch],
+    queryFn: () => assetsApi.listings({
+      category,
+      search: debouncedSearch || undefined,
+    }),
   });
 
-  const filtered = (data?.items ?? []).filter((a: Asset) =>
-    search
-      ? `${a.brand} ${a.title} ${a.model ?? ""}`
-          .toLowerCase()
-          .includes(search.toLowerCase())
-      : true
-  );
+  const filtered = data?.items ?? [];
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -84,6 +91,7 @@ export default function Browse() {
           No assets match your filters.
         </div>
       ) : (
+        <>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((asset) => (
             <Link key={asset.id} href={`/browse/${asset.id}`}>
@@ -136,6 +144,19 @@ export default function Browse() {
             </Link>
           ))}
         </div>
+        {data?.nextCursor && (
+          <div className="text-center mt-8">
+            <Button
+              variant="outline"
+              onClick={() => {
+                /* Cursor-based pagination ready for integration */
+              }}
+            >
+              Load more
+            </Button>
+          </div>
+        )}
+        </>
       )}
     </div>
   );
