@@ -266,10 +266,12 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: { category?: string; brand?: string; search?: string; sort?: string; limit?: number }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.sort) qs.set("sort", params.sort);
     if (params?.limit) qs.set("limit", String(params.limit));
     return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
   },
@@ -582,6 +584,72 @@ export const adminApi = {
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  linkTo?: string;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (limit = 30, offset = 0) =>
+    request<{ items: Notification[]; unreadCount: number }>(
+      `/notifications?limit=${limit}&offset=${offset}`
+    ),
+  markRead: (id: number) =>
+    request<Notification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+  unreadCount: () =>
+    request<{ count: number }>("/notifications/unread-count"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ProfileData extends User {
+  phoneE164?: string;
+  nationalId?: string;
+  phoneVerified: boolean;
+  emailVerified: boolean;
+  isBlocked: boolean;
+  createdAt: string;
+  stats: {
+    rentals: { total: number; active: number; completed: number };
+    assets: { total: number; listed: number; rented: number };
+  };
+  lastRiskScore: {
+    finalScore: number;
+    riskCategory: string;
+    legalCommitmentPct: number;
+    createdAt: string;
+  } | null;
+}
+
+export const profileApi = {
+  get: () => request<ProfileData>("/profile"),
+  update: (data: { fullName?: string; phone?: string }) =>
+    request<{ user: User; token: string }>("/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/profile/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -66,6 +66,6 @@ export function homeForRole(role: User["role"]): string {
       return "/owner";
     case "renter":
     default:
-      return "/browse";
+      return "/dashboard";
   }
 }

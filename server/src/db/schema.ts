@@ -655,6 +655,30 @@ export const operationalAlerts = pgTable("operational_alerts", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// In-app notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    linkTo: text("link_to"),
+    read: boolean("read").notNull().default(false),
+    readAt: timestamp("read_at"),
+    payloadJson: jsonb("payload_json"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    readIdx: index("notifications_read_idx").on(t.userId, t.read),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Immutable audit logs
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -713,3 +737,4 @@ export type SanadRecord = typeof sanadRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
 export type Shipment = typeof shipments.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;

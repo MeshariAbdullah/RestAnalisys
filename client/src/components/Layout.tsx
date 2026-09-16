@@ -19,6 +19,8 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  UserCircle,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
@@ -32,6 +34,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   // Renter
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["renter"] },
   { href: "/browse", label: "Browse Catalog", icon: ShoppingBag, roles: ["renter"] },
   { href: "/my-rentals", label: "My Rentals", icon: FileText, roles: ["renter"] },
 
@@ -129,6 +132,31 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+
+        <div className="p-2 space-y-1 border-t border-neutral-800">
+          <Link href="/notifications">
+            <a className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
+              location === "/notifications"
+                ? "bg-amber-500 text-neutral-950 font-medium"
+                : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+            )}>
+              <Bell className="w-5 h-5 shrink-0" />
+              {sidebarOpen && <span>Notifications</span>}
+            </a>
+          </Link>
+          <Link href="/profile">
+            <a className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
+              location === "/profile"
+                ? "bg-amber-500 text-neutral-950 font-medium"
+                : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+            )}>
+              <UserCircle className="w-5 h-5 shrink-0" />
+              {sidebarOpen && <span>Profile</span>}
+            </a>
+          </Link>
+        </div>
 
         <div className="p-3 border-t border-neutral-800">
           {sidebarOpen ? (

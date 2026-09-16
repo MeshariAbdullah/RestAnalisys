@@ -5,8 +5,11 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Profile from "./pages/Profile";
+import Notifications from "./pages/Notifications";
 
 // Renter
+import RenterDashboard from "./pages/renter/RenterDashboard";
 import Browse from "./pages/renter/Browse";
 import ItemDetail from "./pages/renter/ItemDetail";
 import LegalCommitmentPage from "./pages/renter/LegalCommitment";
@@ -44,7 +47,18 @@ export default function App() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
 
+      {/* Shared */}
+      <Route path="/profile">
+        <ProtectedRoute><Profile /></ProtectedRoute>
+      </Route>
+      <Route path="/notifications">
+        <ProtectedRoute><Notifications /></ProtectedRoute>
+      </Route>
+
       {/* Renter */}
+      <Route path="/dashboard">
+        <ProtectedRoute roles={["renter"]}><RenterDashboard /></ProtectedRoute>
+      </Route>
       <Route path="/browse">
         <ProtectedRoute roles={["renter"]}><Browse /></ProtectedRoute>
       </Route>

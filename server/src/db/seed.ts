@@ -29,6 +29,7 @@ import {
   shipments,
   operationalAlerts,
   inventoryMovements,
+  notifications,
 } from "./schema.js";
 import { sarToHalalas, computeRentalQuote, computeOwnerPayout } from "../utils/money.js";
 import { generateLegalCommitment } from "../services/legalService.js";
@@ -559,6 +560,47 @@ async function seed() {
       toLocation: "renter",
       movedByUserId: ops.id,
       reason: "delivered_to_renter",
+    },
+  ]);
+
+  // ── Demo notifications ────────────────────────────────────────────────
+  await db.insert(notifications).values([
+    {
+      userId: owner.id,
+      type: "asset_approved",
+      title: "Asset Approved",
+      body: 'Your asset "Hermès Birkin 30 Gold Togo PHW" has been approved. Please ship it to our warehouse.',
+      linkTo: "/owner",
+    },
+    {
+      userId: owner.id,
+      type: "asset_listed",
+      title: "Asset Listed",
+      body: 'Your asset "Hermès Birkin 30 Gold Togo PHW" is now live in the catalog!',
+      linkTo: "/owner",
+    },
+    {
+      userId: owner.id,
+      type: "rental_created",
+      title: "New Rental Request",
+      body: 'Your asset has a new rental request.',
+      linkTo: "/owner",
+    },
+    {
+      userId: renter.id,
+      type: "rental_delivered",
+      title: "Item Delivered",
+      body: "Your rented item has been delivered. Enjoy your rental!",
+      linkTo: "/my-rentals",
+    },
+    {
+      userId: renter.id,
+      type: "rental_closed",
+      title: "Rental Closed",
+      body: "Your rental has been closed successfully. Thank you!",
+      linkTo: "/my-rentals",
+      read: true,
+      readAt: new Date(),
     },
   ]);
 

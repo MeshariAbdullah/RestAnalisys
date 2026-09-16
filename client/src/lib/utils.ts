@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatDate(date: string | Date) {
-  return new Intl.DateTimeFormat("ar-SA", {
+  return new Intl.DateTimeFormat("en-SA", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(date));
@@ -37,42 +37,5 @@ export function getSeverityColor(severity: string) {
     case "medium": return "text-yellow-600 bg-yellow-100";
     case "low": return "text-blue-600 bg-blue-100";
     default: return "text-gray-600 bg-gray-100";
-  }
-}
-
-export function getSeverityLabel(severity: string) {
-  switch (severity) {
-    case "critical": return "حرج";
-    case "high": return "مرتفع";
-    case "medium": return "متوسط";
-    case "low": return "منخفض";
-    default: return severity;
-  }
-}
-
-export function getStatusLabel(status: string) {
-  const labels: Record<string, string> = {
-    uploaded: "تم الرفع",
-    extracting_frames: "استخراج الإطارات",
-    analyzing_gpt: "تحليل GPT-4o",
-    analyzing_gemini: "تحليل Gemini",
-    saving_results: "حفظ النتائج",
-    done: "مكتمل",
-    error: "خطأ",
-    queued: "في الانتظار",
-  };
-  return labels[status] ?? status;
-}
-
-export function getStatusIcon(status: string) {
-  switch (status) {
-    case "done": return "✅";
-    case "error": return "❌";
-    case "uploaded": return "📤";
-    case "extracting_frames": return "🎞️";
-    case "analyzing_gpt": return "🤖";
-    case "analyzing_gemini": return "💎";
-    case "saving_results": return "💾";
-    default: return "⏳";
   }
 }

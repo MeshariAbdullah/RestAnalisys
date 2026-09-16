@@ -11,7 +11,7 @@
  */
 
 import { Router } from "express";
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, lte, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -256,6 +257,16 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: asset.ownerId,
+      type: approved ? "asset_approved" : "asset_rejected",
+      title: approved ? "Asset Approved" : "Asset Rejected",
+      body: approved
+        ? `Your asset "${asset.title}" has been approved. Please ship it to our warehouse.`
+        : `Your asset "${asset.title}" was rejected: ${rejectionReason ?? "No reason given"}.`,
+      linkTo: `/owner/assets/${assetId}`,
+    });
+
     res.json(updated);
   })
 );
@@ -318,6 +329,23 @@ router.get(
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.search) {
+      const term = `%${filter.search}%`;
+      conditions.push(
+        or(
+          ilike(assets.title, term),
+          ilike(assets.brand, term),
+          ilike(assets.model, term),
+        )!
+      );
+    }
+
+    const orderBy =
+      filter.sort === "price_asc"
+        ? asc(assets.dailyRentalPriceHalalas)
+        : filter.sort === "price_desc"
+          ? desc(assets.dailyRentalPriceHalalas)
+          : desc(assets.updatedAt);
 
     const rows = await db
       .select({
@@ -326,6 +354,7 @@ router.get(
         brand: assets.brand,
         model: assets.model,
         category: assets.category,
+        description: assets.description,
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
@@ -334,7 +363,7 @@ router.get(
       })
       .from(assets)
       .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
+      .orderBy(orderBy)
       .limit(filter.limit);
 
     res.json({ items: rows, count: rows.length });
@@ -395,6 +424,14 @@ router.post(
       entityType: "asset",
       entityId: id,
       after: updated,
+    });
+
+    await notify({
+      userId: asset.ownerId,
+      type: "asset_listed",
+      title: "Asset Listed",
+      body: `Your asset "${asset.title}" is now live in the catalog and available for rent!`,
+      linkTo: `/owner/assets/${id}`,
     });
 
     res.json(updated);
