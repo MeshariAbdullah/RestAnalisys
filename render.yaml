@@ -4,8 +4,10 @@ services:
     name: mlr-platform-api
     runtime: node
     rootDir: server
-    buildCommand: npm install && npm run build
-    startCommand: node --loader tsx/esm src/index.ts
+    # --include=dev is required: NODE_ENV=production would otherwise prune
+    # typescript/tsx and the tsc build would fail.
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: node dist/db/migrate.js && node dist/index.js
     envVars:
       - key: NODE_ENV
         value: production
@@ -15,6 +17,8 @@ services:
         fromDatabase:
           name: mlr-db
           property: connectionString
+      - key: DATABASE_SSL
+        value: false
       - key: JWT_SECRET
         generateValue: true
       - key: CLIENT_URL

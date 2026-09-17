@@ -63,7 +63,7 @@ Prereqs: Node 20+, Postgres 14+.
 npm run install:all
 
 # 2. Configure the environment
-cp server/.env.example server/.env
+cp .env.example server/.env
 # Set DATABASE_URL and JWT_SECRET at minimum.
 
 # 3. Create the schema and seed demo data
@@ -85,13 +85,13 @@ Password for all: `Mlr@2024!`
 
 | Role         | Email              |
 | ------------ | ------------------ |
-| super_admin  | admin@mlr.sa       |
-| admin        | admin2@mlr.sa      |
+| super_admin  | super@mlr.sa       |
+| admin        | admin@mlr.sa       |
 | inspector    | inspector@mlr.sa   |
 | operations   | ops@mlr.sa         |
-| owner        | owner@demo.sa      |
-| renter       | renter@demo.sa     |
-| new renter   | newbie@demo.sa     |
+| owner        | owner@mlr.sa       |
+| renter       | renter@mlr.sa      |
+| new renter   | new.renter@mlr.sa  |
 
 ---
 

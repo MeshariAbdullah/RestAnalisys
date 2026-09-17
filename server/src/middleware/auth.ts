@@ -1,7 +1,16 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET ?? "mlr-platform-dev-secret-change-me";
+const JWT_SECRET = resolveJwtSecret();
+
+function resolveJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET must be set in production");
+  }
+  return "mlr-platform-dev-secret-change-me";
+}
 
 export type Role =
   | "renter"

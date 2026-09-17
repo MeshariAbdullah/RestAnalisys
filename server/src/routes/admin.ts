@@ -3,6 +3,7 @@
  */
 
 import { Router } from "express";
+import bcrypt from "bcryptjs";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
@@ -17,7 +18,8 @@ import {
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { NotFoundError } from "../utils/errors.js";
+import { CreateStaffSchema } from "../utils/schemas.js";
+import { NotFoundError, ConflictError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
 
 const router = Router();
@@ -178,12 +180,18 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
-      email: string;
-      fullName: string;
-      role: "admin" | "operations" | "inspector";
-      passwordHash: string;
-    };
+    const { email, fullName, role, password } = CreateStaffSchema.parse(req.body);
+
+    const existing = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+    if (existing.length > 0) {
+      throw new ConflictError("Email already registered");
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db
       .insert(users)
       .values({
@@ -202,7 +210,8 @@ router.post(
       entityId: user.id,
       after: { email, role },
     });
-    res.status(201).json(user);
+    const { passwordHash: _omit, ...safeUser } = user;
+    res.status(201).json(safeUser);
   })
 );
 
