@@ -4,6 +4,7 @@
 
 import { Router } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 import { db } from "../db/index.js";
 import {
   users,
@@ -17,8 +18,29 @@ import {
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { NotFoundError } from "../utils/errors.js";
+import { NotFoundError, ValidationError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { CreateStaffSchema } from "../utils/schemas.js";
+
+const SAFE_USER_FIELDS = {
+  id: users.id,
+  email: users.email,
+  fullName: users.fullName,
+  role: users.role,
+  phoneE164: users.phoneE164,
+  nationalId: users.nationalId,
+  nafathVerified: users.nafathVerified,
+  kycStatus: users.kycStatus,
+  phoneVerified: users.phoneVerified,
+  emailVerified: users.emailVerified,
+  trustScore: users.trustScore,
+  riskCategory: users.riskCategory,
+  isBlocked: users.isBlocked,
+  blockedReason: users.blockedReason,
+  createdAt: users.createdAt,
+  updatedAt: users.updatedAt,
+  lastLoginAt: users.lastLoginAt,
+} as const;
 
 const router = Router();
 
@@ -133,7 +155,7 @@ router.get(
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
+    const query = db.select(SAFE_USER_FIELDS).from(users);
     const rows = role
       ? await query.where(eq(users.role, role as any)).limit(200)
       : await query.limit(200);
@@ -149,17 +171,17 @@ router.post(
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
     const { reason, block } = req.body as { reason?: string; block: boolean };
-    const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    const [user] = await db.select(SAFE_USER_FIELDS).from(users).where(eq(users.id, id)).limit(1);
     if (!user) throw new NotFoundError("User");
-    const [updated] = await db
+    await db
       .update(users)
       .set({
         isBlocked: block,
         blockedReason: block ? reason ?? "blocked by admin" : null,
         updatedAt: new Date(),
       })
-      .where(eq(users.id, id))
-      .returning();
+      .where(eq(users.id, id));
+    const [updated] = await db.select(SAFE_USER_FIELDS).from(users).where(eq(users.id, id)).limit(1);
     await recordAudit({
       req,
       action: block ? "user.block" : "user.unblock",
@@ -178,18 +200,14 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
-      email: string;
-      fullName: string;
-      role: "admin" | "operations" | "inspector";
-      passwordHash: string;
-    };
+    const input = CreateStaffSchema.parse(req.body);
+    const passwordHash = await bcrypt.hash(input.password, 12);
     const [user] = await db
       .insert(users)
       .values({
-        email,
-        fullName,
-        role,
+        email: input.email,
+        fullName: input.fullName,
+        role: input.role,
         passwordHash,
         nafathVerified: true,
         kycStatus: "verified",
@@ -200,9 +218,10 @@ router.post(
       action: "user.create_staff",
       entityType: "user",
       entityId: user.id,
-      after: { email, role },
+      after: { email: input.email, role: input.role },
     });
-    res.status(201).json(user);
+    const [safe] = await db.select(SAFE_USER_FIELDS).from(users).where(eq(users.id, user.id)).limit(1);
+    res.status(201).json(safe);
   })
 );
 

@@ -34,14 +34,21 @@ export default function Shipments() {
     queryFn: () => operationsApi.shipments(),
   });
 
+  const [updateError, setUpdateError] = useState("");
+
   async function handleUpdate(id: number) {
-    await operationsApi.updateShipment(id, {
-      status: editStatus,
-      trackingNumber: editTracking || undefined,
-    });
-    setEditingId(null);
-    setEditTracking("");
-    await qc.invalidateQueries({ queryKey: ["shipments"] });
+    setUpdateError("");
+    try {
+      await operationsApi.updateShipment(id, {
+        status: editStatus,
+        trackingNumber: editTracking || undefined,
+      });
+      setEditingId(null);
+      setEditTracking("");
+      await qc.invalidateQueries({ queryKey: ["shipments"] });
+    } catch (e: any) {
+      setUpdateError(e.message ?? "Failed to update shipment");
+    }
   }
 
   return (
@@ -50,6 +57,10 @@ export default function Shipments() {
       <p className="text-neutral-500 mb-8">
         Outbound deliveries to renters and returns to warehouse.
       </p>
+
+      {updateError && (
+        <div className="bg-red-50 text-red-700 p-3 rounded mb-4">{updateError}</div>
+      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>

@@ -3,14 +3,14 @@
  */
 
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { disputes, rentals } from "../db/schema.js";
+import { disputes, rentals, users } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
-import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
+import { DisputeOpenSchema, DisputeResolveSchema, DisputeAssignSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
+import { NotFoundError, ForbiddenError, LegalStateError, ConflictError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
 
 const router = Router();
@@ -34,6 +34,20 @@ router.post(
       rental.ownerId === actorId ||
       ["admin", "operations", "super_admin"].includes(req.user!.role);
     if (!actorIsParty) throw new ForbiddenError();
+
+    const [existingDispute] = await db
+      .select({ id: disputes.id })
+      .from(disputes)
+      .where(
+        and(
+          eq(disputes.rentalId, rental.id),
+          inArray(disputes.status, ["open", "investigating", "awaiting_evidence"])
+        )
+      )
+      .limit(1);
+    if (existingDispute) {
+      throw new ConflictError("An open dispute already exists for this rental");
+    }
 
     const [dispute] = await db
       .insert(disputes)
@@ -84,7 +98,18 @@ router.post(
   requirePermission("dispute.assign"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { assigneeUserId } = req.body as { assigneeUserId: number };
+    const { assigneeUserId } = DisputeAssignSchema.parse(req.body);
+
+    const [assignee] = await db
+      .select({ id: users.id, role: users.role })
+      .from(users)
+      .where(eq(users.id, assigneeUserId))
+      .limit(1);
+    if (!assignee) throw new NotFoundError("Assignee user");
+    if (!["admin", "super_admin", "operations"].includes(assignee.role)) {
+      throw new ForbiddenError("Assignee must be admin, super_admin, or operations staff");
+    }
+
     const [updated] = await db
       .update(disputes)
       .set({

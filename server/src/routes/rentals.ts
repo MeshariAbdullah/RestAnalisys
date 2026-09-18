@@ -21,6 +21,7 @@
 
 import { Router } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { v4 as uuidv4 } from "uuid";
 import { db } from "../db/index.js";
 import {
   assets,
@@ -70,8 +71,8 @@ function daysBetween(startIso: string, endIso: string): number {
 
 function generateRentalReference(): string {
   const year = new Date().getFullYear();
-  const rand = Math.floor(100000 + Math.random() * 900000);
-  return `MLR-${year}-${rand}`;
+  const suffix = uuidv4().replace(/-/g, "").slice(0, 12).toUpperCase();
+  return `MLR-${year}-${suffix}`;
 }
 
 async function buildRiskFeatures(userId: number, assetValueHalalas: number): Promise<RiskFeatures> {

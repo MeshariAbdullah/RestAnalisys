@@ -1,6 +1,7 @@
 import React from "react";
 import { Route, Switch, Redirect } from "wouter";
 import ProtectedRoute from "./components/ProtectedRoute";
+import RentalDetail from "./pages/renter/RentalDetail";
 
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
@@ -27,6 +28,7 @@ import OpsDashboard from "./pages/ops/OpsDashboard";
 import Shipments from "./pages/ops/Shipments";
 import Inventory from "./pages/ops/Inventory";
 import AlertsPage from "./pages/ops/Alerts";
+import RentalManagement from "./pages/ops/RentalManagement";
 
 // Admin
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -64,6 +66,13 @@ export default function App() {
       </Route>
       <Route path="/my-rentals">
         <ProtectedRoute roles={["renter"]}><MyRentals /></ProtectedRoute>
+      </Route>
+      <Route path="/rentals/:id">
+        {(params) => (
+          <ProtectedRoute roles={["renter", "owner", "admin", "super_admin", "operations"]}>
+            <RentalDetail id={Number(params.id)} />
+          </ProtectedRoute>
+        )}
       </Route>
 
       {/* Owner */}
@@ -108,6 +117,9 @@ export default function App() {
       </Route>
       <Route path="/ops/alerts">
         <ProtectedRoute roles={["operations"]}><AlertsPage /></ProtectedRoute>
+      </Route>
+      <Route path="/ops/rentals">
+        <ProtectedRoute roles={["operations"]}><RentalManagement /></ProtectedRoute>
       </Route>
 
       {/* Admin */}

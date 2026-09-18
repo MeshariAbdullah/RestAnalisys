@@ -10,6 +10,7 @@ import {
   Truck,
   Gavel,
   ClipboardCheck,
+  ClipboardList,
   Receipt,
   AlertTriangle,
   Users as UsersIcon,
@@ -45,6 +46,7 @@ const NAV: NavItem[] = [
 
   // Operations
   { href: "/ops", label: "Ops Dashboard", icon: LayoutDashboard, roles: ["operations"] },
+  { href: "/ops/rentals", label: "Rental Lifecycle", icon: ClipboardList, roles: ["operations"] },
   { href: "/ops/shipments", label: "Shipments", icon: Truck, roles: ["operations"] },
   { href: "/ops/inventory", label: "Inventory", icon: PackageSearch, roles: ["operations"] },
   { href: "/ops/alerts", label: "Alerts", icon: AlertTriangle, roles: ["operations"] },

@@ -27,8 +27,15 @@ import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { rateLimiter } from "./middleware/rateLimiter.js";
 
 dotenv.config();
+
+if (!process.env.JWT_SECRET) {
+  console.warn(
+    "⚠️  WARNING: JWT_SECRET not set — using insecure default. Set JWT_SECRET in production."
+  );
+}
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "3001");
@@ -58,7 +65,7 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRouter);
+app.use("/api/auth", rateLimiter({ windowMs: 15 * 60 * 1000, max: 30 }), authRouter);
 app.use("/api/assets", assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
 app.use("/api/rentals", rentalsRouter);

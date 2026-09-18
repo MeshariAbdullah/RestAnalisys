@@ -50,29 +50,19 @@ export function getSeverityLabel(severity: string) {
   }
 }
 
-export function getStatusLabel(status: string) {
-  const labels: Record<string, string> = {
-    uploaded: "تم الرفع",
-    extracting_frames: "استخراج الإطارات",
-    analyzing_gpt: "تحليل GPT-4o",
-    analyzing_gemini: "تحليل Gemini",
-    saving_results: "حفظ النتائج",
-    done: "مكتمل",
-    error: "خطأ",
-    queued: "في الانتظار",
-  };
-  return labels[status] ?? status;
+export function formatHalalas(halalas: number): string {
+  return `${(halalas / 100).toLocaleString("en-SA", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} SAR`;
 }
 
-export function getStatusIcon(status: string) {
-  switch (status) {
-    case "done": return "✅";
-    case "error": return "❌";
-    case "uploaded": return "📤";
-    case "extracting_frames": return "🎞️";
-    case "analyzing_gpt": return "🤖";
-    case "analyzing_gemini": return "💎";
-    case "saving_results": return "💾";
-    default: return "⏳";
+export function getRiskBadgeColor(category: string) {
+  switch (category) {
+    case "low": return "bg-green-100 text-green-800";
+    case "medium": return "bg-yellow-100 text-yellow-800";
+    case "high": return "bg-orange-100 text-orange-800";
+    case "ultra_high": return "bg-red-100 text-red-800";
+    default: return "bg-gray-100 text-gray-800";
   }
 }

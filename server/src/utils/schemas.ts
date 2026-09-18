@@ -119,7 +119,7 @@ export const OwnerValuationResponseSchema = z.object({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const RentalQuoteRequestSchema = z.object({
-  assetId: z.number().int().positive(),
+  assetId: z.coerce.number().int().positive(),
   startDate: IsoDate,
   endDate: IsoDate,
 });
@@ -226,4 +226,23 @@ export const ShipmentUpdateSchema = z.object({
     "returned",
   ]),
   trackingNumber: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin — staff user creation
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const CreateStaffSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  fullName: z.string().min(2),
+  role: z.enum(["admin", "operations", "inspector"]),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dispute assignment validation
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const DisputeAssignSchema = z.object({
+  assigneeUserId: z.number().int().positive(),
 });
