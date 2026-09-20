@@ -52,27 +52,74 @@ export function getSeverityLabel(severity: string) {
 
 export function getStatusLabel(status: string) {
   const labels: Record<string, string> = {
-    uploaded: "تم الرفع",
-    extracting_frames: "استخراج الإطارات",
-    analyzing_gpt: "تحليل GPT-4o",
-    analyzing_gemini: "تحليل Gemini",
-    saving_results: "حفظ النتائج",
-    done: "مكتمل",
-    error: "خطأ",
-    queued: "في الانتظار",
+    // Asset statuses
+    pending_approval: "قيد المراجعة",
+    rejected: "مرفوض",
+    awaiting_shipment: "بانتظار الشحن",
+    in_inspection: "قيد الفحص",
+    inspection_reported: "تم تقرير الفحص",
+    owner_rejected_valuation: "رفض المالك التقييم",
+    ready_for_listing: "جاهز للإدراج",
+    listed: "مدرج",
+    reserved: "محجوز",
+    rented_out: "مؤجر",
+    returned_under_inspection: "مرتجع قيد الفحص",
+    completed: "مكتمل",
+    withdrawn: "تم السحب",
+    lost_or_destroyed: "مفقود أو تالف",
+    // Rental statuses
+    pending_risk_review: "مراجعة المخاطر",
+    pending_legal_signing: "بانتظار التوقيع",
+    pending_payment: "بانتظار الدفع",
+    confirmed: "مؤكد",
+    out_for_delivery: "قيد التوصيل",
+    active: "نشط",
+    return_in_transit: "مرتجع في الطريق",
+    under_inspection: "قيد الفحص",
+    closed: "مغلق",
+    closed_with_penalty: "مغلق مع غرامة",
+    in_dispute: "قيد النزاع",
+    enforcement: "تنفيذ قضائي",
+    cancelled: "ملغي",
+    // Payment statuses
+    pending: "قيد الانتظار",
+    authorized: "مصرح",
+    captured: "محصّل",
+    failed: "فشل",
+    refunded: "مسترد",
+    // General
+    open: "مفتوح",
+    investigating: "قيد التحقيق",
+    resolved: "تم الحل",
   };
   return labels[status] ?? status;
 }
 
-export function getStatusIcon(status: string) {
-  switch (status) {
-    case "done": return "✅";
-    case "error": return "❌";
-    case "uploaded": return "📤";
-    case "extracting_frames": return "🎞️";
-    case "analyzing_gpt": return "🤖";
-    case "analyzing_gemini": return "💎";
-    case "saving_results": return "💾";
-    default: return "⏳";
-  }
+export function getStatusColor(status: string) {
+  const colors: Record<string, string> = {
+    active: "bg-green-100 text-green-800",
+    listed: "bg-green-100 text-green-800",
+    confirmed: "bg-blue-100 text-blue-800",
+    pending_approval: "bg-yellow-100 text-yellow-800",
+    pending_risk_review: "bg-yellow-100 text-yellow-800",
+    pending_legal_signing: "bg-yellow-100 text-yellow-800",
+    pending_payment: "bg-yellow-100 text-yellow-800",
+    pending: "bg-yellow-100 text-yellow-800",
+    in_inspection: "bg-purple-100 text-purple-800",
+    under_inspection: "bg-purple-100 text-purple-800",
+    closed: "bg-neutral-100 text-neutral-600",
+    completed: "bg-neutral-100 text-neutral-600",
+    cancelled: "bg-neutral-100 text-neutral-600",
+    withdrawn: "bg-neutral-100 text-neutral-600",
+    rejected: "bg-red-100 text-red-800",
+    failed: "bg-red-100 text-red-800",
+    enforcement: "bg-red-100 text-red-800",
+    in_dispute: "bg-orange-100 text-orange-800",
+    closed_with_penalty: "bg-orange-100 text-orange-800",
+    rented_out: "bg-blue-100 text-blue-800",
+    out_for_delivery: "bg-cyan-100 text-cyan-800",
+    captured: "bg-green-100 text-green-800",
+    refunded: "bg-amber-100 text-amber-800",
+  };
+  return colors[status] ?? "bg-neutral-100 text-neutral-600";
 }

@@ -19,9 +19,11 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
+import NotificationBell from "./NotificationBell";
 
 interface NavItem {
   href: string;
@@ -129,6 +131,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+
+        <div className="px-3 py-2 border-t border-neutral-800">
+          <div className={cn("flex items-center", sidebarOpen ? "justify-end" : "justify-center")}>
+            <NotificationBell />
+          </div>
+        </div>
 
         <div className="p-3 border-t border-neutral-800">
           {sidebarOpen ? (

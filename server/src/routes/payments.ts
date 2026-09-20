@@ -19,6 +19,8 @@ import {
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyPaymentCaptured, notifyPayoutReleased } from "../services/notificationService.js";
+import { halalasToSar } from "../utils/money.js";
 
 const router = Router();
 
@@ -110,6 +112,12 @@ router.post(
           updatedAt: new Date(),
         })
         .where(eq(rentals.id, rental.id));
+
+      notifyPaymentCaptured(
+        req.user!.userId,
+        rental.reference,
+        String(halalasToSar(rental.totalPayableHalalas))
+      );
     }
 
     await recordAudit({
@@ -220,6 +228,12 @@ router.post(
       entityId: payout.id,
       after: payout,
     });
+
+    notifyPayoutReleased(
+      rental.ownerId,
+      String(halalasToSar(payoutCalc.netHalalas)),
+      rental.reference
+    );
 
     res.json(payout);
   })

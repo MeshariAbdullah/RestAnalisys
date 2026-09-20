@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyRentalCreated } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -279,6 +280,8 @@ router.post(
       entityId: rental.id,
       after: { rental, decision },
     });
+
+    notifyRentalCreated(renterId, asset.ownerId, rental.id, asset.title, reference);
 
     res.status(201).json({
       rental,

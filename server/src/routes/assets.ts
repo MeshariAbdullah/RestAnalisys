@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyAssetApproved, notifyAssetRejected, notifyInspectionComplete } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -255,6 +256,12 @@ router.post(
       before: asset,
       after: updated,
     });
+
+    if (approved) {
+      notifyAssetApproved(asset.ownerId, assetId, asset.title);
+    } else {
+      notifyAssetRejected(asset.ownerId, assetId, asset.title, rejectionReason);
+    }
 
     res.json(updated);
   })
