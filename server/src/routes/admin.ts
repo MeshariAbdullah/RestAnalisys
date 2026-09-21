@@ -13,12 +13,14 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -168,6 +170,18 @@ router.post(
       before: user,
       after: updated,
     });
+
+    await notify({
+      userId: id,
+      type: "system" as const,
+      title: block ? "Account Blocked" : "Account Unblocked",
+      message: block
+        ? `Your account has been blocked. Reason: ${reason ?? "Policy violation"}`
+        : "Your account has been unblocked. You may resume normal activity.",
+      entityType: "user",
+      entityId: id,
+    });
+
     res.json(updated);
   })
 );
@@ -217,6 +231,52 @@ router.get(
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
+    res.json(rows);
+  })
+);
+
+// ── Audit logs viewer ─────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Number(req.query.offset) || 0;
+    const action = req.query.action as string | undefined;
+    const entityType = req.query.entityType as string | undefined;
+
+    const conditions = [];
+    if (action) conditions.push(eq(auditLogs.action, action));
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+
+    const query = conditions.length > 0
+      ? db.select().from(auditLogs).where(and(...conditions))
+      : db.select().from(auditLogs);
+
+    const rows = await query
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    res.json(rows);
+  })
+);
+
+// ── Audit log actions summary (for filter dropdown) ───────────────────────
+router.get(
+  "/audit-logs/actions",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select({
+        action: auditLogs.action,
+        count: sql<number>`count(*)`,
+      })
+      .from(auditLogs)
+      .groupBy(auditLogs.action)
+      .orderBy(auditLogs.action);
     res.json(rows);
   })
 );

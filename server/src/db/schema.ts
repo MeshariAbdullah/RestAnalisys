@@ -681,6 +681,58 @@ export const auditLogs = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications (in-app)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "asset_approved",
+  "asset_rejected",
+  "asset_inspection_complete",
+  "asset_valuation_approved",
+  "asset_valuation_rejected",
+  "asset_listed",
+  "rental_created",
+  "rental_confirmed",
+  "rental_delivered",
+  "rental_returned",
+  "rental_closed",
+  "rental_cancelled",
+  "legal_signed",
+  "payment_captured",
+  "payment_refunded",
+  "payout_released",
+  "dispute_opened",
+  "dispute_resolved",
+  "sanad_issued",
+  "sanad_executed",
+  "user_blocked",
+  "user_unblocked",
+  "system",
+]);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    type: notificationTypeEnum("type").notNull(),
+    title: text("title").notNull(),
+    message: text("message").notNull(),
+    read: boolean("read").notNull().default(false),
+    entityType: text("entity_type"),
+    entityId: integer("entity_id"),
+    metaJson: jsonb("meta_json"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    readAt: timestamp("read_at"),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    userReadIdx: index("notifications_user_read_idx").on(t.userId, t.read),
+    createdIdx: index("notifications_created_idx").on(t.createdAt),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Integration webhooks (Nafath, Nafith, payment gateway, courier)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -713,3 +765,5 @@ export type SanadRecord = typeof sanadRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
 export type Shipment = typeof shipments.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;

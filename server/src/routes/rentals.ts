@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify, notifyMany } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -280,6 +281,15 @@ router.post(
       after: { rental, decision },
     });
 
+    await notify({
+      userId: asset.ownerId,
+      type: "rental_created",
+      title: "New Rental Request",
+      message: `Your asset "${asset.title}" has been reserved for a rental (${rental.reference}).`,
+      entityType: "rental",
+      entityId: rental.id,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -441,6 +451,25 @@ router.post(
       after: updated,
     });
 
+    await notifyMany([
+      {
+        userId: rental.renterId,
+        type: "rental_delivered",
+        title: "Rental Delivered",
+        message: `Your rental ${rental.reference} has been delivered.`,
+        entityType: "rental",
+        entityId: id,
+      },
+      {
+        userId: rental.ownerId,
+        type: "rental_delivered",
+        title: "Asset Delivered to Renter",
+        message: `Your asset (rental ${rental.reference}) has been delivered to the renter.`,
+        entityType: "rental",
+        entityId: id,
+      },
+    ]);
+
     res.json(updated);
   })
 );
@@ -516,6 +545,24 @@ router.post(
         entityId: id,
         after: updated,
       });
+      await notifyMany([
+        {
+          userId: rental.renterId,
+          type: "rental_closed",
+          title: "Rental Closed",
+          message: `Your rental ${rental.reference} has been closed successfully.`,
+          entityType: "rental",
+          entityId: id,
+        },
+        {
+          userId: rental.ownerId,
+          type: "rental_closed",
+          title: "Rental Completed",
+          message: `Rental ${rental.reference} for your asset has been completed. Payout is pending.`,
+          entityType: "rental",
+          entityId: id,
+        },
+      ]);
       return res.json(updated);
     }
 

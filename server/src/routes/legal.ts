@@ -27,6 +27,7 @@ import {
 import { requestNafathSignature } from "../services/nafathService.js";
 import { issueSanad, signSanad, dischargeSanad, executeSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -159,6 +160,26 @@ router.post(
       entityId: commitment.id,
       after: { signed, sanad },
     });
+
+    await notify({
+      userId,
+      type: "rental_confirmed" as const,
+      title: "Commitment Signed",
+      message: `You have signed legal commitment #${commitment.id} for rental ${rental!.reference}. Sanad issued.`,
+      entityType: "legal_commitment",
+      entityId: commitment.id,
+    });
+
+    if (rental!.ownerId) {
+      await notify({
+        userId: rental!.ownerId,
+        type: "rental_confirmed" as const,
+        title: "Rental Commitment Signed",
+        message: `The renter has signed the legal commitment for rental ${rental!.reference}. Pending payment.`,
+        entityType: "rental",
+        entityId: rental!.id,
+      });
+    }
 
     res.json({ commitment: signed, sanad });
   })

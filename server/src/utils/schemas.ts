@@ -46,6 +46,16 @@ export const NafathVerifySchema = z.object({
   nationalId: SaudiNationalId,
 });
 
+export const ProfileUpdateSchema = z.object({
+  fullName: z.string().min(2).optional(),
+  phone: SaudiPhone.optional(),
+  currentPassword: z.string().optional(),
+  newPassword: z.string().min(8).optional(),
+}).refine(
+  (d) => !(d.newPassword && !d.currentPassword),
+  { message: "Current password required to set a new one", path: ["currentPassword"] }
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Assets (owner submission + admin review)
 // ─────────────────────────────────────────────────────────────────────────────
