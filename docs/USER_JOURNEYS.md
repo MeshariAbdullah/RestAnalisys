@@ -75,7 +75,7 @@ Every step maps to a real API call and a real page in the SPA.
    - Assets with status `in_inspection` and rentals awaiting return.
 2. **Intake inspection** (`/inspector/report/:assetId`):
    - Authenticate, grade, value, price, risk category.
-   - On submit the asset advances to `awaiting_owner_approval`.
+   - On submit the asset advances to `inspection_reported`.
 3. **Return inspection**:
    - Same form but tied to a rental.
    - API: `POST /api/inspections/return`.
