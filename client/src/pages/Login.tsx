@@ -9,8 +9,9 @@ import { saveSession, homeForRole } from "@/lib/auth";
 
 export default function Login() {
   const [, navigate] = useLocation();
-  const [email, setEmail] = useState("renter@demo.sa");
-  const [password, setPassword] = useState("Mlr@2024!");
+  const isDev = import.meta.env.DEV;
+  const [email, setEmail] = useState(isDev ? "renter@demo.sa" : "");
+  const [password, setPassword] = useState(isDev ? "Mlr@2024!" : "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -78,12 +79,14 @@ export default function Login() {
               </p>
             )}
 
-            <div className="text-xs text-neutral-400 bg-neutral-950/60 border border-neutral-800 rounded-md p-3 space-y-1">
-              <p className="font-medium text-neutral-300">Demo credentials:</p>
-              <p>Password for all: <code>Mlr@2024!</code></p>
-              <p>· admin@mlr.sa · owner@demo.sa · renter@demo.sa</p>
-              <p>· inspector@mlr.sa · ops@mlr.sa</p>
-            </div>
+            {isDev && (
+              <div className="text-xs text-neutral-400 bg-neutral-950/60 border border-neutral-800 rounded-md p-3 space-y-1">
+                <p className="font-medium text-neutral-300">Demo credentials:</p>
+                <p>Password for all: <code>Mlr@2024!</code></p>
+                <p>· admin@mlr.sa · owner@demo.sa · renter@demo.sa</p>
+                <p>· inspector@mlr.sa · ops@mlr.sa</p>
+              </div>
+            )}
 
             <Button
               type="submit"

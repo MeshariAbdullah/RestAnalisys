@@ -16,9 +16,11 @@ import {
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
+import { AdminBlockUserSchema, AdminCreateUserSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import bcrypt from "bcryptjs";
 
 const router = Router();
 
@@ -148,7 +150,8 @@ router.post(
   requirePermission("user.block"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { reason, block } = req.body as { reason?: string; block: boolean };
+    const block = req.query.action !== "unblock";
+    const { reason } = block ? AdminBlockUserSchema.parse(req.body) : { reason: undefined };
     const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
     if (!user) throw new NotFoundError("User");
     const [updated] = await db
@@ -178,18 +181,14 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
-      email: string;
-      fullName: string;
-      role: "admin" | "operations" | "inspector";
-      passwordHash: string;
-    };
+    const input = AdminCreateUserSchema.parse(req.body);
+    const passwordHash = await bcrypt.hash(input.password, 12);
     const [user] = await db
       .insert(users)
       .values({
-        email,
-        fullName,
-        role,
+        email: input.email,
+        fullName: input.fullName,
+        role: input.role,
         passwordHash,
         nafathVerified: true,
         kycStatus: "verified",
@@ -200,7 +199,7 @@ router.post(
       action: "user.create_staff",
       entityType: "user",
       entityId: user.id,
-      after: { email, role },
+      after: { email: input.email, role: input.role },
     });
     res.status(201).json(user);
   })

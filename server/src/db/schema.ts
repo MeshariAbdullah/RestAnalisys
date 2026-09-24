@@ -169,6 +169,47 @@ export const shipmentDirectionEnum = pgEnum("shipment_direction", [
   "platform_to_owner",
 ]);
 
+export const payoutStatusEnum = pgEnum("payout_status", [
+  "pending",
+  "processing",
+  "paid",
+  "failed",
+]);
+
+export const inspectionTypeEnum = pgEnum("inspection_type", [
+  "intake",
+  "return",
+  "audit",
+]);
+
+export const alertSeverityEnum = pgEnum("alert_severity", [
+  "low",
+  "medium",
+  "high",
+  "critical",
+]);
+
+export const alertStatusEnum = pgEnum("alert_status", [
+  "open",
+  "acknowledged",
+  "resolved",
+]);
+
+export const disputeCategoryEnum = pgEnum("dispute_category", [
+  "damage",
+  "loss",
+  "fraud",
+  "service",
+  "billing",
+]);
+
+export const disputeSeverityEnum = pgEnum("dispute_severity", [
+  "low",
+  "medium",
+  "high",
+  "critical",
+]);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Core identity
 // ─────────────────────────────────────────────────────────────────────────────
@@ -302,7 +343,7 @@ export const inspections = pgTable(
     assetId: integer("asset_id").references(() => assets.id).notNull(),
     inspectorId: integer("inspector_id").references(() => users.id).notNull(),
 
-    type: text("type").notNull().default("intake"), // intake | return | audit
+    type: inspectionTypeEnum("type").notNull().default("intake"),
     rentalId: integer("rental_id"), // set when type = return
 
     authenticityVerified: boolean("authenticity_verified").notNull().default(false),
@@ -340,15 +381,21 @@ export const inspections = pgTable(
 // Inventory movements (audit of where the item physically is)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const inventoryMovements = pgTable("inventory_movements", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  assetId: integer("asset_id").references(() => assets.id).notNull(),
-  fromLocation: text("from_location"),
-  toLocation: text("to_location").notNull(),
-  movedByUserId: integer("moved_by_user_id").references(() => users.id),
-  reason: text("reason"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+export const inventoryMovements = pgTable(
+  "inventory_movements",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    assetId: integer("asset_id").references(() => assets.id).notNull(),
+    fromLocation: text("from_location"),
+    toLocation: text("to_location").notNull(),
+    movedByUserId: integer("moved_by_user_id").references(() => users.id),
+    reason: text("reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    assetIdx: index("inventory_movements_asset_idx").on(t.assetId),
+  })
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Rentals (the core lifecycle object)
@@ -567,7 +614,8 @@ export const payouts = pgTable("payouts", {
   commissionHalalas: bigint("commission_halalas", { mode: "number" }).notNull(),
   netHalalas: bigint("net_halalas", { mode: "number" }).notNull(),
   iban: text("iban"),
-  status: text("status").notNull().default("pending"), // pending | processing | paid | failed
+  status: payoutStatusEnum("status").notNull().default("pending"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
   reference: text("reference"),
   paidAt: timestamp("paid_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -586,8 +634,8 @@ export const disputes = pgTable(
     assignedToUserId: integer("assigned_to_user_id").references(() => users.id),
 
     status: disputeStatusEnum("status").notNull().default("open"),
-    category: text("category").notNull(), // damage | loss | fraud | service | billing
-    severity: text("severity").notNull().default("medium"),
+    category: disputeCategoryEnum("category").notNull(),
+    severity: disputeSeverityEnum("severity").notNull().default("medium"),
 
     summary: text("summary").notNull(),
     evidenceJson: jsonb("evidence_json").notNull().default("[]"),
@@ -644,11 +692,11 @@ export const shipments = pgTable(
 export const operationalAlerts = pgTable("operational_alerts", {
   id: serial("id").primaryKey(),
   type: text("type").notNull(), // late_return | high_risk_user | payment_failed | sanad_overdue
-  severity: text("severity").notNull().default("medium"),
-  subjectType: text("subject_type").notNull(), // rental | user | asset
+  severity: alertSeverityEnum("severity").notNull().default("medium"),
+  subjectType: text("subject_type").notNull(),
   subjectId: integer("subject_id").notNull(),
   message: text("message").notNull(),
-  status: text("status").notNull().default("open"), // open | acknowledged | resolved
+  status: alertStatusEnum("status").notNull().default("open"),
   payloadJson: jsonb("payload_json"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   resolvedAt: timestamp("resolved_at"),

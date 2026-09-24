@@ -40,6 +40,7 @@ import {
   RentalQuoteRequestSchema,
   RentalCreateSchema,
   RentalCancelSchema,
+  RentalCloseSchema,
 } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
@@ -52,7 +53,7 @@ import {
   computeRentalQuote,
   DEFAULT_PLATFORM_FEE_PCT,
 } from "../utils/money.js";
-import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
+import { computeRiskDecision, trustScoreToCategory, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
@@ -89,6 +90,20 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     .where(eq(rentals.renterId, userId));
   const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
 
+  const lateReturnStats = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`${rentals.returnedAt} IS NOT NULL`,
+        sql`${rentals.returnedAt}::date > ${rentals.endDate}::date`
+      )
+    );
+  const lateReturns = Number(lateReturnStats[0]?.count ?? 0);
+
   const accountAgeDays = Math.max(
     0,
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
@@ -99,7 +114,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns,
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -109,6 +124,32 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     userRole: user.role,
     countryIsSaudi: true,
   };
+}
+
+async function updateTrustScore(
+  renterId: number,
+  outcome: "clean" | "penalty" | "major_damage" | "loss"
+): Promise<void> {
+  const [user] = await db.select().from(users).where(eq(users.id, renterId)).limit(1);
+  if (!user) return;
+
+  let delta: number;
+  switch (outcome) {
+    case "clean":       delta = +3; break;
+    case "penalty":     delta = -5; break;
+    case "major_damage": delta = -15; break;
+    case "loss":        delta = -25; break;
+  }
+
+  const newScore = Math.max(0, Math.min(100, user.trustScore + delta));
+  await db
+    .update(users)
+    .set({
+      trustScore: newScore,
+      riskCategory: trustScoreToCategory(newScore),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, renterId));
 }
 
 // ── Quote (no side effects) ─────────────────────────────────────────────────
@@ -488,10 +529,7 @@ router.post(
   requirePermission("rental.close"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { outcome, penaltyHalalas } = req.body as {
-      outcome: "clean" | "penalty" | "major_damage" | "loss";
-      penaltyHalalas?: number;
-    };
+    const { outcome, penaltyHalalas } = RentalCloseSchema.parse(req.body);
 
     const [rental] = await db.select().from(rentals).where(eq(rentals.id, id)).limit(1);
     if (!rental) throw new NotFoundError("Rental");
@@ -509,6 +547,7 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await updateTrustScore(rental.renterId, "clean");
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -540,6 +579,7 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await updateTrustScore(rental.renterId, "penalty");
       await recordAudit({
         req,
         action: "rental.close_penalty",
@@ -573,6 +613,8 @@ router.post(
       message: `Rental ${rental.reference} requires Sanad execution for ${outcome}.`,
       payloadJson: { outcome, rentalId: id },
     });
+
+    await updateTrustScore(rental.renterId, outcome);
 
     await recordAudit({
       req,
