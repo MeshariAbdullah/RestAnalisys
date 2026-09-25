@@ -40,6 +40,7 @@ import {
   RentalQuoteRequestSchema,
   RentalCreateSchema,
   RentalCancelSchema,
+  RentalCloseSchema,
 } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
@@ -56,6 +57,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyRentalStatusChange } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -94,12 +96,24 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
   );
 
+  const lateReturnStats = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`${rentals.returnedAt} IS NOT NULL AND ${rentals.returnedAt}::date > ${rentals.endDate}::date`
+      )
+    );
+
   return {
     accountAgeDays,
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateReturnStats[0]?.count ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +294,13 @@ router.post(
       after: { rental, decision },
     });
 
+    await notifyRentalStatusChange({
+      userId: renterId,
+      rentalReference: rental.reference,
+      rentalId: rental.id,
+      newStatus: "pending_legal_signing",
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -401,6 +422,13 @@ router.post(
       after: updated,
     });
 
+    await notifyRentalStatusChange({
+      userId: rental.renterId,
+      rentalReference: rental.reference,
+      rentalId: id,
+      newStatus: "out_for_delivery",
+    });
+
     res.json(updated);
   })
 );
@@ -439,6 +467,13 @@ router.post(
       entityType: "rental",
       entityId: id,
       after: updated,
+    });
+
+    await notifyRentalStatusChange({
+      userId: rental.renterId,
+      rentalReference: rental.reference,
+      rentalId: id,
+      newStatus: "active",
     });
 
     res.json(updated);
@@ -488,10 +523,7 @@ router.post(
   requirePermission("rental.close"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { outcome, penaltyHalalas } = req.body as {
-      outcome: "clean" | "penalty" | "major_damage" | "loss";
-      penaltyHalalas?: number;
-    };
+    const { outcome, penaltyHalalas } = RentalCloseSchema.parse(req.body);
 
     const [rental] = await db.select().from(rentals).where(eq(rentals.id, id)).limit(1);
     if (!rental) throw new NotFoundError("Rental");
@@ -515,6 +547,12 @@ router.post(
         entityType: "rental",
         entityId: id,
         after: updated,
+      });
+      await notifyRentalStatusChange({
+        userId: rental.renterId,
+        rentalReference: rental.reference,
+        rentalId: id,
+        newStatus: "closed",
       });
       return res.json(updated);
     }
@@ -546,6 +584,12 @@ router.post(
         entityType: "rental",
         entityId: id,
         after: { updated, penaltyHalalas },
+      });
+      await notifyRentalStatusChange({
+        userId: rental.renterId,
+        rentalReference: rental.reference,
+        rentalId: id,
+        newStatus: "closed_with_penalty",
       });
       return res.json(updated);
     }
@@ -626,6 +670,13 @@ router.post(
       entityType: "rental",
       entityId: id,
       after: updated,
+    });
+
+    await notifyRentalStatusChange({
+      userId: rental.renterId,
+      rentalReference: rental.reference,
+      rentalId: id,
+      newStatus: "cancelled",
     });
 
     res.json(updated);

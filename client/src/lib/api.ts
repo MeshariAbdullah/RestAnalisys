@@ -259,6 +259,16 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ nationalId }),
     }),
+  updateProfile: (data: { fullName?: string; phone?: string; nationalAddressJson?: Record<string, string> }) =>
+    request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ message: string }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -578,6 +588,38 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (params?: { limit?: number; cursor?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", String(params.cursor));
+    return request<{ notifications: Notification[]; unreadCount: number; nextCursor: number | null }>(
+      `/notifications?${qs}`
+    );
+  },
+  markRead: (id: number) =>
+    request<{ success: boolean }>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ success: boolean }>("/notifications/read-all", { method: "POST" }),
 };
 
 export const healthApi = {
