@@ -10,15 +10,23 @@ import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
 import { LoginSchema, RegisterSchema, NafathVerifySchema } from "../utils/schemas.js";
-import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors.js";
+import { UnauthorizedError, ConflictError, NotFoundError, ValidationError } from "../utils/errors.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
+import { rateLimit } from "../middleware/rateLimit.js";
 
 const router = Router();
 
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  keyPrefix: "auth",
+});
+
 router.post(
   "/register",
+  authLimiter,
   asyncHandler(async (req, res) => {
     const input = RegisterSchema.parse(req.body);
 
@@ -77,6 +85,7 @@ router.post(
 
 router.post(
   "/login",
+  authLimiter,
   asyncHandler(async (req, res) => {
     const { email, password } = LoginSchema.parse(req.body);
     const [user] = await db
@@ -185,6 +194,78 @@ router.get(
       trustScore: user.trustScore,
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
+    });
+  })
+);
+
+// ── Update profile ────────────────────────────────────────────────────────
+router.patch(
+  "/profile",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const { fullName, phoneE164, currentPassword, newPassword } = req.body as {
+      fullName?: string;
+      phoneE164?: string;
+      currentPassword?: string;
+      newPassword?: string;
+    };
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+
+    if (fullName && fullName.length >= 2) {
+      updates.fullName = fullName;
+    }
+    if (phoneE164) {
+      updates.phoneE164 = phoneE164;
+    }
+
+    if (newPassword) {
+      if (!currentPassword) {
+        throw new ValidationError("Current password required to change password");
+      }
+      const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!ok) {
+        throw new UnauthorizedError("Current password is incorrect");
+      }
+      if (newPassword.length < 8) {
+        throw new ValidationError("New password must be at least 8 characters");
+      }
+      updates.passwordHash = await bcrypt.hash(newPassword, 10);
+    }
+
+    const [updated] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning();
+
+    await recordAudit({
+      req,
+      action: "auth.profile.update",
+      entityType: "user",
+      entityId: userId,
+      after: { fullName: updated.fullName, phoneE164: updated.phoneE164 },
+    });
+
+    return res.json({
+      id: updated.id,
+      email: updated.email,
+      fullName: updated.fullName,
+      role: updated.role,
+      phoneE164: updated.phoneE164,
+      nationalId: updated.nationalId,
+      nafathVerified: updated.nafathVerified,
+      kycStatus: updated.kycStatus,
+      trustScore: updated.trustScore,
+      riskCategory: updated.riskCategory,
     });
   })
 );

@@ -10,7 +10,7 @@ import { assetsApi, formatSar, type Asset } from "@/lib/api";
 
 const CATEGORIES = [
   { id: undefined, label: "All", icon: Diamond },
-  { id: "bag", label: "Bags", icon: Diamond },
+  { id: "handbag", label: "Bags", icon: Diamond },
   { id: "watch", label: "Watches", icon: Watch },
   { id: "dress", label: "Dresses", icon: Shirt },
   { id: "jewelry", label: "Jewelry", icon: Gem },

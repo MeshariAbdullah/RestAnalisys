@@ -19,6 +19,7 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Settings,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
@@ -137,11 +138,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <Shield className="w-4 h-4 text-neutral-950" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
-                <p className="text-[11px] text-neutral-400 truncate">
-                  {user ? roleLabel(user.role) : ""}
-                </p>
+                <Link href="/profile">
+                  <a className="block">
+                    <p className="text-sm font-medium truncate hover:text-amber-400 transition-colors">{user?.fullName ?? "Guest"}</p>
+                    <p className="text-[11px] text-neutral-400 truncate">
+                      {user ? roleLabel(user.role) : ""}
+                    </p>
+                  </a>
+                </Link>
               </div>
+              <Link href="/profile">
+                <a
+                  className="p-1.5 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white"
+                  title="Settings"
+                >
+                  <Settings className="w-4 h-4" />
+                </a>
+              </Link>
               <button
                 onClick={handleLogout}
                 className="p-1.5 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white"

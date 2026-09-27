@@ -36,6 +36,9 @@ import DisputesPage from "./pages/admin/Disputes";
 import FinancialOverview from "./pages/admin/FinancialOverview";
 import SanadTracking from "./pages/admin/SanadTracking";
 
+// Shared
+import Profile from "./pages/Profile";
+
 export default function App() {
   return (
     <Switch>
@@ -43,6 +46,13 @@ export default function App() {
       <Route path="/" component={Landing} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+
+      {/* Profile (all authenticated users) */}
+      <Route path="/profile">
+        <ProtectedRoute roles={["renter", "owner", "inspector", "operations", "admin", "super_admin"]}>
+          <Profile />
+        </ProtectedRoute>
+      </Route>
 
       {/* Renter */}
       <Route path="/browse">
