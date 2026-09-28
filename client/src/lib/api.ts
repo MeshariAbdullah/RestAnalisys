@@ -578,7 +578,30 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: { cursor?: number; action?: string; entityType?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.cursor) qs.set("cursor", String(params.cursor));
+    if (params?.action) qs.set("action", params.action);
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    const q = qs.toString();
+    return request<{ rows: AuditLogEntry[]; nextCursor: number | null }>(`/admin/audit-logs${q ? `?${q}` : ""}`);
+  },
 };
+
+export interface AuditLogEntry {
+  id: number;
+  actorUserId: number | null;
+  actorRole: string | null;
+  action: string;
+  entityType: string;
+  entityId: number | null;
+  beforeJson: unknown;
+  afterJson: unknown;
+  ip: string | null;
+  userAgent: string | null;
+  createdAt: string;
+}
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
