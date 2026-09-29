@@ -40,6 +40,7 @@ import {
   RentalQuoteRequestSchema,
   RentalCreateSchema,
   RentalCancelSchema,
+  RentalCloseSchema,
 } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
@@ -52,7 +53,7 @@ import {
   computeRentalQuote,
   DEFAULT_PLATFORM_FEE_PCT,
 } from "../utils/money.js";
-import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
+import { computeRiskDecision, trustScoreToCategory, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
@@ -66,6 +67,42 @@ function daysBetween(startIso: string, endIso: string): number {
   const end = new Date(endIso + "T00:00:00Z").getTime();
   if (end <= start) throw new LegalStateError("endDate must be after startDate");
   return Math.round((end - start) / (1000 * 60 * 60 * 24));
+}
+
+async function updateUserTrustScore(userId: number): Promise<void> {
+  const stats = await db
+    .select({
+      completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
+      disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
+      cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      lateReturns: sql<number>`count(*) filter (where returned_at is not null and returned_at > (end_date::timestamp + interval '1 day'))`,
+      total: sql<number>`count(*)`,
+    })
+    .from(rentals)
+    .where(eq(rentals.renterId, userId));
+  const row = stats[0];
+  if (!row) return;
+
+  const completed = Number(row.completed ?? 0);
+  const disputed = Number(row.disputed ?? 0);
+  const late = Number(row.lateReturns ?? 0);
+  const cancelled = Number(row.cancelled ?? 0);
+
+  let score = 50;
+  score += Math.min(completed * 3, 25);
+  score -= disputed * 10;
+  score -= late * 5;
+  if (cancelled >= 3) score -= 8;
+  score = Math.max(0, Math.min(100, score));
+
+  await db
+    .update(users)
+    .set({
+      trustScore: score,
+      riskCategory: trustScoreToCategory(score),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId));
 }
 
 function generateRentalReference(): string {
@@ -84,10 +121,11 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      lateReturns: sql<number>`count(*) filter (where returned_at is not null and returned_at > (end_date::timestamp + interval '1 day'))`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, lateReturns: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +137,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.lateReturns ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -488,10 +526,7 @@ router.post(
   requirePermission("rental.close"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { outcome, penaltyHalalas } = req.body as {
-      outcome: "clean" | "penalty" | "major_damage" | "loss";
-      penaltyHalalas?: number;
-    };
+    const { outcome, penaltyHalalas } = RentalCloseSchema.parse(req.body);
 
     const [rental] = await db.select().from(rentals).where(eq(rentals.id, id)).limit(1);
     if (!rental) throw new NotFoundError("Rental");
@@ -516,6 +551,7 @@ router.post(
         entityId: id,
         after: updated,
       });
+      await updateUserTrustScore(rental.renterId);
       return res.json(updated);
     }
 
@@ -547,6 +583,7 @@ router.post(
         entityId: id,
         after: { updated, penaltyHalalas },
       });
+      await updateUserTrustScore(rental.renterId);
       return res.json(updated);
     }
 
@@ -581,6 +618,7 @@ router.post(
       entityId: id,
       after: { updated, outcome },
     });
+    await updateUserTrustScore(rental.renterId);
 
     res.json(updated);
   })

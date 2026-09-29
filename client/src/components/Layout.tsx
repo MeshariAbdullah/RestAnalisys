@@ -108,6 +108,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+          {user && !user.nafathVerified && (user.role === "renter" || user.role === "owner") && sidebarOpen && (
+            <Link href="/verify">
+              <a className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30 mb-2">
+                <Shield className="w-5 h-5 shrink-0" />
+                <span>Verify identity</span>
+              </a>
+            </Link>
+          )}
           {items.map((item) => {
             const Icon = item.icon;
             const active =
