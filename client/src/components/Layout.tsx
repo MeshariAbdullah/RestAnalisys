@@ -19,6 +19,9 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  UserCog,
+  ScrollText,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
@@ -56,6 +59,7 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit-logs", label: "Audit Logs", icon: ScrollText, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
@@ -130,6 +134,30 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
+        <div className="p-2 border-t border-neutral-800 space-y-1">
+          <Link href="/notifications">
+            <a className={cn(
+              "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+              location === "/notifications"
+                ? "bg-amber-500 text-neutral-950 font-medium"
+                : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+            )}>
+              <Bell className="w-5 h-5 shrink-0" />
+              {sidebarOpen && <span>Notifications</span>}
+            </a>
+          </Link>
+          <Link href="/profile">
+            <a className={cn(
+              "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+              location === "/profile"
+                ? "bg-amber-500 text-neutral-950 font-medium"
+                : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+            )}>
+              <UserCog className="w-5 h-5 shrink-0" />
+              {sidebarOpen && <span>Profile</span>}
+            </a>
+          </Link>
+        </div>
         <div className="p-3 border-t border-neutral-800">
           {sidebarOpen ? (
             <div className="flex items-center gap-3">

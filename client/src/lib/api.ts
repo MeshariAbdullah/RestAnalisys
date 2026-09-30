@@ -580,6 +580,113 @@ export const adminApi = {
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const profileApi = {
+  get: () => request<User & { nationalAddressJson?: Record<string, string>; createdAt: string; lastLoginAt?: string }>("/profile"),
+  update: (data: { fullName?: string; phoneE164?: string; nationalAddressJson?: Record<string, string> }) =>
+    request<User>("/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (data: { currentPassword: string; newPassword: string; confirmPassword: string }) =>
+    request<{ ok: boolean }>("/profile/change-password", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  channel: string;
+  title: string;
+  body: string;
+  category: string;
+  referenceType?: string;
+  referenceId?: number;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (limit = 30, offset = 0) =>
+    request<{ items: AppNotification[]; unread: number }>(
+      `/notifications?limit=${limit}&offset=${offset}`
+    ),
+  unreadCount: () => request<{ unread: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit Logs (admin)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AuditLogEntry {
+  id: number;
+  actorUserId?: number;
+  actorRole?: string;
+  actorName?: string;
+  action: string;
+  entityType: string;
+  entityId?: number;
+  beforeJson?: Record<string, unknown>;
+  afterJson?: Record<string, unknown>;
+  ip?: string;
+  createdAt: string;
+}
+
+export const auditLogsApi = {
+  list: (params?: { entityType?: string; action?: string; actorUserId?: number; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    if (params?.actorUserId) qs.set("actorUserId", String(params.actorUserId));
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    return request<{ items: AuditLogEntry[]; total: number; limit: number; offset: number }>(
+      `/audit-logs?${qs}`
+    );
+  },
+  forEntity: (entityType: string, entityId: number) =>
+    request<AuditLogEntry[]>(`/audit-logs/entity/${entityType}/${entityId}`),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Owner Agreements
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface OwnerAgreement {
+  id: number;
+  ownerId: number;
+  ownerName?: string;
+  version: string;
+  commissionPct: number;
+  guaranteeAccepted: boolean;
+  signedAt?: string;
+  effectiveFrom?: string;
+  effectiveUntil?: string;
+}
+
+export const agreementsApi = {
+  mine: () => request<OwnerAgreement[]>("/agreements/mine"),
+  sign: (version?: string, commissionPct?: number) =>
+    request<OwnerAgreement>("/agreements/sign", {
+      method: "POST",
+      body: JSON.stringify({ version, commissionPct }),
+    }),
+  list: () => request<OwnerAgreement[]>("/agreements"),
+};
+
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };

@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -167,6 +168,15 @@ router.post(
         after: updated,
       });
 
+      await notify({
+        userId: asset.ownerId,
+        title: "Asset ready for listing",
+        body: `Your asset "${asset.title}" valuation was accepted. It's now ready to be published.`,
+        category: "asset",
+        referenceType: "asset",
+        referenceId: id,
+      });
+
       res.json(updated);
     } else {
       await db
@@ -254,6 +264,17 @@ router.post(
       entityId: assetId,
       before: asset,
       after: updated,
+    });
+
+    await notify({
+      userId: asset.ownerId,
+      title: approved ? "Asset approved" : "Asset rejected",
+      body: approved
+        ? `Your asset "${asset.title}" has been approved. Please arrange shipment.`
+        : `Your asset "${asset.title}" was rejected: ${rejectionReason ?? "No reason given"}.`,
+      category: "asset",
+      referenceType: "asset",
+      referenceId: assetId,
     });
 
     res.json(updated);

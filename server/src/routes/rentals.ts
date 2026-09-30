@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -89,6 +90,17 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     .where(eq(rentals.renterId, userId));
   const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
 
+  const lateReturnStats = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`returned_at is not null and returned_at::date > end_date::date`
+      )
+    );
+  const lateReturns = Number(lateReturnStats[0]?.count ?? 0);
+
   const accountAgeDays = Math.max(
     0,
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
@@ -99,7 +111,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns,
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +292,15 @@ router.post(
       after: { rental, decision },
     });
 
+    await notify({
+      userId: asset.ownerId,
+      title: "New rental request",
+      body: `Your asset "${asset.title}" has been reserved (${rental.reference}).`,
+      category: "rental",
+      referenceType: "rental",
+      referenceId: rental.id,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -439,6 +460,15 @@ router.post(
       entityType: "rental",
       entityId: id,
       after: updated,
+    });
+
+    await notify({
+      userId: rental.renterId,
+      title: "Item delivered",
+      body: `Your rented item has been delivered. Enjoy your rental!`,
+      category: "rental",
+      referenceType: "rental",
+      referenceId: id,
     });
 
     res.json(updated);

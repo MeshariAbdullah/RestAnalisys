@@ -11,6 +11,10 @@
  *   /api/disputes     — dispute creation + resolution
  *   /api/operations   — shipments, inventory, alerts
  *   /api/admin        — KPIs, risk monitoring, user management
+ *   /api/profile      — user profile management + password change
+ *   /api/notifications— in-app notification feed
+ *   /api/audit-logs   — immutable audit log viewer (admin)
+ *   /api/agreements   — owner consignment agreements
  */
 
 import express from "express";
@@ -26,6 +30,10 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import profileRouter from "./routes/profile.js";
+import notificationsRouter from "./routes/notifications.js";
+import auditLogsRouter from "./routes/auditLogs.js";
+import agreementsRouter from "./routes/agreements.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 dotenv.config();
@@ -67,6 +75,10 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/profile", profileRouter);
+app.use("/api/notifications", notificationsRouter);
+app.use("/api/audit-logs", auditLogsRouter);
+app.use("/api/agreements", agreementsRouter);
 
 // 404
 app.use((req, res) => {

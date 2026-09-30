@@ -227,3 +227,54 @@ export const ShipmentUpdateSchema = z.object({
   ]),
   trackingNumber: z.string().optional(),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ProfileUpdateSchema = z.object({
+  fullName: z.string().min(2).optional(),
+  phoneE164: SaudiPhone.optional(),
+  nationalAddressJson: z
+    .object({
+      city: z.string(),
+      district: z.string(),
+      street: z.string(),
+      buildingNumber: z.string().optional(),
+      postalCode: z.string().optional(),
+      additionalCode: z.string().optional(),
+    })
+    .optional(),
+});
+
+export const PasswordChangeSchema = z
+  .object({
+    currentPassword: z.string().min(1),
+    newPassword: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string().min(1),
+  })
+  .refine((d) => d.newPassword === d.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit log query
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const AuditLogQuerySchema = z.object({
+  entityType: z.string().optional(),
+  action: z.string().optional(),
+  actorUserId: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  offset: z.coerce.number().int().nonnegative().default(0),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Owner agreements
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const OwnerAgreementSignSchema = z.object({
+  version: z.string().default("1.0"),
+  commissionPct: z.number().min(0).max(100).default(20),
+});
