@@ -21,6 +21,11 @@ type Risk = "low" | "medium" | "high" | "ultra_high";
 
 export default function InspectionForm({ assetId }: { assetId: number }) {
   const [, navigate] = useLocation();
+
+  const params = new URLSearchParams(window.location.search);
+  const isReturn = params.get("type") === "return";
+  const rentalId = params.get("rentalId") ? Number(params.get("rentalId")) : null;
+
   const [authenticityVerified, setAuthenticityVerified] = useState(true);
   const [authenticityNotes, setAuthenticityNotes] = useState("");
   const [conditionScore, setConditionScore] = useState(92);
@@ -49,7 +54,7 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
       if (!marketValueHalalas || !recommendedDailyPriceHalalas) {
         throw new Error("Market value and daily price are required");
       }
-      await inspectionsApi.createIntake({
+      const payload = {
         assetId,
         authenticityVerified,
         authenticityNotes: authenticityNotes || undefined,
@@ -59,7 +64,17 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
         marketValueHalalas,
         recommendedDailyPriceHalalas,
         riskCategory,
-      });
+      };
+
+      if (isReturn) {
+        if (!rentalId) {
+          throw new Error("rentalId is required for return inspections");
+        }
+        const { hint } = await inspectionsApi.createReturn({ ...payload, rentalId });
+        alert(hint);
+      } else {
+        await inspectionsApi.createIntake(payload);
+      }
       navigate("/inspector");
     } catch (err) {
       setError((err as Error).message ?? "Submission failed");
@@ -72,7 +87,7 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
     <div className="p-8 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-2 text-sm text-neutral-500">
         <ClipboardCheck className="w-4 h-4" />
-        Intake inspection
+        {isReturn ? "Return inspection" : "Intake inspection"}
       </div>
       <h1 className="text-3xl font-bold mb-1">
         {asset ? `${asset.brand} — ${asset.title}` : "Inspection report"}

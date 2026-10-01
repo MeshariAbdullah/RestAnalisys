@@ -19,6 +19,7 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  RotateCcw,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
@@ -46,6 +47,7 @@ const NAV: NavItem[] = [
   // Operations
   { href: "/ops", label: "Ops Dashboard", icon: LayoutDashboard, roles: ["operations"] },
   { href: "/ops/shipments", label: "Shipments", icon: Truck, roles: ["operations"] },
+  { href: "/ops/rentals", label: "Rentals", icon: RotateCcw, roles: ["operations"] },
   { href: "/ops/inventory", label: "Inventory", icon: PackageSearch, roles: ["operations"] },
   { href: "/ops/alerts", label: "Alerts", icon: AlertTriangle, roles: ["operations"] },
 
