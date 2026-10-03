@@ -13,11 +13,13 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { NotFoundError } from "../utils/errors.js";
+import { NotFoundError, LegalStateError } from "../utils/errors.js";
+import { trustScoreToCategory } from "../services/riskEngine.js";
 import { recordAudit } from "../services/auditService.js";
 
 const router = Router();
@@ -218,6 +220,143 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const entityType = req.query.entityType as string | undefined;
+    const entityId = req.query.entityId
+      ? Number(req.query.entityId)
+      : undefined;
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Number(req.query.offset) || 0;
+
+    let query = db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt));
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (entityId) conditions.push(eq(auditLogs.entityId, entityId));
+
+    const rows =
+      conditions.length > 0
+        ? await query.where(and(...conditions)).limit(limit).offset(offset)
+        : await query.limit(limit).offset(offset);
+
+    res.json(rows);
+  })
+);
+
+// ── Manual risk review: approve or reject a flagged rental ────────────────
+router.post(
+  "/risk/review/:rentalId",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const rentalId = Number(req.params.rentalId);
+    const { approved, reason } = req.body as {
+      approved: boolean;
+      reason?: string;
+    };
+
+    const [rental] = await db
+      .select()
+      .from(rentals)
+      .where(eq(rentals.id, rentalId))
+      .limit(1);
+    if (!rental) throw new NotFoundError("Rental");
+    if (rental.status !== "pending_risk_review") {
+      throw new LegalStateError(
+        `Rental not pending review (status=${rental.status})`
+      );
+    }
+
+    if (approved) {
+      const [updated] = await db
+        .update(rentals)
+        .set({ status: "pending_legal_signing", updatedAt: new Date() })
+        .where(eq(rentals.id, rentalId))
+        .returning();
+
+      await recordAudit({
+        req,
+        action: "risk_review.approve",
+        entityType: "rental",
+        entityId: rentalId,
+        after: updated,
+      });
+
+      return res.json(updated);
+    }
+
+    const [updated] = await db
+      .update(rentals)
+      .set({
+        status: "cancelled",
+        cancelledAt: new Date(),
+        cancellationReason: reason ?? "Rejected during manual risk review",
+        updatedAt: new Date(),
+      })
+      .where(eq(rentals.id, rentalId))
+      .returning();
+
+    await db
+      .update(assets)
+      .set({ status: "listed", updatedAt: new Date() })
+      .where(eq(assets.id, rental.assetId));
+
+    await recordAudit({
+      req,
+      action: "risk_review.reject",
+      entityType: "rental",
+      entityId: rentalId,
+      after: { updated, reason },
+    });
+
+    res.json(updated);
+  })
+);
+
+// ── Update a user's trust score ───────────────────────────────────────────
+router.post(
+  "/users/:id/trust-score",
+  authenticate,
+  requirePermission("user.block"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const id = Number(req.params.id);
+    const { trustScore } = req.body as { trustScore: number };
+    if (trustScore < 0 || trustScore > 100) {
+      throw new LegalStateError("Trust score must be between 0 and 100");
+    }
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const riskCategory = trustScoreToCategory(trustScore);
+    const [updated] = await db
+      .update(users)
+      .set({ trustScore, riskCategory, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+
+    await recordAudit({
+      req,
+      action: "user.trust_score_update",
+      entityType: "user",
+      entityId: id,
+      before: { trustScore: user.trustScore, riskCategory: user.riskCategory },
+      after: { trustScore, riskCategory },
+    });
+
+    res.json(updated);
   })
 );
 

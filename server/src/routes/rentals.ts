@@ -20,7 +20,7 @@
  */
 
 import { Router } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   assets,
@@ -52,7 +52,7 @@ import {
   computeRentalQuote,
   DEFAULT_PLATFORM_FEE_PCT,
 } from "../utils/money.js";
-import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
+import { computeRiskDecision, trustScoreToCategory, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
@@ -89,6 +89,18 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     .where(eq(rentals.renterId, userId));
   const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
 
+  const lateReturnRows = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        inArray(rentals.status, ["closed", "closed_with_penalty"]),
+        sql`returned_at > (end_date::timestamp + interval '1 day')`
+      )
+    );
+  const lateReturns = Number(lateReturnRows[0]?.count ?? 0);
+
   const accountAgeDays = Math.max(
     0,
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
@@ -99,7 +111,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns,
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -109,6 +121,17 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     userRole: user.role,
     countryIsSaudi: true,
   };
+}
+
+async function updateTrustScore(renterId: number, outcomeModifier: number): Promise<void> {
+  const [user] = await db.select().from(users).where(eq(users.id, renterId)).limit(1);
+  if (!user) return;
+  const newScore = Math.max(0, Math.min(100, user.trustScore + outcomeModifier));
+  const riskCategory = trustScoreToCategory(newScore);
+  await db
+    .update(users)
+    .set({ trustScore: newScore, riskCategory, updatedAt: new Date() })
+    .where(eq(users.id, renterId));
 }
 
 // ── Quote (no side effects) ─────────────────────────────────────────────────
@@ -201,7 +224,7 @@ router.post(
         assetId: asset.id,
         renterId,
         ownerId: asset.ownerId,
-        status: "pending_legal_signing",
+        status: decision.requiresReview ? "pending_risk_review" : "pending_legal_signing",
         startDate: input.startDate,
         endDate: input.endDate,
         durationDays,
@@ -509,6 +532,7 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await updateTrustScore(rental.renterId, +3);
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -540,6 +564,7 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await updateTrustScore(rental.renterId, -5);
       await recordAudit({
         req,
         action: "rental.close_penalty",
@@ -574,6 +599,7 @@ router.post(
       payloadJson: { outcome, rentalId: id },
     });
 
+    await updateTrustScore(rental.renterId, -15);
     await recordAudit({
       req,
       action: "rental.close_enforcement",
