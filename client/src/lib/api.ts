@@ -242,6 +242,18 @@ export interface AdminKPIs {
 // Auth
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  entityType?: string;
+  entityId?: number;
+  readAt?: string;
+  createdAt: string;
+}
+
 export const authApi = {
   login: (email: string, password: string) =>
     request<{ token: string; user: User }>("/auth/login", {
@@ -258,6 +270,16 @@ export const authApi = {
     request<{ transactionId: string; status: string }>("/auth/nafath/initiate", {
       method: "POST",
       body: JSON.stringify({ nationalId }),
+    }),
+  updateProfile: (data: { fullName?: string; phoneE164?: string }) =>
+    request<{ id: number; email: string; fullName: string; phoneE164?: string }>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ message: string }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
     }),
 };
 
@@ -578,6 +600,25 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notificationsApi = {
+  list: (opts?: { unread?: boolean; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (opts?.unread) qs.set("unread", "true");
+    if (opts?.limit) qs.set("limit", String(opts.limit));
+    return request<{ notifications: Notification[]; unreadCount: number }>(
+      `/notifications?${qs}`
+    );
+  },
+  markRead: (id: number) =>
+    request<{ ok: boolean }>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
 };
 
 export const healthApi = {

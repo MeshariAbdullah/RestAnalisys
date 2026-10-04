@@ -4,6 +4,7 @@
 
 import { Router } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 import { db } from "../db/index.js";
 import {
   users,
@@ -17,7 +18,8 @@ import {
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { NotFoundError } from "../utils/errors.js";
+import { StaffCreateSchema } from "../utils/schemas.js";
+import { NotFoundError, ConflictError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
 
 const router = Router();
@@ -178,18 +180,23 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
-      email: string;
-      fullName: string;
-      role: "admin" | "operations" | "inspector";
-      passwordHash: string;
-    };
+    const input = StaffCreateSchema.parse(req.body);
+    const existing = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, input.email))
+      .limit(1);
+    if (existing.length > 0) {
+      throw new ConflictError("Email already registered");
+    }
+
+    const passwordHash = await bcrypt.hash(input.password, 10);
     const [user] = await db
       .insert(users)
       .values({
-        email,
-        fullName,
-        role,
+        email: input.email,
+        fullName: input.fullName,
+        role: input.role,
         passwordHash,
         nafathVerified: true,
         kycStatus: "verified",
@@ -200,9 +207,14 @@ router.post(
       action: "user.create_staff",
       entityType: "user",
       entityId: user.id,
-      after: { email, role },
+      after: { email: input.email, role: input.role },
     });
-    res.status(201).json(user);
+    res.status(201).json({
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+    });
   })
 );
 
