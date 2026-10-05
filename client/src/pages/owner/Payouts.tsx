@@ -64,7 +64,7 @@ export default function Payouts() {
                   </p>
                   <Badge
                     className={
-                      p.status === "released"
+                      p.status === "paid"
                         ? "bg-green-100 text-green-700"
                         : "bg-amber-100 text-amber-800"
                     }

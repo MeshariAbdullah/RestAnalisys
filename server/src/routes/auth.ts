@@ -14,11 +14,15 @@ import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
+import { rateLimit } from "../middleware/rateLimiter.js";
 
 const router = Router();
 
+const authRateLimit = rateLimit(10, 15 * 60 * 1000);
+
 router.post(
   "/register",
+  authRateLimit,
   asyncHandler(async (req, res) => {
     const input = RegisterSchema.parse(req.body);
 
@@ -77,6 +81,7 @@ router.post(
 
 router.post(
   "/login",
+  authRateLimit,
   asyncHandler(async (req, res) => {
     const { email, password } = LoginSchema.parse(req.body);
     const [user] = await db
@@ -156,6 +161,49 @@ router.post(
     return res.json({
       transactionId: result.transactionId,
       status: result.status,
+    });
+  })
+);
+
+router.patch(
+  "/profile",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const { fullName, phone } = req.body as {
+      fullName?: string;
+      phone?: string;
+    };
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (fullName && fullName.length >= 2) updates.fullName = fullName;
+    if (phone) updates.phoneE164 = phone;
+
+    const [updated] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning();
+
+    await recordAudit({
+      req,
+      action: "auth.profile.update",
+      entityType: "user",
+      entityId: userId,
+      after: updates,
+    });
+
+    return res.json({
+      id: updated.id,
+      email: updated.email,
+      fullName: updated.fullName,
+      role: updated.role,
+      phoneE164: updated.phoneE164,
+      nationalId: updated.nationalId,
+      nafathVerified: updated.nafathVerified,
+      kycStatus: updated.kycStatus,
+      trustScore: updated.trustScore,
+      riskCategory: updated.riskCategory,
     });
   })
 );

@@ -19,8 +19,12 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  UserCircle,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import type { Role, User } from "@/lib/api";
+import { notificationsApi } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
 
 interface NavItem {
@@ -67,6 +71,40 @@ function roleLabel(role: Role): string {
     admin: "Admin",
     super_admin: "Super Admin",
   }[role];
+}
+
+function TopBar({ user }: { user: User | null }) {
+  const { data } = useQuery({
+    queryKey: ["unread-count"],
+    queryFn: () => notificationsApi.unreadCount(),
+    enabled: !!user,
+    refetchInterval: 30_000,
+  });
+  const count = data?.count ?? 0;
+
+  return (
+    <div className="h-12 border-b bg-white flex items-center justify-end gap-2 px-4 shrink-0">
+      {user && (
+        <>
+          <Link href="/notifications">
+            <a className="relative p-2 rounded-lg hover:bg-neutral-100 transition-colors text-neutral-600">
+              <Bell className="w-5 h-5" />
+              {count > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {count > 9 ? "9+" : count}
+                </span>
+              )}
+            </a>
+          </Link>
+          <Link href="/profile">
+            <a className="p-2 rounded-lg hover:bg-neutral-100 transition-colors text-neutral-600">
+              <UserCircle className="w-5 h-5" />
+            </a>
+          </Link>
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -162,7 +200,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <TopBar user={user} />
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
     </div>
   );
 }
