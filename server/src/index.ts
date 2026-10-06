@@ -26,12 +26,18 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import notificationsRouter from "./routes/notifications.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { authLimiter, apiLimiter, publicLimiter } from "./middleware/rateLimiter.js";
+import { requestIdMiddleware, requestLogger } from "./middleware/requestId.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = parseInt(process.env.PORT ?? "3001");
+
+app.use(requestIdMiddleware);
+app.use(requestLogger);
 
 app.use(
   cors({
@@ -43,11 +49,11 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Health
-app.get("/api/health", (_req, res) => {
+app.get("/api/health", publicLimiter, (_req, res) => {
   res.json({
     ok: true,
     service: "mlr-platform",
-    version: "1.0.0",
+    version: "1.1.0",
     integrations: {
       nafath: !!process.env.NAFATH_API_KEY,
       nafith: !!process.env.NAFITH_API_KEY,
@@ -58,15 +64,16 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.use("/api/auth", authRouter);
-app.use("/api/assets", assetsRouter);
-app.use("/api/inspections", inspectionsRouter);
-app.use("/api/rentals", rentalsRouter);
-app.use("/api/legal", legalRouter);
-app.use("/api/payments", paymentsRouter);
-app.use("/api/disputes", disputesRouter);
-app.use("/api/operations", operationsRouter);
-app.use("/api/admin", adminRouter);
+app.use("/api/auth", authLimiter, authRouter);
+app.use("/api/assets", apiLimiter, assetsRouter);
+app.use("/api/inspections", apiLimiter, inspectionsRouter);
+app.use("/api/rentals", apiLimiter, rentalsRouter);
+app.use("/api/legal", apiLimiter, legalRouter);
+app.use("/api/payments", apiLimiter, paymentsRouter);
+app.use("/api/disputes", apiLimiter, disputesRouter);
+app.use("/api/operations", apiLimiter, operationsRouter);
+app.use("/api/admin", apiLimiter, adminRouter);
+app.use("/api/notifications", apiLimiter, notificationsRouter);
 
 // 404
 app.use((req, res) => {
