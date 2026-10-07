@@ -24,8 +24,11 @@ or full compensation equal to its evaluated value, backed by a Nafith Sanad
 - **VAT 15%** computed and stored on every rental
 - **RBAC** with a declarative permission matrix
 - **Immutable audit logging** of every material action
+- **Bilingual notifications** (EN/AR) via email/SMS stubs, ready for production
+- **Security hardened**: helmet, rate limiting (auth, payments, general), request logging
 - **State machines** via Postgres enums for assets, rentals, Sanads, shipments,
   payments and disputes
+- **Test suite**: vitest unit tests for risk engine, money arithmetic, and RBAC
 
 ---
 
@@ -85,13 +88,13 @@ Password for all: `Mlr@2024!`
 
 | Role         | Email              |
 | ------------ | ------------------ |
-| super_admin  | admin@mlr.sa       |
-| admin        | admin2@mlr.sa      |
+| super_admin  | super@mlr.sa       |
+| admin        | admin@mlr.sa       |
 | inspector    | inspector@mlr.sa   |
 | operations   | ops@mlr.sa         |
-| owner        | owner@demo.sa      |
-| renter       | renter@demo.sa     |
-| new renter   | newbie@demo.sa     |
+| owner        | owner@mlr.sa       |
+| renter       | renter@mlr.sa      |
+| new renter   | new.renter@mlr.sa  |
 
 ---
 
@@ -101,13 +104,14 @@ Every third-party integration has a dev-mode stub that returns plausible
 data with zero external calls. Drop real credentials into `.env` to switch to
 production mode.
 
-| Service         | Stub file                              | Env keys                          |
-| --------------- | -------------------------------------- | --------------------------------- |
-| Nafath ID       | `server/src/services/nafathService.ts` | `NAFATH_API_BASE`, `NAFATH_API_KEY` |
-| Nafith Sanad    | `server/src/services/nafithService.ts` | `NAFITH_API_BASE`, `NAFITH_API_KEY` |
-| Payment gateway | `server/src/services/paymentService.ts`| `PAYMENT_GATEWAY_*`               |
-| ZATCA invoicing | `server/src/services/paymentService.ts`| `ZATCA_API_*`                     |
-| National Address| (planned)                              | `SPL_API_KEY`                     |
+| Service            | Stub file                                       | Env keys                          |
+| ------------------ | ----------------------------------------------- | --------------------------------- |
+| Nafath ID          | `server/src/services/nafathService.ts`           | `NAFATH_API_BASE`, `NAFATH_API_KEY` |
+| Nafith Sanad       | `server/src/services/nafithService.ts`           | `NAFITH_API_BASE`, `NAFITH_API_KEY` |
+| Payment gateway    | `server/src/services/paymentService.ts`          | `PAYMENT_GATEWAY_*`               |
+| ZATCA invoicing    | `server/src/services/paymentService.ts`          | `ZATCA_API_*`                     |
+| Notifications      | `server/src/services/notificationService.ts`     | `SMTP_HOST`, `SMS_API_KEY`        |
+| National Address   | (planned)                                        | `SPL_API_KEY`                     |
 
 ---
 
@@ -132,6 +136,7 @@ production mode.
 | `npm run db:generate` | Drizzle-kit generate a new migration           |
 | `npm run db:migrate`  | Apply migrations to `DATABASE_URL`             |
 | `npm run db:seed`     | Seed the database with demo data               |
+| `npm run test`        | Run server unit tests (vitest)                 |
 
 ---
 
