@@ -119,7 +119,7 @@ export const OwnerValuationResponseSchema = z.object({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const RentalQuoteRequestSchema = z.object({
-  assetId: z.number().int().positive(),
+  assetId: z.coerce.number().int().positive(),
   startDate: IsoDate,
   endDate: IsoDate,
 });
@@ -226,4 +226,48 @@ export const ShipmentUpdateSchema = z.object({
     "returned",
   ]),
   trackingNumber: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const CreateStaffUserSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  fullName: z.string().min(2),
+  role: z.enum(["admin", "operations", "inspector"]),
+});
+
+export const BlockUserSchema = z.object({
+  block: z.boolean(),
+  reason: z.string().optional(),
+});
+
+export const AssignDisputeSchema = z.object({
+  assigneeUserId: z.number().int().positive(),
+});
+
+export const RentalCloseSchema = z.object({
+  outcome: z.enum(["clean", "penalty", "major_damage", "loss"]),
+  penaltyHalalas: HalalasAmount.optional(),
+});
+
+export const ValuationResponseSchema = z.object({
+  approved: z.boolean(),
+  rejectionReason: z.string().optional(),
+});
+
+export const AssetReceivedSchema = z.object({
+  warehouseLocationCode: z.string().min(1),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const UpdateProfileSchema = z.object({
+  fullName: z.string().min(2).optional(),
+  phone: SaudiPhone.optional(),
+  nationalAddressJson: z.record(z.any()).optional(),
 });

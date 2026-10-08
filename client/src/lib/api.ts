@@ -254,6 +254,11 @@ export const authApi = {
       body: JSON.stringify({ email, password, fullName, role }),
     }),
   me: () => request<User>("/auth/me"),
+  updateProfile: (data: { fullName?: string; phone?: string; nationalAddressJson?: Record<string, unknown> }) =>
+    request<User>("/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
   nafathVerify: (nationalId: string) =>
     request<{ transactionId: string; status: string }>("/auth/nafath/initiate", {
       method: "POST",
@@ -548,6 +553,10 @@ export const operationsApi = {
     request<Array<{ id: number; title: string; brand: string; status: string }>>(
       "/operations/inventory"
     ),
+  inventoryMovements: (assetId: number) =>
+    request<Array<{ id: number; fromLocation: string; toLocation: string; reason: string; createdAt: string }>>(
+      `/operations/inventory/${assetId}/movements`
+    ),
   alerts: () =>
     request<Array<{ id: number; type: string; severity: string; message: string; status: string; createdAt: string }>>(
       "/operations/alerts"
@@ -560,6 +569,19 @@ export const operationsApi = {
 // Admin
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface AuditLog {
+  id: number;
+  actorUserId: number | null;
+  actorRole: string | null;
+  action: string;
+  entityType: string;
+  entityId: number | null;
+  beforeJson: unknown;
+  afterJson: unknown;
+  ip: string | null;
+  createdAt: string;
+}
+
 export const adminApi = {
   kpis: () => request<AdminKPIs>("/admin/kpis"),
   revenueTrend: () =>
@@ -571,6 +593,11 @@ export const adminApi = {
     const qs = role ? `?role=${role}` : "";
     return request<User[]>(`/admin/users${qs}`);
   },
+  createStaffUser: (data: { email: string; password: string; fullName: string; role: "admin" | "operations" | "inspector" }) =>
+    request<User>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   blockUser: (id: number, block: boolean, reason?: string) =>
     request<User>(`/admin/users/${id}/block`, {
       method: "POST",
@@ -578,6 +605,16 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: { entityType?: string; entityId?: number; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.entityId) qs.set("entityId", String(params.entityId));
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    return request<{ items: AuditLog[]; count: number; offset: number; limit: number }>(
+      `/admin/audit-logs?${qs}`
+    );
+  },
 };
 
 export const healthApi = {

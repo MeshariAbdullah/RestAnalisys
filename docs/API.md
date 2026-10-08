@@ -23,6 +23,7 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | POST   | `/login`             | public          | Email + password → JWT                 |
 | POST   | `/nafath/initiate`   | authenticated   | Begin Nafath identity verification     |
 | GET    | `/me`                | authenticated   | Current user profile                   |
+| PATCH  | `/me`                | authenticated   | Update profile (fullName, phone, address) |
 
 ## Assets — `/api/assets`
 
@@ -47,6 +48,7 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | GET    | `/queue`           | inspector / admin       | Queue of assets awaiting inspection |
 | POST   | `/intake`          | inspector               | Submit an intake inspection report  |
 | POST   | `/return`          | inspector               | Submit a return inspection report   |
+| GET    | `/:id`             | inspector / admin / ops | View a single inspection            |
 | GET    | `/asset/:assetId`  | inspector / admin / ops | All inspections for an asset        |
 
 ## Rentals — `/api/rentals`
@@ -61,7 +63,7 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | POST   | `/:id/fulfill`   | operations               | Move rental into fulfillment                     |
 | POST   | `/:id/delivered` | operations               | Confirm delivery to renter                       |
 | POST   | `/:id/returned`  | operations               | Confirm return received                          |
-| POST   | `/:id/close`     | admin / super_admin      | Close with outcome (`clean`/`penalty`/`major_damage`/`loss`) |
+| POST   | `/:id/close`     | operations / admin / super_admin | Close with outcome (`clean`/`penalty`/`major_damage`/`loss`) |
 | POST   | `/:id/cancel`    | renter / admin           | Cancel a rental with reason                      |
 
 ## Legal & Sanad — `/api/legal`
@@ -117,7 +119,8 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | GET    | `/risk/recent`        | admin / super_admin   | Recent risk engine decisions           |
 | GET    | `/users`              | admin / super_admin   | All users (filter by role)             |
 | POST   | `/users/:id/block`    | admin / super_admin   | Block or unblock a user                |
-| POST   | `/users`              | super_admin           | Create staff users                     |
+| POST   | `/users`              | super_admin           | Create staff users (password hashed server-side) |
+| GET    | `/audit-logs`         | admin / super_admin   | Audit log viewer (filter by entityType, entityId) |
 
 ## Health
 
