@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
@@ -19,9 +19,12 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  CheckCheck,
 } from "lucide-react";
-import type { Role, User } from "@/lib/api";
-import { clearSession, getCurrentUser } from "@/lib/auth";
+import type { Role, User, Notification } from "@/lib/api";
+import { notificationsApi } from "@/lib/api";
+import { clearSession, getCurrentUser, isAuthenticated } from "@/lib/auth";
 
 interface NavItem {
   href: string;
@@ -69,12 +72,123 @@ function roleLabel(role: Role): string {
   }[role];
 }
 
+function NotificationBell() {
+  const [unread, setUnread] = useState(0);
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<Notification[]>([]);
+
+  useEffect(() => {
+    if (!isAuthenticated()) return;
+    notificationsApi.unreadCount().then((r) => setUnread(r.count)).catch(() => {});
+    const interval = setInterval(() => {
+      notificationsApi.unreadCount().then((r) => setUnread(r.count)).catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  async function togglePanel() {
+    if (!open) {
+      try {
+        const res = await notificationsApi.list({ limit: 15 });
+        setItems(res.items);
+      } catch {}
+    }
+    setOpen(!open);
+  }
+
+  async function handleMarkAllRead() {
+    try {
+      await notificationsApi.markAllRead();
+      setUnread(0);
+      setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch {}
+  }
+
+  async function handleMarkRead(id: number) {
+    try {
+      await notificationsApi.markRead(id);
+      setUnread((c) => Math.max(0, c - 1));
+      setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    } catch {}
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={togglePanel}
+        className="relative p-2 rounded-lg hover:bg-neutral-100 transition-colors"
+        title="Notifications"
+      >
+        <Bell className="w-5 h-5 text-neutral-600" />
+        {unread > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
+            {unread > 99 ? "99+" : unread}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-2 w-96 max-h-[480px] bg-white border border-neutral-200 rounded-xl shadow-xl z-50 overflow-hidden">
+            <div className="flex items-center justify-between p-3 border-b border-neutral-100">
+              <h3 className="font-semibold text-sm">Notifications</h3>
+              {unread > 0 && (
+                <button
+                  onClick={handleMarkAllRead}
+                  className="text-xs text-amber-600 hover:underline flex items-center gap-1"
+                >
+                  <CheckCheck className="w-3.5 h-3.5" />
+                  Mark all read
+                </button>
+              )}
+            </div>
+            <div className="overflow-y-auto max-h-[420px]">
+              {items.length === 0 ? (
+                <div className="p-8 text-center text-sm text-neutral-400">
+                  No notifications yet
+                </div>
+              ) : (
+                items.map((n) => (
+                  <div
+                    key={n.id}
+                    onClick={() => !n.read && handleMarkRead(n.id)}
+                    className={cn(
+                      "px-4 py-3 border-b border-neutral-50 cursor-pointer hover:bg-neutral-50 transition-colors",
+                      !n.read && "bg-amber-50/40"
+                    )}
+                  >
+                    <div className="flex items-start gap-2">
+                      {!n.read && (
+                        <span className="w-2 h-2 bg-amber-500 rounded-full mt-1.5 shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{n.title}</p>
+                        <p className="text-xs text-neutral-500 mt-0.5 line-clamp-2">
+                          {n.body}
+                        </p>
+                        <p className="text-[10px] text-neutral-400 mt-1">
+                          {new Date(n.createdAt).toLocaleString("en-SA")}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const user: User | null = getCurrentUser();
 
-  const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
+  const navItems = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
 
   function handleLogout() {
     clearSession();
@@ -108,7 +222,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-          {items.map((item) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
             const active =
               location === item.href || location.startsWith(item.href + "/");
@@ -162,7 +276,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="flex-1 overflow-auto">
+        <div className="flex justify-end items-center px-6 py-3 border-b border-neutral-200 bg-white">
+          <NotificationBell />
+        </div>
+        {children}
+      </main>
     </div>
   );
 }

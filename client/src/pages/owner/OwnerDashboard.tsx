@@ -1,11 +1,19 @@
 import React from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Diamond, Plus, TrendingUp, Package, Wallet } from "lucide-react";
+import {
+  Diamond,
+  Plus,
+  TrendingUp,
+  Package,
+  Wallet,
+  BarChart3,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { assetsApi, paymentsApi, formatSar, type Asset } from "@/lib/api";
+import { statsApi, assetsApi, formatSar, type Asset } from "@/lib/api";
+import { getAssetStatusLabel } from "@/lib/utils";
 
 function statusColor(s: string): string {
   if (s === "listed" || s === "rented_out") return "bg-green-100 text-green-700";
@@ -15,28 +23,22 @@ function statusColor(s: string): string {
 }
 
 export default function OwnerDashboard() {
+  const statsQuery = useQuery({
+    queryKey: ["owner-stats"],
+    queryFn: () => statsApi.owner(),
+  });
+
   const assetsQuery = useQuery({
     queryKey: ["assets-mine"],
     queryFn: () => assetsApi.mine(),
   });
 
-  const payoutsQuery = useQuery({
-    queryKey: ["my-payouts"],
-    queryFn: () => paymentsApi.myPayouts(),
-  });
-
+  const stats = statsQuery.data;
   const assets = assetsQuery.data ?? [];
-  const totalValue = assets.reduce(
-    (sum, a) => sum + (a.evaluatedValueHalalas ?? 0),
-    0
-  );
-  const activeCount = assets.filter(
-    (a) => a.status === "listed" || a.status === "rented_out"
-  ).length;
-  const totalPayouts = (payoutsQuery.data ?? []).reduce(
-    (sum, p) => sum + Number(p.netHalalas ?? 0),
-    0
-  );
+
+  const activeCount = stats?.listedAssets ?? 0;
+  const totalAssets = stats?.totalAssets ?? assets.length;
+  const totalEarnings = stats?.earnings.totalNetHalalas ?? 0;
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -55,7 +57,7 @@ export default function OwnerDashboard() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-2 text-neutral-500 text-sm">
@@ -64,7 +66,19 @@ export default function OwnerDashboard() {
             </div>
             <p className="text-3xl font-bold">{activeCount}</p>
             <p className="text-xs text-neutral-500 mt-1">
-              of {assets.length} total
+              of {totalAssets} total
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3 mb-2 text-neutral-500 text-sm">
+              <BarChart3 className="w-4 h-4" />
+              Rented out
+            </div>
+            <p className="text-3xl font-bold">{stats?.rentedAssets ?? 0}</p>
+            <p className="text-xs text-neutral-500 mt-1">
+              {stats?.rentals.active ?? 0} active rentals
             </p>
           </CardContent>
         </Card>
@@ -72,19 +86,23 @@ export default function OwnerDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-2 text-neutral-500 text-sm">
               <TrendingUp className="w-4 h-4" />
-              Portfolio value
+              Net earnings
             </div>
-            <p className="text-3xl font-bold">{formatSar(totalValue)}</p>
-            <p className="text-xs text-neutral-500 mt-1">Sum of evaluations</p>
+            <p className="text-3xl font-bold">{formatSar(totalEarnings)}</p>
+            <p className="text-xs text-neutral-500 mt-1">
+              {stats?.earnings.totalCommissionHalalas
+                ? `${formatSar(stats.earnings.totalCommissionHalalas)} commission`
+                : "After platform fees"}
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-2 text-neutral-500 text-sm">
               <Wallet className="w-4 h-4" />
-              Lifetime payouts
+              Pending payouts
             </div>
-            <p className="text-3xl font-bold">{formatSar(totalPayouts)}</p>
+            <p className="text-3xl font-bold">{stats?.pendingPayouts ?? 0}</p>
             <Link href="/owner/payouts">
               <a className="text-xs text-amber-600 hover:underline mt-1 inline-block">
                 View payout history →
@@ -93,6 +111,56 @@ export default function OwnerDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {stats?.assetsByStatus && stats.assetsByStatus.length > 0 && (
+        <Card className="mb-8">
+          <CardContent className="p-6">
+            <h3 className="text-sm font-semibold mb-3">Assets by status</h3>
+            <div className="flex flex-wrap gap-2">
+              {stats.assetsByStatus.map((s) => (
+                <Badge
+                  key={s.status}
+                  variant="outline"
+                  className="text-sm py-1 px-3"
+                >
+                  {getAssetStatusLabel(s.status)}{" "}
+                  <span className="font-bold ml-1">{s.count}</span>
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {stats?.recentRentals && stats.recentRentals.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-xl font-bold mb-4">Recent rentals</h2>
+          <div className="space-y-3">
+            {stats.recentRentals.map((r) => (
+              <Card key={r.id}>
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div>
+                    <p className="font-mono text-xs text-neutral-500">
+                      {r.reference}
+                    </p>
+                    <p className="text-sm font-medium mt-0.5">
+                      {r.startDate} → {r.endDate}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline">
+                      {r.status.replace(/_/g, " ")}
+                    </Badge>
+                    <span className="font-semibold text-sm">
+                      {formatSar(r.totalPayableHalalas)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       <h2 className="text-xl font-bold mb-4">My assets</h2>
       {assetsQuery.isLoading ? (
@@ -133,7 +201,7 @@ export default function OwnerDashboard() {
                         asset.status
                       )}`}
                     >
-                      {asset.status.replace(/_/g, " ")}
+                      {getAssetStatusLabel(asset.status)}
                     </Badge>
                   </div>
                   <CardContent className="p-4">

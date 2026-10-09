@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -280,6 +281,15 @@ router.post(
       after: { rental, decision },
     });
 
+    await notify({
+      userId: asset.ownerId,
+      title: "New rental request",
+      body: `Your asset "${asset.title}" has been reserved for rental ${rental.reference}.`,
+      category: "rental_update",
+      entityType: "rental",
+      entityId: rental.id,
+    });
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -441,6 +451,15 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: rental.renterId,
+      title: "Item delivered",
+      body: `Your rental ${rental.reference} has been delivered. Enjoy!`,
+      category: "rental_update",
+      entityType: "rental",
+      entityId: id,
+    });
+
     res.json(updated);
   })
 );
@@ -515,6 +534,22 @@ router.post(
         entityType: "rental",
         entityId: id,
         after: updated,
+      });
+      await notify({
+        userId: rental.renterId,
+        title: "Rental completed",
+        body: `Your rental ${rental.reference} has been closed successfully.`,
+        category: "rental_update",
+        entityType: "rental",
+        entityId: id,
+      });
+      await notify({
+        userId: rental.ownerId,
+        title: "Asset returned",
+        body: `Rental ${rental.reference} closed. Your asset is back in the catalog.`,
+        category: "rental_update",
+        entityType: "rental",
+        entityId: id,
       });
       return res.json(updated);
     }

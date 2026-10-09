@@ -585,6 +585,122 @@ export const healthApi = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id: number;
+  userId: number;
+  channel: string;
+  title: string;
+  body: string;
+  category: string;
+  severity: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (opts?: { unread?: boolean; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (opts?.unread) qs.set("unread", "true");
+    if (opts?.limit) qs.set("limit", String(opts.limit));
+    if (opts?.offset) qs.set("offset", String(opts.offset));
+    return request<{ items: Notification[]; total: number }>(`/notifications?${qs}`);
+  },
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<{ ok: boolean }>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ marked: number }>("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stats (role-specific dashboard data)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface OwnerStats {
+  totalAssets: number;
+  listedAssets: number;
+  rentedAssets: number;
+  assetsByStatus: Array<{ status: string; count: number }>;
+  earnings: {
+    totalGrossHalalas: number;
+    totalNetHalalas: number;
+    totalCommissionHalalas: number;
+  };
+  pendingPayouts: number;
+  rentals: { total: number; active: number; completed: number };
+  recentRentals: Array<{
+    id: number;
+    reference: string;
+    status: string;
+    startDate: string;
+    endDate: string;
+    totalPayableHalalas: number;
+    createdAt: string;
+  }>;
+}
+
+export interface RenterStats {
+  rentals: { total: number; active: number; completed: number; pending: number };
+  totalSpentHalalas: number;
+  openDisputes: number;
+  activeRentals: Array<{
+    id: number;
+    reference: string;
+    status: string;
+    assetId: number;
+    startDate: string;
+    endDate: string;
+    totalPayableHalalas: number;
+  }>;
+}
+
+export interface InspectorStats {
+  totalInspections: number;
+  thisMonth: number;
+  intakeCount: number;
+  returnCount: number;
+  pendingQueue: number;
+  recentInspections: Array<{
+    id: number;
+    assetId: number;
+    type: string;
+    conditionGrade?: string;
+    conditionScore?: number;
+    authenticityVerified: boolean;
+    createdAt: string;
+  }>;
+}
+
+export const statsApi = {
+  owner: () => request<OwnerStats>("/stats/owner"),
+  renter: () => request<RenterStats>("/stats/renter"),
+  inspector: () => request<InspectorStats>("/stats/inspector"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const profileApi = {
+  update: (data: { fullName?: string; phone?: string }) =>
+    request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Money helpers (frontend copies of the backend constants)
 // ─────────────────────────────────────────────────────────────────────────────
 

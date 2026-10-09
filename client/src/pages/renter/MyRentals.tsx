@@ -1,27 +1,33 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Package, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import {
+  Package,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  Wallet,
+  BarChart3,
+  Gavel,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { rentalsApi, formatSar, type Rental } from "@/lib/api";
+import { rentalsApi, statsApi, formatSar, type Rental } from "@/lib/api";
+import { getRentalStatusLabel } from "@/lib/utils";
 
 const STATUS_META: Record<string, { color: string; icon: typeof Clock }> = {
   draft: { color: "bg-neutral-200 text-neutral-700", icon: Clock },
   pending_payment: { color: "bg-amber-100 text-amber-800", icon: Clock },
+  pending_risk_review: { color: "bg-amber-100 text-amber-800", icon: Clock },
+  pending_legal_signing: { color: "bg-amber-100 text-amber-800", icon: Clock },
   confirmed: { color: "bg-blue-100 text-blue-700", icon: CheckCircle },
-  in_fulfillment: { color: "bg-blue-100 text-blue-700", icon: Package },
   out_for_delivery: { color: "bg-blue-100 text-blue-700", icon: Package },
-  delivered: { color: "bg-green-100 text-green-700", icon: CheckCircle },
-  in_use: { color: "bg-green-100 text-green-700", icon: CheckCircle },
-  awaiting_return: { color: "bg-amber-100 text-amber-800", icon: Clock },
-  returned: { color: "bg-green-100 text-green-700", icon: CheckCircle },
-  inspection_post_return: {
-    color: "bg-amber-100 text-amber-800",
-    icon: Clock,
-  },
-  closed_clean: { color: "bg-green-100 text-green-700", icon: CheckCircle },
+  active: { color: "bg-green-100 text-green-700", icon: CheckCircle },
+  return_in_transit: { color: "bg-amber-100 text-amber-800", icon: Package },
+  under_inspection: { color: "bg-amber-100 text-amber-800", icon: Clock },
+  closed: { color: "bg-green-100 text-green-700", icon: CheckCircle },
   closed_with_penalty: { color: "bg-red-100 text-red-700", icon: AlertCircle },
-  disputed: { color: "bg-red-100 text-red-700", icon: AlertCircle },
+  in_dispute: { color: "bg-red-100 text-red-700", icon: AlertCircle },
+  enforcement: { color: "bg-red-100 text-red-700", icon: AlertCircle },
   cancelled: { color: "bg-neutral-200 text-neutral-600", icon: AlertCircle },
 };
 
@@ -31,7 +37,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <Badge className={`${meta.color} hover:${meta.color} border-0`}>
       <Icon className="w-3 h-3 mr-1" />
-      {status.replace(/_/g, " ")}
+      {getRentalStatusLabel(status)}
     </Badge>
   );
 }
@@ -42,12 +48,64 @@ export default function MyRentals() {
     queryFn: () => rentalsApi.mine(),
   });
 
+  const statsQuery = useQuery({
+    queryKey: ["renter-stats"],
+    queryFn: () => statsApi.renter(),
+  });
+
+  const stats = statsQuery.data;
+
   return (
     <div className="p-8 max-w-5xl mx-auto">
       <h1 className="text-3xl font-bold mb-2">My rentals</h1>
       <p className="text-neutral-500 mb-8">
         Track contracts, shipments and returns.
       </p>
+
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <Card>
+            <CardContent className="p-5">
+              <div className="flex items-center gap-2 mb-1 text-neutral-500 text-xs">
+                <BarChart3 className="w-3.5 h-3.5" />
+                Total rentals
+              </div>
+              <p className="text-2xl font-bold">{stats.rentals.total}</p>
+              <p className="text-[11px] text-neutral-500">
+                {stats.rentals.active} active · {stats.rentals.completed} completed
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <div className="flex items-center gap-2 mb-1 text-neutral-500 text-xs">
+                <Clock className="w-3.5 h-3.5" />
+                Pending
+              </div>
+              <p className="text-2xl font-bold">{stats.rentals.pending}</p>
+              <p className="text-[11px] text-neutral-500">Awaiting processing</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <div className="flex items-center gap-2 mb-1 text-neutral-500 text-xs">
+                <Wallet className="w-3.5 h-3.5" />
+                Total spent
+              </div>
+              <p className="text-2xl font-bold">{formatSar(stats.totalSpentHalalas)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <div className="flex items-center gap-2 mb-1 text-neutral-500 text-xs">
+                <Gavel className="w-3.5 h-3.5" />
+                Open disputes
+              </div>
+              <p className="text-2xl font-bold">{stats.openDisputes}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-4">

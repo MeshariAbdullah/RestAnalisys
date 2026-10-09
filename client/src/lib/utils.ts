@@ -50,29 +50,41 @@ export function getSeverityLabel(severity: string) {
   }
 }
 
-export function getStatusLabel(status: string) {
+export function getRentalStatusLabel(status: string) {
   const labels: Record<string, string> = {
-    uploaded: "تم الرفع",
-    extracting_frames: "استخراج الإطارات",
-    analyzing_gpt: "تحليل GPT-4o",
-    analyzing_gemini: "تحليل Gemini",
-    saving_results: "حفظ النتائج",
-    done: "مكتمل",
-    error: "خطأ",
-    queued: "في الانتظار",
+    pending_risk_review: "Risk Review",
+    pending_legal_signing: "Awaiting Signature",
+    pending_payment: "Awaiting Payment",
+    confirmed: "Confirmed",
+    out_for_delivery: "Out for Delivery",
+    active: "Active",
+    return_in_transit: "Returning",
+    under_inspection: "Under Inspection",
+    closed: "Closed",
+    closed_with_penalty: "Closed (Penalty)",
+    in_dispute: "In Dispute",
+    enforcement: "Enforcement",
+    cancelled: "Cancelled",
   };
-  return labels[status] ?? status;
+  return labels[status] ?? status.replace(/_/g, " ");
 }
 
-export function getStatusIcon(status: string) {
-  switch (status) {
-    case "done": return "✅";
-    case "error": return "❌";
-    case "uploaded": return "📤";
-    case "extracting_frames": return "🎞️";
-    case "analyzing_gpt": return "🤖";
-    case "analyzing_gemini": return "💎";
-    case "saving_results": return "💾";
-    default: return "⏳";
-  }
+export function getAssetStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    pending_approval: "Pending Approval",
+    rejected: "Rejected",
+    awaiting_shipment: "Awaiting Shipment",
+    in_inspection: "In Inspection",
+    inspection_reported: "Valuation Ready",
+    owner_rejected_valuation: "Valuation Rejected",
+    ready_for_listing: "Ready to List",
+    listed: "Listed",
+    reserved: "Reserved",
+    rented_out: "Rented Out",
+    returned_under_inspection: "Return Inspection",
+    completed: "Completed",
+    withdrawn: "Withdrawn",
+    lost_or_destroyed: "Lost / Destroyed",
+  };
+  return labels[status] ?? status.replace(/_/g, " ");
 }

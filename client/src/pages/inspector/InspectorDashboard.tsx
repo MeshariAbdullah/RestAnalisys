@@ -1,17 +1,30 @@
 import React from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardCheck, Diamond } from "lucide-react";
+import {
+  ClipboardCheck,
+  Diamond,
+  BarChart3,
+  Calendar,
+  CheckCircle2,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { inspectionsApi, formatSar, type Asset } from "@/lib/api";
+import { inspectionsApi, statsApi, formatSar, type Asset } from "@/lib/api";
 
 export default function InspectorDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["inspection-queue"],
     queryFn: () => inspectionsApi.queue(),
   });
+
+  const statsQuery = useQuery({
+    queryKey: ["inspector-stats"],
+    queryFn: () => statsApi.inspector(),
+  });
+
+  const stats = statsQuery.data;
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -23,6 +36,50 @@ export default function InspectorDashboard() {
       <p className="text-neutral-500 mb-8">
         Assets awaiting authentication, valuation or return inspection.
       </p>
+
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <Card>
+            <CardContent className="p-5">
+              <div className="flex items-center gap-2 mb-1 text-neutral-500 text-xs">
+                <BarChart3 className="w-3.5 h-3.5" />
+                Total inspections
+              </div>
+              <p className="text-2xl font-bold">{stats.totalInspections}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <div className="flex items-center gap-2 mb-1 text-neutral-500 text-xs">
+                <Calendar className="w-3.5 h-3.5" />
+                This month
+              </div>
+              <p className="text-2xl font-bold">{stats.thisMonth}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <div className="flex items-center gap-2 mb-1 text-neutral-500 text-xs">
+                <Diamond className="w-3.5 h-3.5" />
+                Intake
+              </div>
+              <p className="text-2xl font-bold">{stats.intakeCount}</p>
+              <p className="text-[11px] text-neutral-500">{stats.returnCount} returns</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <div className="flex items-center gap-2 mb-1 text-amber-600 text-xs">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Pending
+              </div>
+              <p className="text-2xl font-bold text-amber-600">
+                {stats.pendingQueue}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>
