@@ -13,6 +13,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -218,6 +219,47 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Audit logs viewer ─────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit ?? 50), 200);
+    const offset = Math.max(Number(req.query.offset ?? 0), 0);
+    const entityType = req.query.entityType as string | undefined;
+    const action = req.query.action as string | undefined;
+    const actorId = req.query.actorId ? Number(req.query.actorId) : undefined;
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (action) conditions.push(sql`${auditLogs.action} ILIKE ${`%${action}%`}`);
+    if (actorId) conditions.push(eq(auditLogs.actorUserId, actorId));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(whereClause)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(auditLogs)
+      .where(whereClause);
+
+    res.json({
+      items: rows,
+      total: Number(countResult?.count ?? 0),
+      limit,
+      offset,
+    });
   })
 );
 

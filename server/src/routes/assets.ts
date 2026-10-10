@@ -319,6 +319,45 @@ router.get(
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
 
+    // Full-text search across brand, title, model (case-insensitive)
+    const search = req.query.search as string | undefined;
+    if (search) {
+      const pattern = `%${search}%`;
+      conditions.push(
+        sql`(${assets.brand} ILIKE ${pattern} OR ${assets.title} ILIKE ${pattern} OR ${assets.model} ILIKE ${pattern})`
+      );
+    }
+
+    // Price range filters (in halalas)
+    const minPrice = req.query.minPrice ? Number(req.query.minPrice) : undefined;
+    const maxPrice = req.query.maxPrice ? Number(req.query.maxPrice) : undefined;
+    if (minPrice !== undefined)
+      conditions.push(gte(assets.dailyRentalPriceHalalas, minPrice));
+    if (maxPrice !== undefined)
+      conditions.push(lte(assets.dailyRentalPriceHalalas, maxPrice));
+
+    // Sorting
+    const sort = (req.query.sort as string) ?? "newest";
+    let orderClause;
+    switch (sort) {
+      case "price_asc":
+        orderClause = asc(assets.dailyRentalPriceHalalas);
+        break;
+      case "price_desc":
+        orderClause = desc(assets.dailyRentalPriceHalalas);
+        break;
+      case "newest":
+      default:
+        orderClause = desc(assets.createdAt);
+        break;
+    }
+
+    // Pagination
+    const limit = Math.min(Number(req.query.limit ?? filter.limit), 50);
+    const offset = Math.max(Number(req.query.offset ?? 0), 0);
+
+    const whereClause = and(...conditions);
+
     const rows = await db
       .select({
         id: assets.id,
@@ -333,11 +372,22 @@ router.get(
         riskCategory: assets.riskCategory,
       })
       .from(assets)
-      .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
-      .limit(filter.limit);
+      .where(whereClause)
+      .orderBy(orderClause)
+      .limit(limit)
+      .offset(offset);
 
-    res.json({ items: rows, count: rows.length });
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(assets)
+      .where(whereClause);
+
+    res.json({
+      items: rows,
+      total: Number(countResult?.count ?? 0),
+      limit,
+      offset,
+    });
   })
 );
 

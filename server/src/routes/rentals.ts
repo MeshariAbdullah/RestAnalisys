@@ -99,7 +99,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await countLateReturns(userId),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -109,6 +109,19 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     userRole: user.role,
     countryIsSaudi: true,
   };
+}
+
+async function countLateReturns(userId: number): Promise<number> {
+  const [result] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`returned_at IS NOT NULL AND returned_at::date > end_date::date`
+      )
+    );
+  return Number(result?.count ?? 0);
 }
 
 // ── Quote (no side effects) ─────────────────────────────────────────────────

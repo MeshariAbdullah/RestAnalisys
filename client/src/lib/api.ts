@@ -266,12 +266,26 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: {
+    category?: string;
+    brand?: string;
+    search?: string;
+    sort?: "price_asc" | "price_desc" | "newest";
+    minPrice?: number;
+    maxPrice?: number;
+    limit?: number;
+    offset?: number;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.sort) qs.set("sort", params.sort);
+    if (params?.minPrice) qs.set("minPrice", String(params.minPrice));
+    if (params?.maxPrice) qs.set("maxPrice", String(params.maxPrice));
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    if (params?.offset) qs.set("offset", String(params.offset));
+    return request<{ items: Asset[]; total: number; limit: number; offset: number }>(`/assets/listings?${qs}`);
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
@@ -578,7 +592,77 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (opts?: {
+    limit?: number;
+    offset?: number;
+    entityType?: string;
+    action?: string;
+    actorId?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (opts?.limit) qs.set("limit", String(opts.limit));
+    if (opts?.offset) qs.set("offset", String(opts.offset));
+    if (opts?.entityType) qs.set("entityType", opts.entityType);
+    if (opts?.action) qs.set("action", opts.action);
+    if (opts?.actorId) qs.set("actorId", String(opts.actorId));
+    return request<{ items: AuditLog[]; total: number; limit: number; offset: number }>(
+      `/admin/audit-logs?${qs}`
+    );
+  },
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  entityType?: string;
+  entityId?: number;
+  isRead: boolean;
+  readAt?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (opts?: { limit?: number; offset?: number; unreadOnly?: boolean }) => {
+    const qs = new URLSearchParams();
+    if (opts?.limit) qs.set("limit", String(opts.limit));
+    if (opts?.offset) qs.set("offset", String(opts.offset));
+    if (opts?.unreadOnly) qs.set("unreadOnly", "true");
+    return request<{ items: AppNotification[]; total: number }>(
+      `/notifications?${qs}`
+    );
+  },
+  unreadCount: () =>
+    request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit logs (admin)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AuditLog {
+  id: number;
+  actorUserId?: number;
+  actorRole?: string;
+  action: string;
+  entityType: string;
+  entityId?: number;
+  beforeJson?: Record<string, unknown>;
+  afterJson?: Record<string, unknown>;
+  ip?: string;
+  createdAt: string;
+}
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
