@@ -3,7 +3,7 @@
  */
 
 import { Router } from "express";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   users,
@@ -13,6 +13,8 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
+  operationalAlerts,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -218,6 +220,191 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const entityType = req.query.entityType as string | undefined;
+    const action = req.query.action as string | undefined;
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (action) conditions.push(sql`${auditLogs.action} ilike ${"%" + action + "%"}`);
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const rows = await db
+      .select({
+        id: auditLogs.id,
+        actorUserId: auditLogs.actorUserId,
+        actorRole: auditLogs.actorRole,
+        action: auditLogs.action,
+        entityType: auditLogs.entityType,
+        entityId: auditLogs.entityId,
+        ip: auditLogs.ip,
+        createdAt: auditLogs.createdAt,
+      })
+      .from(auditLogs)
+      .where(where)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [total] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(auditLogs)
+      .where(where);
+
+    res.json({ items: rows, total: Number(total?.count ?? 0), limit, offset });
+  })
+);
+
+// ── Audit log detail ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs/:id",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const [row] = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.id, id))
+      .limit(1);
+    if (!row) throw new NotFoundError("AuditLog");
+    res.json(row);
+  })
+);
+
+// ── Analytics: asset category distribution ────────────────────────────────
+router.get(
+  "/analytics/categories",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select({
+        category: assets.category,
+        total: sql<number>`count(*)`,
+        listed: sql<number>`count(*) filter (where status = 'listed')`,
+        rented: sql<number>`count(*) filter (where status = 'rented_out')`,
+        totalValueHalalas: sql<string>`coalesce(sum(evaluated_value_halalas), 0)`,
+      })
+      .from(assets)
+      .groupBy(assets.category);
+
+    res.json(
+      rows.map((r) => ({
+        category: r.category,
+        total: Number(r.total),
+        listed: Number(r.listed),
+        rented: Number(r.rented),
+        totalValueHalalas: Number(r.totalValueHalalas),
+      }))
+    );
+  })
+);
+
+// ── Analytics: rental status breakdown ────────────────────────────────────
+router.get(
+  "/analytics/rental-status",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const rows = await db
+      .select({
+        status: rentals.status,
+        count: sql<number>`count(*)`,
+        totalValueHalalas: sql<string>`coalesce(sum(total_payable_halalas), 0)`,
+      })
+      .from(rentals)
+      .groupBy(rentals.status);
+
+    res.json(
+      rows.map((r) => ({
+        status: r.status,
+        count: Number(r.count),
+        totalValueHalalas: Number(r.totalValueHalalas),
+      }))
+    );
+  })
+);
+
+// ── Detect overdue rentals and create operational alerts ──────────────────
+router.post(
+  "/detect-overdue",
+  authenticate,
+  requirePermission("operations.update"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const overdueRentals = await db
+      .select({
+        id: rentals.id,
+        reference: rentals.reference,
+        renterId: rentals.renterId,
+        endDate: rentals.endDate,
+        assetId: rentals.assetId,
+      })
+      .from(rentals)
+      .where(
+        and(
+          eq(rentals.status, "active"),
+          lte(rentals.endDate, today)
+        )
+      );
+
+    let alertsCreated = 0;
+    for (const rental of overdueRentals) {
+      const daysOverdue = Math.floor(
+        (Date.now() - new Date(rental.endDate + "T00:00:00Z").getTime()) /
+          (1000 * 60 * 60 * 24)
+      );
+
+      const [existing] = await db
+        .select({ id: operationalAlerts.id })
+        .from(operationalAlerts)
+        .where(
+          and(
+            eq(operationalAlerts.type, "late_return"),
+            eq(operationalAlerts.subjectType, "rental"),
+            eq(operationalAlerts.subjectId, rental.id),
+            eq(operationalAlerts.status, "open")
+          )
+        )
+        .limit(1);
+
+      if (!existing) {
+        await db.insert(operationalAlerts).values({
+          type: "late_return",
+          severity: daysOverdue >= 7 ? "critical" : daysOverdue >= 3 ? "high" : "medium",
+          subjectType: "rental",
+          subjectId: rental.id,
+          message: `Rental ${rental.reference} is ${daysOverdue} day(s) overdue. End date was ${rental.endDate}.`,
+          payloadJson: { rentalId: rental.id, daysOverdue, endDate: rental.endDate },
+        });
+        alertsCreated++;
+      }
+    }
+
+    await recordAudit({
+      req,
+      action: "admin.detect_overdue",
+      entityType: "system",
+      after: { overdueCount: overdueRentals.length, alertsCreated },
+    });
+
+    res.json({
+      overdueRentals: overdueRentals.length,
+      alertsCreated,
+    });
   })
 );
 

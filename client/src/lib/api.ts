@@ -560,6 +560,37 @@ export const operationsApi = {
 // Admin
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface AuditLogEntry {
+  id: number;
+  actorUserId: number | null;
+  actorRole: string | null;
+  action: string;
+  entityType: string;
+  entityId: number | null;
+  ip: string | null;
+  createdAt: string;
+}
+
+export interface AuditLogDetail extends AuditLogEntry {
+  beforeJson: unknown;
+  afterJson: unknown;
+  userAgent: string | null;
+}
+
+export interface CategoryAnalytics {
+  category: string;
+  total: number;
+  listed: number;
+  rented: number;
+  totalValueHalalas: number;
+}
+
+export interface RentalStatusAnalytics {
+  status: string;
+  count: number;
+  totalValueHalalas: number;
+}
+
 export const adminApi = {
   kpis: () => request<AdminKPIs>("/admin/kpis"),
   revenueTrend: () =>
@@ -578,6 +609,23 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: { entityType?: string; action?: string; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    return request<{ items: AuditLogEntry[]; total: number; limit: number; offset: number }>(
+      `/admin/audit-logs?${qs}`
+    );
+  },
+  auditLogDetail: (id: number) => request<AuditLogDetail>(`/admin/audit-logs/${id}`),
+  categoryAnalytics: () => request<CategoryAnalytics[]>("/admin/analytics/categories"),
+  rentalStatusAnalytics: () => request<RentalStatusAnalytics[]>("/admin/analytics/rental-status"),
+  detectOverdue: () =>
+    request<{ overdueRentals: number; alertsCreated: number }>("/admin/detect-overdue", {
+      method: "POST",
+    }),
 };
 
 export const healthApi = {

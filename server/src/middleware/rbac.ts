@@ -110,6 +110,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "dispute.assign",
     "dispute.resolve",
     "operations.read",
+    "operations.update",
     "system.audit",
   ],
   super_admin: [], // computed below

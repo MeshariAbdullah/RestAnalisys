@@ -9,6 +9,8 @@ import {
   FileSignature,
   AlertOctagon,
   TrendingUp,
+  ScrollText,
+  BarChart3,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { adminApi, formatSar } from "@/lib/api";
@@ -118,6 +120,39 @@ export default function AdminDashboard() {
                 <p className="text-2xl font-bold">
                   {isLoading ? "…" : data?.sanadsUnderExecution ?? 0}
                 </p>
+              </CardContent>
+            </Card>
+          </a>
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <Link href="/admin/audit-logs">
+          <a>
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardContent className="p-6 flex items-center gap-4">
+                <ScrollText className="w-8 h-8 text-neutral-500" />
+                <div>
+                  <p className="font-medium">Audit logs</p>
+                  <p className="text-sm text-neutral-500">
+                    View the immutable record of every action
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </a>
+        </Link>
+        <Link href="/admin/analytics">
+          <a>
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardContent className="p-6 flex items-center gap-4">
+                <BarChart3 className="w-8 h-8 text-amber-500" />
+                <div>
+                  <p className="font-medium">Analytics</p>
+                  <p className="text-sm text-neutral-500">
+                    Category distribution, rental breakdown, overdue detection
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </a>

@@ -101,13 +101,14 @@ Every third-party integration has a dev-mode stub that returns plausible
 data with zero external calls. Drop real credentials into `.env` to switch to
 production mode.
 
-| Service         | Stub file                              | Env keys                          |
-| --------------- | -------------------------------------- | --------------------------------- |
-| Nafath ID       | `server/src/services/nafathService.ts` | `NAFATH_API_BASE`, `NAFATH_API_KEY` |
-| Nafith Sanad    | `server/src/services/nafithService.ts` | `NAFITH_API_BASE`, `NAFITH_API_KEY` |
-| Payment gateway | `server/src/services/paymentService.ts`| `PAYMENT_GATEWAY_*`               |
-| ZATCA invoicing | `server/src/services/paymentService.ts`| `ZATCA_API_*`                     |
-| National Address| (planned)                              | `SPL_API_KEY`                     |
+| Service         | Stub file                                    | Env keys                          |
+| --------------- | -------------------------------------------- | --------------------------------- |
+| Nafath ID       | `server/src/services/nafathService.ts`       | `NAFATH_API_BASE`, `NAFATH_API_KEY` |
+| Nafith Sanad    | `server/src/services/nafithService.ts`       | `NAFITH_API_BASE`, `NAFITH_API_KEY` |
+| Payment gateway | `server/src/services/paymentService.ts`      | `PAYMENT_GATEWAY_*`               |
+| ZATCA invoicing | `server/src/services/paymentService.ts`      | `ZATCA_API_*`                     |
+| Notifications   | `server/src/services/notificationService.ts` | `SMTP_*`, `SMS_API_KEY`           |
+| National Address| (planned)                                    | `SPL_API_KEY`                     |
 
 ---
 

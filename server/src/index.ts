@@ -81,6 +81,8 @@ app.listen(PORT, () => {
   console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
+  console.log(`   Email:    ${process.env.SMTP_HOST ? "live" : "placeholder"}`);
+  console.log(`   SMS:      ${process.env.SMS_API_KEY ? "live" : "placeholder"}`);
 });
 
 export default app;
