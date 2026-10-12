@@ -13,7 +13,7 @@
 import { Router } from "express";
 import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
+import { assets, inspections, users, inventoryMovements, rentals, payouts } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import {
@@ -401,6 +401,78 @@ router.post(
   })
 );
 
+// ── Owner: portfolio analytics ────────────────────────────────────────────
+router.get(
+  "/analytics/portfolio",
+  authenticate,
+  requirePermission("asset.read.own"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const ownerId = req.user!.userId;
+
+    const assetStats = await db
+      .select({
+        total: sql<number>`count(*)`,
+        listed: sql<number>`count(*) filter (where status = 'listed')`,
+        rented: sql<number>`count(*) filter (where status = 'rented_out')`,
+        withdrawn: sql<number>`count(*) filter (where status = 'withdrawn')`,
+      })
+      .from(assets)
+      .where(eq(assets.ownerId, ownerId));
+
+    const rentalStats = await db
+      .select({
+        total: sql<number>`count(*)`,
+        active: sql<number>`count(*) filter (where status = 'active')`,
+        completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
+        totalRevenue: sql<string>`coalesce(sum(rental_subtotal_halalas) filter (where status in ('closed','closed_with_penalty','active')), 0)`,
+      })
+      .from(rentals)
+      .where(eq(rentals.ownerId, ownerId));
+
+    const payoutStats = await db
+      .select({
+        totalPaid: sql<string>`coalesce(sum(net_halalas) filter (where status = 'paid'), 0)`,
+        totalPending: sql<string>`coalesce(sum(net_halalas) filter (where status in ('pending','processing')), 0)`,
+        totalCommission: sql<string>`coalesce(sum(commission_halalas), 0)`,
+      })
+      .from(payouts)
+      .where(eq(payouts.ownerId, ownerId));
+
+    const portfolioValue = await db
+      .select({
+        total: sql<string>`coalesce(sum(evaluated_value_halalas), 0)`,
+      })
+      .from(assets)
+      .where(
+        and(
+          eq(assets.ownerId, ownerId),
+          inArray(assets.status, ["listed", "rented_out", "reserved"])
+        )
+      );
+
+    res.json({
+      assets: {
+        total: Number(assetStats[0]?.total ?? 0),
+        listed: Number(assetStats[0]?.listed ?? 0),
+        rented: Number(assetStats[0]?.rented ?? 0),
+        withdrawn: Number(assetStats[0]?.withdrawn ?? 0),
+      },
+      rentals: {
+        total: Number(rentalStats[0]?.total ?? 0),
+        active: Number(rentalStats[0]?.active ?? 0),
+        completed: Number(rentalStats[0]?.completed ?? 0),
+        totalRevenueHalalas: Number(rentalStats[0]?.totalRevenue ?? 0),
+      },
+      payouts: {
+        totalPaidHalalas: Number(payoutStats[0]?.totalPaid ?? 0),
+        totalPendingHalalas: Number(payoutStats[0]?.totalPending ?? 0),
+        totalCommissionHalalas: Number(payoutStats[0]?.totalCommission ?? 0),
+      },
+      portfolioValueHalalas: Number(portfolioValue[0]?.total ?? 0),
+    });
+  })
+);
+
 // ── Admin / Ops: full asset record ─────────────────────────────────────────
 router.get(
   "/:id",
@@ -409,7 +481,6 @@ router.get(
     const id = Number(req.params.id);
     const [asset] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
     if (!asset) throw new NotFoundError("Asset");
-    // Owners can only see their own assets; others need read.any.
     if (req.user!.role === "owner" && asset.ownerId !== req.user!.userId) {
       throw new ForbiddenError();
     }

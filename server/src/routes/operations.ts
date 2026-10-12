@@ -21,6 +21,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { detectOverdueRentals } from "../services/overdueService.js";
 
 const router = Router();
 
@@ -191,6 +192,27 @@ router.get(
       .orderBy(desc(operationalAlerts.createdAt))
       .limit(200);
     res.json(rows);
+  })
+);
+
+// ── Trigger overdue rental scan ───────────────────────────────────────────
+router.post(
+  "/overdue-scan",
+  authenticate,
+  requirePermission("operations.update"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const overdue = await detectOverdueRentals();
+    await recordAudit({
+      req,
+      action: "ops.overdue_scan",
+      entityType: "system",
+      after: { overdueCount: overdue.length },
+    });
+    res.json({
+      scannedAt: new Date().toISOString(),
+      overdueCount: overdue.length,
+      overdueRentals: overdue,
+    });
   })
 );
 

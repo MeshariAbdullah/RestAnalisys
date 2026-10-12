@@ -27,6 +27,8 @@ import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { authLimiter, apiLimiter } from "./middleware/rateLimit.js";
+import { detectOverdueRentals } from "./services/overdueService.js";
 
 dotenv.config();
 
@@ -41,6 +43,9 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use("/api", apiLimiter);
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/register", authLimiter);
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -81,6 +86,18 @@ app.listen(PORT, () => {
   console.log(`   Nafath:   ${process.env.NAFATH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Nafith:   ${process.env.NAFITH_API_KEY ? "live" : "placeholder"}`);
   console.log(`   Payment:  ${process.env.PAYMENT_GATEWAY_API_KEY ? "live" : "placeholder"}`);
+
+  const OVERDUE_CHECK_INTERVAL = parseInt(process.env.OVERDUE_CHECK_INTERVAL_MS ?? "3600000");
+  setInterval(async () => {
+    try {
+      const overdue = await detectOverdueRentals();
+      if (overdue.length > 0) {
+        console.log(`[overdue] Found ${overdue.length} overdue rental(s)`);
+      }
+    } catch (err) {
+      console.error("[overdue] scan failed:", err);
+    }
+  }, OVERDUE_CHECK_INTERVAL);
 });
 
 export default app;

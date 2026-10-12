@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { countLateReturnsForUser } from "../services/overdueService.js";
 
 const router = Router();
 
@@ -99,7 +100,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await countLateReturnsForUser(userId),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,

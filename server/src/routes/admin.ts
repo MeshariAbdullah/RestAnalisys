@@ -3,6 +3,7 @@
  */
 
 import { Router } from "express";
+import bcrypt from "bcryptjs";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
@@ -13,12 +14,15 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
+import { AuditLogFilterSchema } from "../utils/schemas.js";
 import { recordAudit } from "../services/auditService.js";
+import { getRecentNotifications } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -178,12 +182,16 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
+    const { email, fullName, role, password } = req.body as {
       email: string;
       fullName: string;
       role: "admin" | "operations" | "inspector";
-      passwordHash: string;
+      password: string;
     };
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db
       .insert(users)
       .values({
@@ -218,6 +226,104 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const filter = AuditLogFilterSchema.parse(req.query);
+    const conditions: ReturnType<typeof eq>[] = [];
+
+    if (filter.entityType) conditions.push(eq(auditLogs.entityType, filter.entityType));
+    if (filter.action) conditions.push(eq(auditLogs.action, filter.action));
+    if (filter.actorUserId) conditions.push(eq(auditLogs.actorUserId, filter.actorUserId));
+    if (filter.from) conditions.push(sql`${auditLogs.createdAt} >= ${filter.from}::date`);
+    if (filter.to) conditions.push(sql`${auditLogs.createdAt} < (${filter.to}::date + interval '1 day')`);
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [total] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(auditLogs)
+      .where(whereClause);
+
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(whereClause)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(filter.limit)
+      .offset(filter.offset);
+
+    res.json({
+      total: Number(total?.count ?? 0),
+      limit: filter.limit,
+      offset: filter.offset,
+      rows,
+    });
+  })
+);
+
+// ── Notification log (recent stub notifications) ──────────────────────────
+router.get(
+  "/notifications/log",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (_req, res) => {
+    res.json(getRecentNotifications());
+  })
+);
+
+// ── Platform-wide stats ──────────────────────────────────────────────────
+router.get(
+  "/stats",
+  authenticate,
+  requirePermission("finance.read"),
+  asyncHandler(async (_req, res) => {
+    const [totalRentals] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(rentals);
+
+    const statusBreakdown = await db
+      .select({ status: rentals.status, count: sql<number>`count(*)` })
+      .from(rentals)
+      .groupBy(rentals.status);
+
+    const [avgRentalValue] = await db
+      .select({ avg: sql<string>`coalesce(avg(total_payable_halalas), 0)` })
+      .from(rentals)
+      .where(inArray(rentals.status, ["closed", "closed_with_penalty", "active"]));
+
+    const usersByRole = await db
+      .select({ role: users.role, count: sql<number>`count(*)` })
+      .from(users)
+      .groupBy(users.role);
+
+    const assetsByCategory = await db
+      .select({ category: assets.category, count: sql<number>`count(*)` })
+      .from(assets)
+      .groupBy(assets.category);
+
+    res.json({
+      totalRentals: Number(totalRentals?.count ?? 0),
+      rentalsByStatus: statusBreakdown.map((r) => ({
+        status: r.status,
+        count: Number(r.count),
+      })),
+      avgRentalValueHalalas: Math.round(Number(avgRentalValue?.avg ?? 0)),
+      usersByRole: usersByRole.map((r) => ({
+        role: r.role,
+        count: Number(r.count),
+      })),
+      assetsByCategory: assetsByCategory.map((r) => ({
+        category: r.category,
+        count: Number(r.count),
+      })),
+    });
   })
 );
 

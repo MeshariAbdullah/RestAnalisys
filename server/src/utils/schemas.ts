@@ -227,3 +227,46 @@ export const ShipmentUpdateSchema = z.object({
   ]),
   trackingNumber: z.string().optional(),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const UpdateProfileSchema = z.object({
+  fullName: z.string().min(2).optional(),
+  phone: SaudiPhone.optional(),
+  nationalAddressJson: z
+    .object({
+      city: z.string(),
+      district: z.string(),
+      street: z.string(),
+      buildingNumber: z.string().optional(),
+      postalCode: z.string().optional(),
+    })
+    .optional(),
+});
+
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])/,
+      "Password must include uppercase, lowercase, digit, and special character"
+    ),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit log filters
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const AuditLogFilterSchema = z.object({
+  entityType: z.string().optional(),
+  action: z.string().optional(),
+  actorUserId: z.coerce.number().int().positive().optional(),
+  from: IsoDate.optional(),
+  to: IsoDate.optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});

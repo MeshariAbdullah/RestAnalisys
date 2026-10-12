@@ -9,7 +9,13 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
-import { LoginSchema, RegisterSchema, NafathVerifySchema } from "../utils/schemas.js";
+import {
+  LoginSchema,
+  RegisterSchema,
+  NafathVerifySchema,
+  UpdateProfileSchema,
+  ChangePasswordSchema,
+} from "../utils/schemas.js";
 import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
@@ -185,7 +191,81 @@ router.get(
       trustScore: user.trustScore,
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
+      nationalAddressJson: user.nationalAddressJson,
+      createdAt: user.createdAt,
     });
+  })
+);
+
+router.patch(
+  "/profile",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const input = UpdateProfileSchema.parse(req.body);
+    const userId = req.user!.userId;
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (input.fullName) updates.fullName = input.fullName;
+    if (input.phone) updates.phoneE164 = input.phone;
+    if (input.nationalAddressJson)
+      updates.nationalAddressJson = input.nationalAddressJson;
+
+    const [updated] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning();
+    if (!updated) throw new NotFoundError("User");
+
+    await recordAudit({
+      req,
+      action: "auth.profile_update",
+      entityType: "user",
+      entityId: userId,
+      after: { fullName: updated.fullName, phoneE164: updated.phoneE164 },
+    });
+
+    return res.json({
+      id: updated.id,
+      email: updated.email,
+      fullName: updated.fullName,
+      phoneE164: updated.phoneE164,
+      nationalAddressJson: updated.nationalAddressJson,
+    });
+  })
+);
+
+router.post(
+  "/change-password",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const { currentPassword, newPassword } = ChangePasswordSchema.parse(req.body);
+    const userId = req.user!.userId;
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) throw new UnauthorizedError("Current password is incorrect");
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await db
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+
+    await recordAudit({
+      req,
+      action: "auth.password_change",
+      entityType: "user",
+      entityId: userId,
+    });
+
+    return res.json({ message: "Password updated successfully" });
   })
 );
 
