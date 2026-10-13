@@ -10,14 +10,35 @@ import {
   AlertOctagon,
   TrendingUp,
 } from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
-import { adminApi, formatSar } from "@/lib/api";
+import { adminApi, formatSar, halalasToSar } from "@/lib/api";
 
 export default function AdminDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["admin-kpis"],
     queryFn: () => adminApi.kpis(),
   });
+
+  const { data: trend } = useQuery({
+    queryKey: ["revenue-trend"],
+    queryFn: () => adminApi.revenueTrend(),
+  });
+
+  const chartData = (trend ?? []).map((d) => ({
+    day: d.day.slice(5),
+    revenue: halalasToSar(Number(d.total_halalas)),
+    fees: halalasToSar(Number(d.fee_halalas)),
+    rentals: Number(d.rentals),
+  }));
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -30,22 +51,22 @@ export default function AdminDashboard() {
         <Kpi
           icon={Users}
           label="Users"
-          value={isLoading ? "…" : data?.users ?? 0}
+          value={isLoading ? "..." : data?.users ?? 0}
         />
         <Kpi
           icon={Diamond}
           label="Listed assets"
-          value={isLoading ? "…" : data?.listedAssets ?? 0}
+          value={isLoading ? "..." : data?.listedAssets ?? 0}
         />
         <Kpi
           icon={TrendingUp}
           label="Rented assets"
-          value={isLoading ? "…" : data?.rentedAssets ?? 0}
+          value={isLoading ? "..." : data?.rentedAssets ?? 0}
         />
         <Kpi
           icon={Receipt}
           label="Rentals this month"
-          value={isLoading ? "…" : data?.rentalsThisMonth ?? 0}
+          value={isLoading ? "..." : data?.rentalsThisMonth ?? 0}
         />
       </div>
 
@@ -57,7 +78,7 @@ export default function AdminDashboard() {
             </p>
             <p className="text-3xl font-bold">
               {isLoading
-                ? "…"
+                ? "..."
                 : formatSar(data?.revenue.rentalSubtotalHalalas)}
             </p>
           </CardContent>
@@ -66,7 +87,7 @@ export default function AdminDashboard() {
           <CardContent className="p-6">
             <p className="text-sm text-neutral-500 mb-1">Platform fees</p>
             <p className="text-3xl font-bold text-amber-600">
-              {isLoading ? "…" : formatSar(data?.revenue.platformFeeHalalas)}
+              {isLoading ? "..." : formatSar(data?.revenue.platformFeeHalalas)}
             </p>
           </CardContent>
         </Card>
@@ -74,11 +95,58 @@ export default function AdminDashboard() {
           <CardContent className="p-6">
             <p className="text-sm text-neutral-500 mb-1">VAT collected</p>
             <p className="text-3xl font-bold">
-              {isLoading ? "…" : formatSar(data?.revenue.vatHalalas)}
+              {isLoading ? "..." : formatSar(data?.revenue.vatHalalas)}
             </p>
           </CardContent>
         </Card>
       </div>
+
+      {chartData.length > 0 && (
+        <Card className="mb-8">
+          <CardContent className="p-6">
+            <p className="text-sm font-semibold text-neutral-700 mb-4">
+              Revenue trend (30 days)
+            </p>
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorFees" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="day" tick={{ fontSize: 11 }} stroke="#9ca3af" />
+                <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" />
+                <Tooltip
+                  formatter={(v: number) => `${v.toLocaleString()} SAR`}
+                  labelFormatter={(l) => `Date: ${l}`}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#f59e0b"
+                  fillOpacity={1}
+                  fill="url(#colorRevenue)"
+                  name="Revenue"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="fees"
+                  stroke="#3b82f6"
+                  fillOpacity={1}
+                  fill="url(#colorFees)"
+                  name="Platform fees"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Link href="/admin/disputes">
@@ -88,7 +156,7 @@ export default function AdminDashboard() {
                 <Gavel className="w-8 h-8 text-red-500 mb-3" />
                 <p className="text-sm text-neutral-500">Open disputes</p>
                 <p className="text-2xl font-bold">
-                  {isLoading ? "…" : data?.openDisputes ?? 0}
+                  {isLoading ? "..." : data?.openDisputes ?? 0}
                 </p>
               </CardContent>
             </Card>
@@ -101,7 +169,7 @@ export default function AdminDashboard() {
                 <FileSignature className="w-8 h-8 text-amber-500 mb-3" />
                 <p className="text-sm text-neutral-500">Active Sanads</p>
                 <p className="text-2xl font-bold">
-                  {isLoading ? "…" : data?.activeSanads ?? 0}
+                  {isLoading ? "..." : data?.activeSanads ?? 0}
                 </p>
               </CardContent>
             </Card>
@@ -116,7 +184,7 @@ export default function AdminDashboard() {
                   Sanads under execution
                 </p>
                 <p className="text-2xl font-bold">
-                  {isLoading ? "…" : data?.sanadsUnderExecution ?? 0}
+                  {isLoading ? "..." : data?.sanadsUnderExecution ?? 0}
                 </p>
               </CardContent>
             </Card>
