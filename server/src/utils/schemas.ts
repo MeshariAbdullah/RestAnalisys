@@ -119,7 +119,7 @@ export const OwnerValuationResponseSchema = z.object({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const RentalQuoteRequestSchema = z.object({
-  assetId: z.number().int().positive(),
+  assetId: z.coerce.number().int().positive(),
   startDate: IsoDate,
   endDate: IsoDate,
 });
@@ -226,4 +226,61 @@ export const ShipmentUpdateSchema = z.object({
     "returned",
   ]),
   trackingNumber: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const UserBlockSchema = z.object({
+  block: z.boolean(),
+  reason: z.string().optional(),
+});
+
+export const CreateStaffSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().min(2),
+  role: z.enum(["admin", "operations", "inspector"]),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+export const ValuationResponseSchema = z.object({
+  approved: z.boolean(),
+  rejectionReason: z.string().optional(),
+});
+
+export const WarehouseReceiveSchema = z.object({
+  warehouseLocationCode: z.string().min(1, "Warehouse location code is required"),
+});
+
+export const RentalCloseSchema = z.object({
+  outcome: z.enum(["clean", "penalty", "major_damage", "loss"]),
+  penaltyHalalas: HalalasAmount.optional(),
+});
+
+export const DisputeAssignSchema = z.object({
+  assigneeUserId: z.number().int().positive(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ProfileUpdateSchema = z.object({
+  fullName: z.string().min(2).optional(),
+  phone: SaudiPhone.optional(),
+  nationalAddress: z
+    .object({
+      city: z.string(),
+      district: z.string(),
+      street: z.string(),
+      buildingNumber: z.string().optional(),
+      postalCode: z.string().optional(),
+    })
+    .optional(),
+});
+
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
 });
