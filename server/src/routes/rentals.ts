@@ -52,7 +52,12 @@ import {
   computeRentalQuote,
   DEFAULT_PLATFORM_FEE_PCT,
 } from "../utils/money.js";
-import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
+import {
+  computeRiskDecision,
+  RiskFeatures,
+  computeTrustScoreUpdate,
+  trustScoreToCategory,
+} from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
@@ -84,10 +89,11 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      lateReturns: sql<number>`count(*) filter (where returned_at is not null and returned_at::date > end_date::date)`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, lateReturns: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +105,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.lateReturns ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -481,6 +487,29 @@ router.post(
   })
 );
 
+// ── Helper: update renter trust score after close ─────────────────────
+async function updateRenterTrustScore(
+  renterId: number,
+  outcome: "clean" | "penalty" | "major_damage" | "loss",
+  returnedAt: Date | null,
+  endDate: string,
+) {
+  const [renter] = await db.select({ id: users.id, trustScore: users.trustScore }).from(users).where(eq(users.id, renterId)).limit(1);
+  if (!renter) return;
+  const wasLate = returnedAt
+    ? returnedAt > new Date(endDate + "T23:59:59Z")
+    : false;
+  const { newScore } = computeTrustScoreUpdate(renter.trustScore, outcome, wasLate);
+  await db
+    .update(users)
+    .set({
+      trustScore: newScore,
+      riskCategory: trustScoreToCategory(newScore),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, renterId));
+}
+
 // ── Ops/Admin: close a rental after return inspection ──────────────────────
 router.post(
   "/:id/close",
@@ -509,6 +538,7 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await updateRenterTrustScore(rental.renterId, "clean", rental.returnedAt, rental.endDate);
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -540,6 +570,7 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await updateRenterTrustScore(rental.renterId, "penalty", rental.returnedAt, rental.endDate);
       await recordAudit({
         req,
         action: "rental.close_penalty",
@@ -574,6 +605,7 @@ router.post(
       payloadJson: { outcome, rentalId: id },
     });
 
+    await updateRenterTrustScore(rental.renterId, outcome, rental.returnedAt, rental.endDate);
     await recordAudit({
       req,
       action: "rental.close_enforcement",

@@ -134,11 +134,15 @@ router.post(
       .where(eq(disputes.id, input.disputeId))
       .returning();
 
-    // Escalate to enforcement if legally flagged
     if (input.resolution === "escalated_to_legal") {
       await db
         .update(rentals)
         .set({ status: "enforcement", updatedAt: new Date() })
+        .where(eq(rentals.id, dispute.rentalId));
+    } else {
+      await db
+        .update(rentals)
+        .set({ status: "under_inspection", updatedAt: new Date() })
         .where(eq(rentals.id, dispute.rentalId));
     }
 

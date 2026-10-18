@@ -259,6 +259,16 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ nationalId }),
     }),
+  updateProfile: (data: { fullName?: string; phoneE164?: string }) =>
+    request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

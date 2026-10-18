@@ -319,6 +319,13 @@ router.get(
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
 
+    const search = (req.query.q as string | undefined)?.trim();
+    if (search) {
+      conditions.push(
+        sql`(lower(title) like ${"%" + search.toLowerCase() + "%"} or lower(brand) like ${"%" + search.toLowerCase() + "%"} or lower(coalesce(model,'')) like ${"%" + search.toLowerCase() + "%"})`
+      );
+    }
+
     const rows = await db
       .select({
         id: assets.id,
@@ -329,6 +336,7 @@ router.get(
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
+        submissionImagesJson: assets.submissionImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
       })

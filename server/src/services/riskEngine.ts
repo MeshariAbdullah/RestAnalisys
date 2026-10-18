@@ -244,3 +244,37 @@ export function trustScoreToCategory(score: number): RiskCategory {
   if (score >= 25) return "high";
   return "ultra_high";
 }
+
+export type RentalOutcome = "clean" | "penalty" | "major_damage" | "loss" | "cancelled";
+
+/**
+ * Compute updated trust score after a rental outcome.
+ * Returns the new score (clamped 0..100) and the delta applied.
+ */
+export function computeTrustScoreUpdate(
+  currentScore: number,
+  outcome: RentalOutcome,
+  wasLate: boolean,
+): { newScore: number; delta: number } {
+  let delta = 0;
+  switch (outcome) {
+    case "clean":
+      delta = +3;
+      break;
+    case "penalty":
+      delta = -5;
+      break;
+    case "major_damage":
+      delta = -15;
+      break;
+    case "loss":
+      delta = -25;
+      break;
+    case "cancelled":
+      delta = -2;
+      break;
+  }
+  if (wasLate) delta -= 3;
+  const newScore = Math.max(0, Math.min(100, currentScore + delta));
+  return { newScore, delta };
+}
