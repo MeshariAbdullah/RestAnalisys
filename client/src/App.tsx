@@ -1,10 +1,12 @@
 import React from "react";
-import { Route, Switch, Redirect } from "wouter";
+import { Route, Switch } from "wouter";
 import ProtectedRoute from "./components/ProtectedRoute";
+import NotFound from "./pages/NotFound";
 
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Profile from "./pages/Profile";
 
 // Renter
 import Browse from "./pages/renter/Browse";
@@ -110,6 +112,11 @@ export default function App() {
         <ProtectedRoute roles={["operations"]}><AlertsPage /></ProtectedRoute>
       </Route>
 
+      {/* Profile (all authenticated roles) */}
+      <Route path="/profile">
+        <ProtectedRoute><Profile /></ProtectedRoute>
+      </Route>
+
       {/* Admin */}
       <Route path="/admin">
         <ProtectedRoute roles={["admin", "super_admin"]}><AdminDashboard /></ProtectedRoute>
@@ -131,7 +138,7 @@ export default function App() {
       </Route>
 
       <Route>
-        <Redirect to="/" />
+        <NotFound />
       </Route>
     </Switch>
   );

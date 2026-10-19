@@ -3,7 +3,7 @@
  * session info. The Saudi Digital Identity linkage lives here.
  */
 
-import { Router } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
@@ -15,10 +15,42 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
 
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 10;
+const ipHits = new Map<string, number[]>();
+
+function rateLimit(req: Request, res: Response, next: NextFunction) {
+  const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+
+  let timestamps = ipHits.get(ip) ?? [];
+  timestamps = timestamps.filter((t) => t > windowStart);
+
+  if (timestamps.length >= RATE_LIMIT_MAX) {
+    res.status(429).json({ error: "Too many requests — try again in a minute" });
+    return;
+  }
+
+  timestamps.push(now);
+  ipHits.set(ip, timestamps);
+  next();
+}
+
+setInterval(() => {
+  const cutoff = Date.now() - RATE_LIMIT_WINDOW_MS;
+  for (const [ip, timestamps] of ipHits) {
+    const live = timestamps.filter((t) => t > cutoff);
+    if (live.length === 0) ipHits.delete(ip);
+    else ipHits.set(ip, live);
+  }
+}, RATE_LIMIT_WINDOW_MS);
+
 const router = Router();
 
 router.post(
   "/register",
+  rateLimit,
   asyncHandler(async (req, res) => {
     const input = RegisterSchema.parse(req.body);
 
@@ -77,6 +109,7 @@ router.post(
 
 router.post(
   "/login",
+  rateLimit,
   asyncHandler(async (req, res) => {
     const { email, password } = LoginSchema.parse(req.body);
     const [user] = await db
