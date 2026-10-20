@@ -35,8 +35,12 @@ export default function UsersPage() {
       ? prompt("Reason for blocking?") ?? undefined
       : undefined;
     if (block && !reason) return;
-    await adminApi.blockUser(u.id, block, reason);
-    await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    try {
+      await adminApi.blockUser(u.id, block, reason);
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (err: any) {
+      alert(err.message ?? "Failed to update user");
+    }
   }
 
   return (

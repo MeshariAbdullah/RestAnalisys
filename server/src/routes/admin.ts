@@ -4,6 +4,8 @@
 
 import { Router } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
+import { z } from "zod";
 import { db } from "../db/index.js";
 import {
   users,
@@ -133,7 +135,25 @@ router.get(
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
+    const query = db.select({
+      id: users.id,
+      email: users.email,
+      phoneE164: users.phoneE164,
+      fullName: users.fullName,
+      role: users.role,
+      nationalId: users.nationalId,
+      nafathVerified: users.nafathVerified,
+      kycStatus: users.kycStatus,
+      phoneVerified: users.phoneVerified,
+      emailVerified: users.emailVerified,
+      trustScore: users.trustScore,
+      riskCategory: users.riskCategory,
+      isBlocked: users.isBlocked,
+      blockedReason: users.blockedReason,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
+      lastLoginAt: users.lastLoginAt,
+    }).from(users);
     const rows = role
       ? await query.where(eq(users.role, role as any)).limit(200)
       : await query.limit(200);
@@ -148,7 +168,10 @@ router.post(
   requirePermission("user.block"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { reason, block } = req.body as { reason?: string; block: boolean };
+    const { reason, block } = z.object({
+      block: z.boolean(),
+      reason: z.string().optional(),
+    }).parse(req.body);
     const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
     if (!user) throw new NotFoundError("User");
     const [updated] = await db
@@ -178,12 +201,13 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
-      email: string;
-      fullName: string;
-      role: "admin" | "operations" | "inspector";
-      passwordHash: string;
-    };
+    const { email, fullName, role, password } = z.object({
+      email: z.string().email(),
+      fullName: z.string().min(2),
+      role: z.enum(["admin", "operations", "inspector"]),
+      password: z.string().min(8),
+    }).parse(req.body);
+    const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db
       .insert(users)
       .values({

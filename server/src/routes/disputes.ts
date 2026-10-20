@@ -4,6 +4,7 @@
 
 import { Router } from "express";
 import { desc, eq } from "drizzle-orm";
+import { z } from "zod";
 import { db } from "../db/index.js";
 import { disputes, rentals } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -84,7 +85,9 @@ router.post(
   requirePermission("dispute.assign"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { assigneeUserId } = req.body as { assigneeUserId: number };
+    const { assigneeUserId } = z.object({
+      assigneeUserId: z.number().int().positive(),
+    }).parse(req.body);
     const [updated] = await db
       .update(disputes)
       .set({

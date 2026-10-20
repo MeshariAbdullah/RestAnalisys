@@ -21,8 +21,12 @@ export default function AlertsPage() {
   });
 
   async function resolve(id: number) {
-    await operationsApi.resolveAlert(id);
-    await qc.invalidateQueries({ queryKey: ["alerts"] });
+    try {
+      await operationsApi.resolveAlert(id);
+      await qc.invalidateQueries({ queryKey: ["alerts"] });
+    } catch (err: any) {
+      alert(err.message ?? "Failed to resolve alert");
+    }
   }
 
   return (

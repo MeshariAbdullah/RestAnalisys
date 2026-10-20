@@ -85,10 +85,8 @@ export default function OwnerDashboard() {
               Lifetime payouts
             </div>
             <p className="text-3xl font-bold">{formatSar(totalPayouts)}</p>
-            <Link href="/owner/payouts">
-              <a className="text-xs text-amber-600 hover:underline mt-1 inline-block">
-                View payout history →
-              </a>
+            <Link href="/owner/payouts" className="text-xs text-amber-600 hover:underline mt-1 inline-block">
+              View payout history →
             </Link>
           </CardContent>
         </Card>
@@ -102,10 +100,8 @@ export default function OwnerDashboard() {
           <CardContent className="p-12 text-center text-neutral-500">
             <Package className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
             <p>You haven't submitted any assets yet.</p>
-            <Link href="/owner/submit">
-              <a className="text-amber-600 hover:underline text-sm mt-2 inline-block">
-                Submit your first asset →
-              </a>
+            <Link href="/owner/submit" className="text-amber-600 hover:underline text-sm mt-2 inline-block">
+              Submit your first asset →
             </Link>
           </CardContent>
         </Card>
@@ -113,49 +109,47 @@ export default function OwnerDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {assets.map((asset: Asset) => (
             <Link key={asset.id} href={`/owner/assets/${asset.id}`}>
-              <a>
-                <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
-                  <div className="aspect-video bg-neutral-100 relative flex items-center justify-center">
-                    {asset.studioImagesJson?.[0] || asset.submissionImagesJson?.[0] ? (
-                      <img
-                        src={
-                          asset.studioImagesJson[0] ||
-                          asset.submissionImagesJson[0]
-                        }
-                        alt={asset.title}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <Diamond className="w-12 h-12 text-neutral-300" />
-                    )}
-                    <Badge
-                      className={`absolute top-3 right-3 border-0 ${statusColor(
-                        asset.status
-                      )}`}
-                    >
-                      {asset.status.replace(/_/g, " ")}
-                    </Badge>
+              <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+                <div className="aspect-video bg-neutral-100 relative flex items-center justify-center">
+                  {asset.studioImagesJson?.[0] || asset.submissionImagesJson?.[0] ? (
+                    <img
+                      src={
+                        asset.studioImagesJson[0] ||
+                        asset.submissionImagesJson[0]
+                      }
+                      alt={asset.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Diamond className="w-12 h-12 text-neutral-300" />
+                  )}
+                  <Badge
+                    className={`absolute top-3 right-3 border-0 ${statusColor(
+                      asset.status
+                    )}`}
+                  >
+                    {asset.status.replace(/_/g, " ")}
+                  </Badge>
+                </div>
+                <CardContent className="p-4">
+                  <p className="text-[11px] uppercase tracking-wider text-neutral-500">
+                    {asset.brand}
+                  </p>
+                  <p className="font-semibold mt-0.5 line-clamp-1">
+                    {asset.title}
+                  </p>
+                  <div className="mt-3 flex items-center justify-between text-sm">
+                    <span className="text-neutral-500">Daily</span>
+                    <span className="font-semibold text-amber-600">
+                      {formatSar(asset.dailyRentalPriceHalalas)}
+                    </span>
                   </div>
-                  <CardContent className="p-4">
-                    <p className="text-[11px] uppercase tracking-wider text-neutral-500">
-                      {asset.brand}
-                    </p>
-                    <p className="font-semibold mt-0.5 line-clamp-1">
-                      {asset.title}
-                    </p>
-                    <div className="mt-3 flex items-center justify-between text-sm">
-                      <span className="text-neutral-500">Daily</span>
-                      <span className="font-semibold text-amber-600">
-                        {formatSar(asset.dailyRentalPriceHalalas)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-neutral-500">Evaluated</span>
-                      <span>{formatSar(asset.evaluatedValueHalalas)}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </a>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-neutral-500">Evaluated</span>
+                    <span>{formatSar(asset.evaluatedValueHalalas)}</span>
+                  </div>
+                </CardContent>
+              </Card>
             </Link>
           ))}
         </div>

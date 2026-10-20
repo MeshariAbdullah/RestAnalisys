@@ -14,6 +14,7 @@ const CATEGORIES = [
   { id: "watch", label: "Watches", icon: Watch },
   { id: "dress", label: "Dresses", icon: Shirt },
   { id: "jewelry", label: "Jewelry", icon: Gem },
+  { id: "accessory", label: "Accessories", icon: Diamond },
 ];
 
 export default function Browse() {
@@ -87,52 +88,50 @@ export default function Browse() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((asset) => (
             <Link key={asset.id} href={`/browse/${asset.id}`}>
-              <a>
-                <Card className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer h-full">
-                  <div className="aspect-square bg-neutral-100 relative flex items-center justify-center">
-                    {asset.studioImagesJson?.[0] || asset.submissionImagesJson?.[0] ? (
-                      <img
-                        src={
-                          asset.studioImagesJson[0] ||
-                          asset.submissionImagesJson[0]
-                        }
-                        alt={asset.title}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <Diamond className="w-16 h-16 text-neutral-300" />
-                    )}
-                    <Badge className="absolute top-3 right-3 bg-white/90 text-neutral-900 backdrop-blur">
-                      {asset.category}
-                    </Badge>
-                  </div>
-                  <CardContent className="p-5">
-                    <p className="text-xs uppercase tracking-wider text-neutral-500 font-medium">
-                      {asset.brand}
+              <Card className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer h-full">
+                <div className="aspect-square bg-neutral-100 relative flex items-center justify-center">
+                  {asset.studioImagesJson?.[0] || asset.submissionImagesJson?.[0] ? (
+                    <img
+                      src={
+                        asset.studioImagesJson[0] ||
+                        asset.submissionImagesJson[0]
+                      }
+                      alt={asset.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Diamond className="w-16 h-16 text-neutral-300" />
+                  )}
+                  <Badge className="absolute top-3 right-3 bg-white/90 text-neutral-900 backdrop-blur">
+                    {asset.category}
+                  </Badge>
+                </div>
+                <CardContent className="p-5">
+                  <p className="text-xs uppercase tracking-wider text-neutral-500 font-medium">
+                    {asset.brand}
+                  </p>
+                  <h3 className="font-semibold text-lg mt-1 line-clamp-1">
+                    {asset.title}
+                  </h3>
+                  {asset.model && (
+                    <p className="text-sm text-neutral-500 line-clamp-1">
+                      {asset.model}
                     </p>
-                    <h3 className="font-semibold text-lg mt-1 line-clamp-1">
-                      {asset.title}
-                    </h3>
-                    {asset.model && (
-                      <p className="text-sm text-neutral-500 line-clamp-1">
-                        {asset.model}
-                      </p>
-                    )}
-                    <div className="flex items-baseline justify-between mt-4">
-                      <p className="text-amber-600 font-bold">
-                        {formatSar(asset.dailyRentalPriceHalalas)}
-                        <span className="text-xs font-normal text-neutral-500">
-                          {" "}
-                          / day
-                        </span>
-                      </p>
-                      <p className="text-xs text-neutral-500">
-                        Value {formatSar(asset.evaluatedValueHalalas)}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </a>
+                  )}
+                  <div className="flex items-baseline justify-between mt-4">
+                    <p className="text-amber-600 font-bold">
+                      {formatSar(asset.dailyRentalPriceHalalas)}
+                      <span className="text-xs font-normal text-neutral-500">
+                        {" "}
+                        / day
+                      </span>
+                    </p>
+                    <p className="text-xs text-neutral-500">
+                      Value {formatSar(asset.evaluatedValueHalalas)}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
             </Link>
           ))}
         </div>
