@@ -1,10 +1,11 @@
 import React from "react";
-import { Route, Switch, Redirect } from "wouter";
+import { Route, Switch } from "wouter";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import NotFound from "./pages/NotFound";
 
 // Renter
 import Browse from "./pages/renter/Browse";
@@ -130,9 +131,7 @@ export default function App() {
         <ProtectedRoute roles={["admin", "super_admin"]}><SanadTracking /></ProtectedRoute>
       </Route>
 
-      <Route>
-        <Redirect to="/" />
-      </Route>
+      <Route component={NotFound} />
     </Switch>
   );
 }

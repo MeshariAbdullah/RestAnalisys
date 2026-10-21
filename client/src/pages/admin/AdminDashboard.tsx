@@ -10,14 +10,35 @@ import {
   AlertOctagon,
   TrendingUp,
 } from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
-import { adminApi, formatSar } from "@/lib/api";
+import { adminApi, formatSar, halalasToSar } from "@/lib/api";
 
 export default function AdminDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["admin-kpis"],
     queryFn: () => adminApi.kpis(),
   });
+
+  const { data: trendData } = useQuery({
+    queryKey: ["admin-revenue-trend"],
+    queryFn: () => adminApi.revenueTrend(),
+  });
+
+  const chartData = (trendData ?? []).map((row) => ({
+    day: row.day.slice(5),
+    revenue: halalasToSar(Number(row.total_halalas)),
+    fees: halalasToSar(Number(row.fee_halalas)),
+    rentals: Number(row.rentals),
+  }));
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -79,6 +100,45 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {chartData.length > 0 && (
+        <Card className="mb-8">
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold mb-4">Revenue trend (30 days)</h2>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                  <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => `${v} SAR`} />
+                  <Tooltip
+                    formatter={(value: number, name: string) => [
+                      `${value.toLocaleString("en-SA", { maximumFractionDigits: 0 })} SAR`,
+                      name === "revenue" ? "Total Revenue" : "Platform Fees",
+                    ]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="#f59e0b"
+                    fill="#f59e0b"
+                    fillOpacity={0.15}
+                    strokeWidth={2}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="fees"
+                    stroke="#0ea5e9"
+                    fill="#0ea5e9"
+                    fillOpacity={0.1}
+                    strokeWidth={2}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Link href="/admin/disputes">

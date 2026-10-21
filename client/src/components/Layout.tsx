@@ -71,7 +71,8 @@ function roleLabel(role: Role): string {
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const user: User | null = getCurrentUser();
 
   const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
