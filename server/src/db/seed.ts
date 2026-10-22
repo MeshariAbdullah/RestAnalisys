@@ -44,7 +44,7 @@ async function seed() {
       .insert(users)
       .values([
         {
-          email: "super@mlr.sa",
+          email: "admin@mlr.sa",
           passwordHash: pass,
           fullName: "Super Admin",
           role: "super_admin",
@@ -58,7 +58,7 @@ async function seed() {
           riskCategory: "low",
         },
         {
-          email: "admin@mlr.sa",
+          email: "admin2@mlr.sa",
           passwordHash: pass,
           fullName: "Reem AlQahtani",
           role: "admin",
@@ -100,7 +100,7 @@ async function seed() {
           riskCategory: "low",
         },
         {
-          email: "owner@mlr.sa",
+          email: "owner@demo.sa",
           passwordHash: pass,
           fullName: "Nouf AlSaud",
           role: "owner",
@@ -115,7 +115,7 @@ async function seed() {
           riskCategory: "low",
         },
         {
-          email: "renter@mlr.sa",
+          email: "renter@demo.sa",
           passwordHash: pass,
           fullName: "Sara AlOtaibi",
           role: "renter",
@@ -130,7 +130,7 @@ async function seed() {
           riskCategory: "low",
         },
         {
-          email: "new.renter@mlr.sa",
+          email: "newbie@demo.sa",
           passwordHash: pass,
           fullName: "Mohammed AlZahrani",
           role: "renter",
@@ -564,13 +564,13 @@ async function seed() {
 
   console.log("✅ Seed complete.");
   console.log("\nDemo credentials (password for all: Mlr@2024!):");
-  console.log("  super@mlr.sa     (super_admin)");
-  console.log("  admin@mlr.sa     (admin)");
+  console.log("  admin@mlr.sa     (super_admin)");
+  console.log("  admin2@mlr.sa    (admin)");
   console.log("  inspector@mlr.sa (inspector)");
   console.log("  ops@mlr.sa       (operations)");
-  console.log("  owner@mlr.sa     (owner)");
-  console.log("  renter@mlr.sa    (renter - trusted)");
-  console.log("  new.renter@mlr.sa (renter - new, 150% commitment)");
+  console.log("  owner@demo.sa    (owner)");
+  console.log("  renter@demo.sa   (renter - trusted)");
+  console.log("  newbie@demo.sa   (renter - new, 150% commitment)");
 }
 
 seed()

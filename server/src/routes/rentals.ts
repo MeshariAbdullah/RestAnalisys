@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { rentalNotification, assetNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -280,6 +281,14 @@ router.post(
       after: { rental, decision },
     });
 
+    rentalNotification(
+      asset.ownerId,
+      "created",
+      rental.reference,
+      rental.id,
+      `Your asset "${asset.title}" has been reserved for rental ${rental.reference}.`
+    );
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -306,6 +315,21 @@ router.get(
       .select()
       .from(rentals)
       .where(eq(rentals.renterId, req.user!.userId))
+      .orderBy(desc(rentals.createdAt));
+    res.json(rows);
+  })
+);
+
+// ── Owner: view rentals of my assets ──────────────────────────────────────
+router.get(
+  "/owner",
+  authenticate,
+  requirePermission("rental.read.own"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const rows = await db
+      .select()
+      .from(rentals)
+      .where(eq(rentals.ownerId, req.user!.userId))
       .orderBy(desc(rentals.createdAt));
     res.json(rows);
   })
@@ -433,6 +457,21 @@ router.post(
       .set({ status: "rented_out", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
 
+    rentalNotification(
+      rental.renterId,
+      "delivered",
+      rental.reference,
+      rental.id,
+      `Your rental ${rental.reference} has been delivered. Enjoy!`
+    );
+    rentalNotification(
+      rental.ownerId,
+      "delivered",
+      rental.reference,
+      rental.id,
+      `Your asset has been delivered to the renter for rental ${rental.reference}.`
+    );
+
     await recordAudit({
       req,
       action: "rental.delivered",
@@ -509,6 +548,22 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      rentalNotification(
+        rental.renterId,
+        "closed",
+        rental.reference,
+        rental.id,
+        `Rental ${rental.reference} has been closed successfully. Thank you!`
+      );
+      rentalNotification(
+        rental.ownerId,
+        "closed",
+        rental.reference,
+        rental.id,
+        `Rental ${rental.reference} closed. Your asset is back and ready for re-listing.`
+      );
+
       await recordAudit({
         req,
         action: "rental.close_clean",

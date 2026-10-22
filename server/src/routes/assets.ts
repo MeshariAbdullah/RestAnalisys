@@ -11,7 +11,7 @@
  */
 
 import { Router } from "express";
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, lte, or, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { assets, inspections, users, inventoryMovements } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { assetNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -247,6 +248,16 @@ router.post(
       .where(eq(assets.id, assetId))
       .returning();
 
+    assetNotification(
+      asset.ownerId,
+      approved ? "approved" : "rejected",
+      asset.title,
+      assetId,
+      approved
+        ? `Your asset "${asset.title}" has been approved! Please arrange shipment to our facility.`
+        : `Your asset "${asset.title}" was not approved. Reason: ${rejectionReason ?? "See details"}`
+    );
+
     await recordAudit({
       req,
       action: approved ? "asset.approve" : "asset.reject",
@@ -318,6 +329,24 @@ router.get(
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.search) {
+      const term = `%${filter.search}%`;
+      conditions.push(
+        or(
+          ilike(assets.title, term),
+          ilike(assets.brand, term),
+          ilike(assets.model, term),
+          ilike(assets.description, term)
+        )!
+      );
+    }
+
+    const offset = (filter.page - 1) * filter.limit;
+
+    const [totalRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(assets)
+      .where(and(...conditions));
 
     const rows = await db
       .select({
@@ -335,9 +364,16 @@ router.get(
       .from(assets)
       .where(and(...conditions))
       .orderBy(desc(assets.updatedAt))
-      .limit(filter.limit);
+      .limit(filter.limit)
+      .offset(offset);
 
-    res.json({ items: rows, count: rows.length });
+    const total = Number(totalRow?.count ?? 0);
+    res.json({
+      items: rows,
+      total,
+      page: filter.page,
+      pageCount: Math.ceil(total / filter.limit),
+    });
   })
 );
 

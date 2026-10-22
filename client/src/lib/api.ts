@@ -242,6 +242,19 @@ export interface AdminKPIs {
 // Auth
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface AppNotification {
+  id: number;
+  type: string;
+  title: string;
+  body: string;
+  linkUrl?: string;
+  relatedEntityType?: string;
+  relatedEntityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
 export const authApi = {
   login: (email: string, password: string) =>
     request<{ token: string; user: User }>("/auth/login", {
@@ -254,6 +267,11 @@ export const authApi = {
       body: JSON.stringify({ email, password, fullName, role }),
     }),
   me: () => request<User>("/auth/me"),
+  updateProfile: (data: { fullName?: string; phone?: string }) =>
+    request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
   nafathVerify: (nationalId: string) =>
     request<{ transactionId: string; status: string }>("/auth/nafath/initiate", {
       method: "POST",
@@ -266,12 +284,22 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: {
+    category?: string;
+    brand?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.page) qs.set("page", String(params.page));
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    return request<{ items: Asset[]; total: number; page: number; pageCount: number }>(
+      `/assets/listings?${qs}`
+    );
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
@@ -362,6 +390,24 @@ export const inspectionsApi = {
 // Rentals
 // ─────────────────────────────────────────────────────────────────────────────
 
+export const notificationsApi = {
+  list: (params?: { limit?: number; offset?: number; unread?: boolean }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    if (params?.unread) qs.set("unread", "true");
+    return request<{ items: AppNotification[]; unreadCount: number }>(
+      `/notifications?${qs}`
+    );
+  },
+  unreadCount: () =>
+    request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request("/notifications/read-all", { method: "POST" }),
+};
+
 export const rentalsApi = {
   quote: (assetId: number, startDate: string, endDate: string) => {
     const qs = new URLSearchParams({
@@ -394,6 +440,7 @@ export const rentalsApi = {
       body: JSON.stringify(data),
     }),
   mine: () => request<Rental[]>("/rentals/mine"),
+  ownerRentals: () => request<Rental[]>("/rentals/owner"),
   list: () => request<Rental[]>("/rentals"),
   get: (id: number) =>
     request<{
@@ -578,6 +625,36 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: {
+    limit?: number;
+    offset?: number;
+    entityType?: string;
+    action?: string;
+    from?: string;
+    to?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    return request<{
+      items: Array<{
+        id: number;
+        actorUserId: number | null;
+        actorRole: string | null;
+        action: string;
+        entityType: string;
+        entityId: number | null;
+        createdAt: string;
+      }>;
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/admin/audit-logs?${qs}`);
+  },
 };
 
 export const healthApi = {
