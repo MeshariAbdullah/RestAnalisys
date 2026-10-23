@@ -560,6 +560,18 @@ export const operationsApi = {
 // Admin
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface AuditLogEntry {
+  id: number;
+  userId: number | null;
+  action: string;
+  entityType: string;
+  entityId: number | null;
+  beforeJson: Record<string, unknown> | null;
+  afterJson: Record<string, unknown> | null;
+  ipAddress: string | null;
+  createdAt: string;
+}
+
 export const adminApi = {
   kpis: () => request<AdminKPIs>("/admin/kpis"),
   revenueTrend: () =>
@@ -576,8 +588,21 @@ export const adminApi = {
       method: "POST",
       body: JSON.stringify({ block, reason }),
     }),
+  createStaff: (data: { email: string; fullName: string; role: string; password: string }) =>
+    request<User>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLog: (params?: { limit?: number; offset?: number; entityType?: string; action?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    return request<AuditLogEntry[]>(`/admin/audit-log?${qs}`);
+  },
 };
 
 export const healthApi = {

@@ -99,7 +99,18 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(
+      (await db
+        .select({ count: sql<number>`count(*)` })
+        .from(rentals)
+        .where(
+          and(
+            eq(rentals.renterId, userId),
+            sql`returned_at > (end_date::date + interval '1 day')`,
+            sql`status in ('closed','closed_with_penalty')`
+          )
+        ))[0]?.count ?? 0
+    ),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,

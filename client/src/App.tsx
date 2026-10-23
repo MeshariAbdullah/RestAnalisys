@@ -11,6 +11,8 @@ import Browse from "./pages/renter/Browse";
 import ItemDetail from "./pages/renter/ItemDetail";
 import LegalCommitmentPage from "./pages/renter/LegalCommitment";
 import MyRentals from "./pages/renter/MyRentals";
+import RentalDetail from "./pages/renter/RentalDetail";
+import FileDispute from "./pages/renter/FileDispute";
 
 // Owner
 import OwnerDashboard from "./pages/owner/OwnerDashboard";
@@ -21,6 +23,7 @@ import Payouts from "./pages/owner/Payouts";
 // Inspector
 import InspectorDashboard from "./pages/inspector/InspectorDashboard";
 import InspectionForm from "./pages/inspector/InspectionForm";
+import ReturnInspectionForm from "./pages/inspector/ReturnInspectionForm";
 
 // Ops
 import OpsDashboard from "./pages/ops/OpsDashboard";
@@ -35,6 +38,7 @@ import UsersPage from "./pages/admin/Users";
 import DisputesPage from "./pages/admin/Disputes";
 import FinancialOverview from "./pages/admin/FinancialOverview";
 import SanadTracking from "./pages/admin/SanadTracking";
+import AuditLog from "./pages/admin/AuditLog";
 
 export default function App() {
   return (
@@ -65,6 +69,20 @@ export default function App() {
       <Route path="/my-rentals">
         <ProtectedRoute roles={["renter"]}><MyRentals /></ProtectedRoute>
       </Route>
+      <Route path="/my-rentals/:id">
+        {(params) => (
+          <ProtectedRoute roles={["renter"]}>
+            <RentalDetail rentalId={Number(params.id)} />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/dispute/:rentalId">
+        {(params) => (
+          <ProtectedRoute roles={["renter", "owner"]}>
+            <FileDispute rentalId={Number(params.rentalId)} />
+          </ProtectedRoute>
+        )}
+      </Route>
 
       {/* Owner */}
       <Route path="/owner">
@@ -92,6 +110,16 @@ export default function App() {
         {(params) => (
           <ProtectedRoute roles={["inspector"]}>
             <InspectionForm assetId={Number(params.assetId)} />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/inspector/return/:assetId/:rentalId">
+        {(params) => (
+          <ProtectedRoute roles={["inspector"]}>
+            <ReturnInspectionForm
+              assetId={Number(params.assetId)}
+              rentalId={Number(params.rentalId)}
+            />
           </ProtectedRoute>
         )}
       </Route>
@@ -128,6 +156,9 @@ export default function App() {
       </Route>
       <Route path="/admin/sanad">
         <ProtectedRoute roles={["admin", "super_admin"]}><SanadTracking /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/audit">
+        <ProtectedRoute roles={["admin", "super_admin"]}><AuditLog /></ProtectedRoute>
       </Route>
 
       <Route>

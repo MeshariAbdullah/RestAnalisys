@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users as UsersIcon, ShieldAlert, ShieldCheck } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -23,20 +25,35 @@ function riskColor(c: string): string {
 export default function UsersPage() {
   const qc = useQueryClient();
   const [role, setRole] = useState<string>("all");
+  const [blockTarget, setBlockTarget] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
+  const [blockReason, setBlockReason] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users", role],
     queryFn: () => adminApi.users(role === "all" ? undefined : role),
   });
 
-  async function toggleBlock(u: User) {
-    const block = !u.isBlocked;
-    const reason = block
-      ? prompt("Reason for blocking?") ?? undefined
-      : undefined;
-    if (block && !reason) return;
-    await adminApi.blockUser(u.id, block, reason);
+  function startBlock(u: User) {
+    if (u.isBlocked) {
+      // Unblock directly, no reason needed
+      adminApi.blockUser(u.id, false).then(() => {
+        qc.invalidateQueries({ queryKey: ["admin-users"] });
+      });
+      return;
+    }
+    setBlockTarget({ id: u.id, name: u.fullName });
+    setBlockReason("");
+  }
+
+  async function confirmBlock() {
+    if (!blockTarget || !blockReason.trim()) return;
+    await adminApi.blockUser(blockTarget.id, true, blockReason.trim());
     await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    setBlockTarget(null);
+    setBlockReason("");
   }
 
   return (
@@ -121,7 +138,7 @@ export default function UsersPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => toggleBlock(u)}
+                        onClick={() => startBlock(u)}
                       >
                         {u.isBlocked ? (
                           <>
@@ -143,6 +160,56 @@ export default function UsersPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Block user dialog */}
+      <Dialog.Root
+        open={blockTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setBlockTarget(null);
+            setBlockReason("");
+          }
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/40 z-50" />
+          <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md rounded-lg border bg-white p-6 shadow-xl">
+            <Dialog.Title className="text-lg font-semibold">
+              Block user
+            </Dialog.Title>
+            <Dialog.Description className="text-sm text-neutral-500 mt-1 mb-4">
+              Provide a reason for blocking{" "}
+              <span className="font-medium text-neutral-700">
+                {blockTarget?.name}
+              </span>
+              .
+            </Dialog.Description>
+
+            <Textarea
+              placeholder="Reason for blocking this user..."
+              value={blockReason}
+              onChange={(e) => setBlockReason(e.target.value)}
+              rows={3}
+            />
+
+            <div className="flex gap-2 justify-end mt-4">
+              <Dialog.Close asChild>
+                <Button variant="outline" size="sm">
+                  Cancel
+                </Button>
+              </Dialog.Close>
+              <Button
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={!blockReason.trim()}
+                onClick={confirmBlock}
+              >
+                Block user
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }

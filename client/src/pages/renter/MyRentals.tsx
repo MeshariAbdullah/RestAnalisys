@@ -21,6 +21,10 @@ const STATUS_META: Record<string, { color: string; icon: typeof Clock }> = {
   },
   closed_clean: { color: "bg-green-100 text-green-700", icon: CheckCircle },
   closed_with_penalty: { color: "bg-red-100 text-red-700", icon: AlertCircle },
+  closed_with_major_damage: { color: "bg-red-100 text-red-700", icon: AlertCircle },
+  closed_with_loss: { color: "bg-red-100 text-red-700", icon: AlertCircle },
+  enforcement: { color: "bg-red-200 text-red-800", icon: AlertCircle },
+  in_dispute: { color: "bg-red-100 text-red-700", icon: AlertCircle },
   disputed: { color: "bg-red-100 text-red-700", icon: AlertCircle },
   cancelled: { color: "bg-neutral-200 text-neutral-600", icon: AlertCircle },
 };
@@ -74,36 +78,42 @@ export default function MyRentals() {
       ) : (
         <div className="space-y-4">
           {data.map((r: Rental) => (
-            <Card key={r.id}>
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between gap-6 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-mono text-xs text-neutral-500">
-                      {r.reference}
-                    </p>
-                    <p className="font-semibold mt-1">
-                      {r.startDate} → {r.endDate}{" "}
-                      <span className="text-neutral-500 font-normal">
-                        ({r.durationDays} days)
-                      </span>
-                    </p>
-                    <div className="mt-3">
-                      <StatusBadge status={r.status} />
+            <a
+              key={r.id}
+              href={`/my-rentals/${r.id}`}
+              className="block hover:ring-2 hover:ring-amber-300 rounded-xl transition-shadow"
+            >
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between gap-6 flex-wrap">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-mono text-xs text-neutral-500">
+                        {r.reference}
+                      </p>
+                      <p className="font-semibold mt-1">
+                        {r.startDate} → {r.endDate}{" "}
+                        <span className="text-neutral-500 font-normal">
+                          ({r.durationDays} days)
+                        </span>
+                      </p>
+                      <div className="mt-3">
+                        <StatusBadge status={r.status} />
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-neutral-500 uppercase">Total paid</p>
+                      <p className="font-bold text-lg">
+                        {formatSar(r.totalPayableHalalas)}
+                      </p>
+                      <p className="text-[11px] text-neutral-500 mt-1">
+                        Commitment {formatSar(r.legalCommitmentHalalas)} (
+                        {r.legalCommitmentPct}%)
+                      </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-neutral-500 uppercase">Total paid</p>
-                    <p className="font-bold text-lg">
-                      {formatSar(r.totalPayableHalalas)}
-                    </p>
-                    <p className="text-[11px] text-neutral-500 mt-1">
-                      Commitment {formatSar(r.legalCommitmentHalalas)} (
-                      {r.legalCommitmentPct}%)
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </a>
           ))}
         </div>
       )}

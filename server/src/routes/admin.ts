@@ -14,11 +14,13 @@ import {
   sanadRecords,
   riskScores,
 } from "../db/schema.js";
+import bcrypt from "bcryptjs";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { auditLogs } from "../db/schema.js";
 
 const router = Router();
 
@@ -178,12 +180,16 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
+    const { email, fullName, role, password } = req.body as {
       email: string;
       fullName: string;
       role: "admin" | "operations" | "inspector";
-      passwordHash: string;
+      password: string;
     };
+    if (role === "admin" && req.user!.role !== "super_admin") {
+      return res.status(403).json({ error: "Only super_admin can create admin users" });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db
       .insert(users)
       .values({
@@ -217,6 +223,29 @@ router.get(
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
+    res.json(rows);
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-log",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+    const entityType = req.query.entityType as string | undefined;
+    const action = req.query.action as string | undefined;
+
+    let query = db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt));
+    if (entityType) {
+      query = query.where(eq(auditLogs.entityType, entityType)) as typeof query;
+    }
+    if (action) {
+      query = query.where(eq(auditLogs.action, action)) as typeof query;
+    }
+    const rows = await query.limit(limit).offset(offset);
     res.json(rows);
   })
 );
