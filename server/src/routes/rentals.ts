@@ -68,6 +68,22 @@ function daysBetween(startIso: string, endIso: string): number {
   return Math.round((end - start) / (1000 * 60 * 60 * 24));
 }
 
+async function countLateReturns(userId: number): Promise<number> {
+  const result = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`${rentals.returnedAt} IS NOT NULL`,
+        sql`${rentals.returnedAt}::date > ${rentals.endDate}::date`
+      )
+    );
+  return Number(result[0]?.count ?? 0);
+}
+
 function generateRentalReference(): string {
   const year = new Date().getFullYear();
   const rand = Math.floor(100000 + Math.random() * 900000);
@@ -99,7 +115,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await countLateReturns(userId),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
