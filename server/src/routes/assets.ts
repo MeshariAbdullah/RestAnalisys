@@ -20,6 +20,7 @@ import {
   AssetSubmissionSchema,
   AssetApprovalSchema,
   AssetListingFilter,
+  ValuationResponseSchema,
 } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
@@ -121,10 +122,7 @@ router.post(
   requirePermission("asset.read.own"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { approved, rejectionReason } = req.body as {
-      approved: boolean;
-      rejectionReason?: string;
-    };
+    const { approved, rejectionReason } = ValuationResponseSchema.parse(req.body);
 
     const [asset] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
     if (!asset) throw new NotFoundError("Asset");
@@ -267,7 +265,10 @@ router.post(
   requirePermission("operations.update"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { warehouseLocationCode } = req.body as { warehouseLocationCode: string };
+    const { warehouseLocationCode } = req.body;
+    if (!warehouseLocationCode || typeof warehouseLocationCode !== "string") {
+      return res.status(400).json({ error: "warehouseLocationCode is required" });
+    }
 
     const [asset] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
     if (!asset) throw new NotFoundError("Asset");

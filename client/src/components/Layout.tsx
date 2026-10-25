@@ -7,6 +7,7 @@ import {
   PackageSearch,
   FileText,
   Shield,
+  ShieldCheck,
   Truck,
   Gavel,
   ClipboardCheck,
@@ -35,6 +36,9 @@ const NAV: NavItem[] = [
   { href: "/browse", label: "Browse Catalog", icon: ShoppingBag, roles: ["renter"] },
   { href: "/my-rentals", label: "My Rentals", icon: FileText, roles: ["renter"] },
 
+  // Identity verification (renter + owner, shown dynamically when unverified)
+  { href: "/nafath", label: "Verify Identity", icon: ShieldCheck, roles: ["renter", "owner"] },
+
   // Owner
   { href: "/owner", label: "Owner Dashboard", icon: LayoutDashboard, roles: ["owner"] },
   { href: "/owner/submit", label: "Submit Asset", icon: Diamond, roles: ["owner"] },
@@ -46,6 +50,7 @@ const NAV: NavItem[] = [
   // Operations
   { href: "/ops", label: "Ops Dashboard", icon: LayoutDashboard, roles: ["operations"] },
   { href: "/ops/shipments", label: "Shipments", icon: Truck, roles: ["operations"] },
+  { href: "/ops/rentals", label: "Rental Lifecycle", icon: FileText, roles: ["operations"] },
   { href: "/ops/inventory", label: "Inventory", icon: PackageSearch, roles: ["operations"] },
   { href: "/ops/alerts", label: "Alerts", icon: AlertTriangle, roles: ["operations"] },
 
@@ -56,6 +61,7 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit-logs", label: "Audit Logs", icon: Shield, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
@@ -74,7 +80,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const user: User | null = getCurrentUser();
 
-  const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
+  const items = user
+    ? NAV.filter((n) => {
+        if (!n.roles.includes(user.role)) return false;
+        if (n.href === "/nafath" && user.nafathVerified) return false;
+        return true;
+      })
+    : [];
 
   function handleLogout() {
     clearSession();
