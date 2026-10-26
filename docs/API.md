@@ -119,8 +119,60 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | POST   | `/users/:id/block`    | admin / super_admin   | Block or unblock a user                |
 | POST   | `/users`              | super_admin           | Create staff users                     |
 
+## Owner Agreements — `/api/owner-agreements`
+
+| Method | Path         | Roles                 | Purpose                                      |
+| ------ | ------------ | --------------------- | -------------------------------------------- |
+| GET    | `/mine`      | owner                 | My consignment agreements                    |
+| GET    | `/`          | admin / super_admin   | All agreements (paginated)                   |
+| GET    | `/:id`       | owner / admin         | Agreement detail                             |
+| POST   | `/`          | owner                 | Create a new consignment agreement           |
+| POST   | `/:id/sign`  | owner                 | Sign the agreement (activates for 1 year)    |
+
 ## Health
 
 | Method | Path          | Roles  | Purpose                                |
 | ------ | ------------- | ------ | -------------------------------------- |
 | GET    | `/api/health` | public | Service status + integration readiness |
+
+---
+
+## Pagination
+
+List endpoints (`GET /rentals`, `GET /admin/users`, `GET /disputes`, `GET /operations/shipments`,
+`GET /operations/alerts`, `GET /owner-agreements`) accept optional query parameters:
+
+| Param  | Default | Range   | Purpose                    |
+| ------ | ------- | ------- | -------------------------- |
+| `page` | 1       | 1+      | Page number                |
+| `limit`| 20      | 1–100   | Items per page             |
+
+Paginated responses follow the shape:
+```json
+{
+  "data": [...],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 150,
+    "totalPages": 8,
+    "hasNext": true,
+    "hasPrev": false
+  }
+}
+```
+
+---
+
+## Rate Limiting
+
+Auth endpoints (`POST /auth/login`, `POST /auth/register`) are rate-limited to
+15 requests per 15-minute window per IP. Responses include headers:
+
+| Header                  | Purpose                                |
+| ----------------------- | -------------------------------------- |
+| `X-RateLimit-Limit`    | Maximum allowed requests in window     |
+| `X-RateLimit-Remaining`| Remaining requests in current window   |
+| `X-RateLimit-Reset`    | Unix timestamp when window resets      |
+
+When exceeded, the server returns `429 Too Many Requests`.

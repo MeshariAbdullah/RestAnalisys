@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Diamond, Plus, TrendingUp, Package, Wallet } from "lucide-react";
+import { Diamond, Plus, TrendingUp, Package, Wallet, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -47,12 +47,20 @@ export default function OwnerDashboard() {
             Your assets under management with MLR
           </p>
         </div>
-        <Link href="/owner/submit">
-          <Button className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
-            <Plus className="w-4 h-4 mr-1.5" />
-            Submit new asset
-          </Button>
-        </Link>
+        <div className="flex gap-3">
+          <Link href="/owner/agreements">
+            <Button variant="outline">
+              <FileText className="w-4 h-4 mr-1.5" />
+              Agreements
+            </Button>
+          </Link>
+          <Link href="/owner/submit">
+            <Button className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
+              <Plus className="w-4 h-4 mr-1.5" />
+              Submit new asset
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">

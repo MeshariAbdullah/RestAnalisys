@@ -56,6 +56,10 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { updateTrustScoreAfterRental, computeLateReturns } from "../services/trustScoreService.js";
+import { notifyRentalCreated, notifyRentalClosed } from "../services/notificationService.js";
+import { RentalCloseSchema } from "../utils/schemas.js";
+import { PaginationSchema, paginate, paginatedResponse } from "../utils/pagination.js";
 
 const router = Router();
 
@@ -99,7 +103,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await computeLateReturns(userId),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +284,8 @@ router.post(
       after: { rental, decision },
     });
 
+    notifyRentalCreated(renterId, rental.reference, quote.totalPayableHalalas / 100).catch(() => {});
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -316,13 +322,23 @@ router.get(
   "/",
   authenticate,
   requirePermission("rental.read.any"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const { page, limit } = PaginationSchema.parse(req.query);
+    const p = paginate({ page, limit });
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(rentals);
+    const total = Number(countResult?.count ?? 0);
+
     const rows = await db
       .select()
       .from(rentals)
       .orderBy(desc(rentals.createdAt))
-      .limit(200);
-    res.json(rows);
+      .limit(p.limit)
+      .offset(p.offset);
+
+    res.json(paginatedResponse(rows, total, { page, limit }));
   })
 );
 
@@ -488,10 +504,7 @@ router.post(
   requirePermission("rental.close"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { outcome, penaltyHalalas } = req.body as {
-      outcome: "clean" | "penalty" | "major_damage" | "loss";
-      penaltyHalalas?: number;
-    };
+    const { outcome, penaltyHalalas } = RentalCloseSchema.parse(req.body);
 
     const [rental] = await db.select().from(rentals).where(eq(rentals.id, id)).limit(1);
     if (!rental) throw new NotFoundError("Rental");
@@ -509,6 +522,8 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await updateTrustScoreAfterRental(rental.renterId, "clean");
+      notifyRentalClosed(rental.renterId, rental.reference, "clean").catch(() => {});
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -540,6 +555,8 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await updateTrustScoreAfterRental(rental.renterId, "penalty");
+      notifyRentalClosed(rental.renterId, rental.reference, "penalty").catch(() => {});
       await recordAudit({
         req,
         action: "rental.close_penalty",
@@ -573,6 +590,10 @@ router.post(
       message: `Rental ${rental.reference} requires Sanad execution for ${outcome}.`,
       payloadJson: { outcome, rentalId: id },
     });
+
+    const trustOutcome = outcome === "loss" ? "loss" as const : "major_damage" as const;
+    await updateTrustScoreAfterRental(rental.renterId, trustOutcome);
+    notifyRentalClosed(rental.renterId, rental.reference, outcome).catch(() => {});
 
     await recordAudit({
       req,
@@ -619,6 +640,8 @@ router.post(
       .update(assets)
       .set({ status: "listed", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
+
+    await updateTrustScoreAfterRental(rental.renterId, "cancelled");
 
     await recordAudit({
       req,

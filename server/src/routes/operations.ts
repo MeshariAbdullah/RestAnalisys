@@ -21,6 +21,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { PaginationSchema, paginate, paginatedResponse } from "../utils/pagination.js";
 
 const router = Router();
 
@@ -70,13 +71,23 @@ router.get(
   "/shipments",
   authenticate,
   requirePermission("operations.read"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const { page, limit } = PaginationSchema.parse(req.query);
+    const p = paginate({ page, limit });
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(shipments);
+    const total = Number(countResult?.count ?? 0);
+
     const rows = await db
       .select()
       .from(shipments)
       .orderBy(desc(shipments.createdAt))
-      .limit(200);
-    res.json(rows);
+      .limit(p.limit)
+      .offset(p.offset);
+
+    res.json(paginatedResponse(rows, total, { page, limit }));
   })
 );
 
@@ -184,13 +195,23 @@ router.get(
   "/alerts",
   authenticate,
   requirePermission("operations.read"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const { page, limit } = PaginationSchema.parse(req.query);
+    const p = paginate({ page, limit });
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(operationalAlerts);
+    const total = Number(countResult?.count ?? 0);
+
     const rows = await db
       .select()
       .from(operationalAlerts)
       .orderBy(desc(operationalAlerts.createdAt))
-      .limit(200);
-    res.json(rows);
+      .limit(p.limit)
+      .offset(p.offset);
+
+    res.json(paginatedResponse(rows, total, { page, limit }));
   })
 );
 

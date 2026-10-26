@@ -580,6 +580,37 @@ export const adminApi = {
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Owner Agreements
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface OwnerAgreement {
+  id: number;
+  ownerId: number;
+  version: string;
+  commissionPct: number;
+  guaranteeAccepted: boolean;
+  signedAt?: string;
+  effectiveFrom?: string;
+  effectiveUntil?: string;
+  createdAt: string;
+}
+
+export const ownerAgreementsApi = {
+  mine: () => request<OwnerAgreement[]>("/owner-agreements/mine"),
+  get: (id: number) => request<OwnerAgreement>(`/owner-agreements/${id}`),
+  create: (data: { guaranteeAccepted: boolean; commissionPct?: number }) =>
+    request<OwnerAgreement>("/owner-agreements", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  sign: (id: number) =>
+    request<OwnerAgreement>(`/owner-agreements/${id}/sign`, {
+      method: "POST",
+      body: JSON.stringify({ acceptTerms: true }),
+    }),
+};
+
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };

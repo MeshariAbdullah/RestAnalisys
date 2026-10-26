@@ -50,6 +50,9 @@ export type Permission =
   | "dispute.resolve"
   | "operations.read"
   | "operations.update"
+  | "owner_agreement.create"
+  | "owner_agreement.sign"
+  | "owner_agreement.read.own"
   | "system.audit"
   | "system.impersonate";
 

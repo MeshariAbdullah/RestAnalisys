@@ -3,15 +3,18 @@
  */
 
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { disputes, rentals } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
-import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
+import { DisputeOpenSchema, DisputeResolveSchema, DisputeAssignSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { updateTrustScoreAfterRental } from "../services/trustScoreService.js";
+import { notifyDisputeOpened, notifyDisputeResolved } from "../services/notificationService.js";
+import { PaginationSchema, paginate, paginatedResponse } from "../utils/pagination.js";
 
 const router = Router();
 
@@ -60,6 +63,9 @@ router.post(
       after: dispute,
     });
 
+    await updateTrustScoreAfterRental(rental.renterId, "dispute");
+    notifyDisputeOpened(rental.renterId, rental.reference, dispute.id).catch(() => {});
+
     res.status(201).json(dispute);
   })
 );
@@ -68,13 +74,23 @@ router.get(
   "/",
   authenticate,
   requirePermission("dispute.assign"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    const { page, limit } = PaginationSchema.parse(req.query);
+    const p = paginate({ page, limit });
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(disputes);
+    const total = Number(countResult?.count ?? 0);
+
     const rows = await db
       .select()
       .from(disputes)
       .orderBy(desc(disputes.openedAt))
-      .limit(200);
-    res.json(rows);
+      .limit(p.limit)
+      .offset(p.offset);
+
+    res.json(paginatedResponse(rows, total, { page, limit }));
   })
 );
 
@@ -84,7 +100,7 @@ router.post(
   requirePermission("dispute.assign"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { assigneeUserId } = req.body as { assigneeUserId: number };
+    const { assigneeUserId } = DisputeAssignSchema.parse(req.body);
     const [updated] = await db
       .update(disputes)
       .set({
@@ -140,6 +156,15 @@ router.post(
         .update(rentals)
         .set({ status: "enforcement", updatedAt: new Date() })
         .where(eq(rentals.id, dispute.rentalId));
+    }
+
+    const [rentalForNotify] = await db
+      .select({ reference: rentals.reference, renterId: rentals.renterId })
+      .from(rentals)
+      .where(eq(rentals.id, dispute.rentalId))
+      .limit(1);
+    if (rentalForNotify) {
+      notifyDisputeResolved(rentalForNotify.renterId, rentalForNotify.reference, input.resolution).catch(() => {});
     }
 
     await recordAudit({

@@ -185,6 +185,10 @@ export const DisputeOpenSchema = z.object({
   evidence: z.array(z.string().url()).default([]),
 });
 
+export const DisputeAssignSchema = z.object({
+  assigneeUserId: z.number().int().positive(),
+});
+
 export const DisputeResolveSchema = z.object({
   disputeId: z.number().int().positive(),
   resolution: z.enum([
@@ -226,4 +230,39 @@ export const ShipmentUpdateSchema = z.object({
     "returned",
   ]),
   trackingNumber: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const UserBlockSchema = z.object({
+  block: z.boolean(),
+  reason: z.string().min(3).optional(),
+});
+
+export const StaffCreateSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().min(2),
+  role: z.enum(["admin", "operations", "inspector"]),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+export const RentalCloseSchema = z.object({
+  outcome: z.enum(["clean", "penalty", "major_damage", "loss"]),
+  penaltyHalalas: HalalasAmount.optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Owner Agreements
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const OwnerAgreementCreateSchema = z.object({
+  version: z.string().optional(),
+  commissionPct: z.number().min(0).max(100).optional(),
+  guaranteeAccepted: z.boolean(),
+});
+
+export const OwnerAgreementSignSchema = z.object({
+  acceptTerms: z.literal(true),
 });

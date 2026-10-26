@@ -19,6 +19,9 @@ import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { UserBlockSchema, StaffCreateSchema } from "../utils/schemas.js";
+import { PaginationSchema, paginate, paginatedResponse } from "../utils/pagination.js";
+import bcrypt from "bcryptjs";
 
 const router = Router();
 
@@ -132,12 +135,27 @@ router.get(
   authenticate,
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
+    const { page, limit } = PaginationSchema.parse(req.query);
+    const p = paginate({ page, limit });
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
-    const rows = role
-      ? await query.where(eq(users.role, role as any)).limit(200)
-      : await query.limit(200);
-    res.json(rows);
+
+    const condition = role ? eq(users.role, role as any) : undefined;
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(users)
+      .where(condition);
+    const total = Number(countResult?.count ?? 0);
+
+    const rows = await db
+      .select()
+      .from(users)
+      .where(condition)
+      .orderBy(desc(users.createdAt))
+      .limit(p.limit)
+      .offset(p.offset);
+
+    res.json(paginatedResponse(rows, total, { page, limit }));
   })
 );
 
@@ -148,7 +166,7 @@ router.post(
   requirePermission("user.block"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { reason, block } = req.body as { reason?: string; block: boolean };
+    const { reason, block } = UserBlockSchema.parse(req.body);
     const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
     if (!user) throw new NotFoundError("User");
     const [updated] = await db
@@ -178,12 +196,8 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
-      email: string;
-      fullName: string;
-      role: "admin" | "operations" | "inspector";
-      passwordHash: string;
-    };
+    const { email, fullName, role, password } = StaffCreateSchema.parse(req.body);
+    const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db
       .insert(users)
       .values({
