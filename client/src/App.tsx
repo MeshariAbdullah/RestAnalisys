@@ -1,16 +1,20 @@
 import React from "react";
-import { Route, Switch, Redirect } from "wouter";
+import { Route, Switch } from "wouter";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import NotFound from "./pages/NotFound";
 
 // Renter
 import Browse from "./pages/renter/Browse";
 import ItemDetail from "./pages/renter/ItemDetail";
 import LegalCommitmentPage from "./pages/renter/LegalCommitment";
 import MyRentals from "./pages/renter/MyRentals";
+import RentalDetail from "./pages/renter/RentalDetail";
+import OpenDispute from "./pages/renter/OpenDispute";
+import PaymentHistory from "./pages/renter/PaymentHistory";
 
 // Owner
 import OwnerDashboard from "./pages/owner/OwnerDashboard";
@@ -64,6 +68,19 @@ export default function App() {
       </Route>
       <Route path="/my-rentals">
         <ProtectedRoute roles={["renter"]}><MyRentals /></ProtectedRoute>
+      </Route>
+      <Route path="/rental/:id">
+        {(params) => (
+          <ProtectedRoute roles={["renter"]}>
+            <RentalDetail id={Number(params.id)} />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/payments">
+        <ProtectedRoute roles={["renter"]}><PaymentHistory /></ProtectedRoute>
+      </Route>
+      <Route path="/open-dispute">
+        <ProtectedRoute roles={["renter"]}><OpenDispute /></ProtectedRoute>
       </Route>
 
       {/* Owner */}
@@ -130,9 +147,7 @@ export default function App() {
         <ProtectedRoute roles={["admin", "super_admin"]}><SanadTracking /></ProtectedRoute>
       </Route>
 
-      <Route>
-        <Redirect to="/" />
-      </Route>
+      <Route component={NotFound} />
     </Switch>
   );
 }

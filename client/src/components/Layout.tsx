@@ -19,6 +19,8 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  CreditCard,
+  MessageSquareWarning,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
@@ -34,6 +36,8 @@ const NAV: NavItem[] = [
   // Renter
   { href: "/browse", label: "Browse Catalog", icon: ShoppingBag, roles: ["renter"] },
   { href: "/my-rentals", label: "My Rentals", icon: FileText, roles: ["renter"] },
+  { href: "/payments", label: "Payment History", icon: CreditCard, roles: ["renter"] },
+  { href: "/open-dispute", label: "Open Dispute", icon: MessageSquareWarning, roles: ["renter"] },
 
   // Owner
   { href: "/owner", label: "Owner Dashboard", icon: LayoutDashboard, roles: ["owner"] },
