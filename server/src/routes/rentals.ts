@@ -20,7 +20,7 @@
  */
 
 import { Router } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   assets,
@@ -99,7 +99,17 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await (async () => {
+      const [lateRow] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(rentals)
+        .where(and(
+          eq(rentals.renterId, userId),
+          inArray(rentals.status, ['closed', 'closed_with_penalty']),
+          sql`returned_at > end_date::timestamp`
+        ));
+      return Number(lateRow?.count ?? 0);
+    })(),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -193,7 +203,19 @@ router.post(
     });
 
     // Rental row -----------------------------------------------------------
-    const reference = generateRentalReference();
+    let reference = generateRentalReference();
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const [existing] = await db
+        .select({ id: rentals.id })
+        .from(rentals)
+        .where(eq(rentals.reference, reference))
+        .limit(1);
+      if (!existing) break;
+      if (attempt === 4) {
+        throw new LegalStateError("Failed to generate unique rental reference after 5 attempts");
+      }
+      reference = generateRentalReference();
+    }
     const [rental] = await db
       .insert(rentals)
       .values({
@@ -509,6 +531,11 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      // Trust score: +2 for clean close (cap at 100)
+      await db.update(users).set({
+        trustScore: sql`greatest(0, least(100, trust_score + 2))`,
+        updatedAt: new Date(),
+      }).where(eq(users.id, rental.renterId));
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -540,6 +567,11 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      // Trust score: -5 for penalty close (floor at 0)
+      await db.update(users).set({
+        trustScore: sql`greatest(0, least(100, trust_score + ${-5}))`,
+        updatedAt: new Date(),
+      }).where(eq(users.id, rental.renterId));
       await recordAudit({
         req,
         action: "rental.close_penalty",
@@ -573,6 +605,12 @@ router.post(
       message: `Rental ${rental.reference} requires Sanad execution for ${outcome}.`,
       payloadJson: { outcome, rentalId: id },
     });
+
+    // Trust score: -15 for major_damage or loss (floor at 0)
+    await db.update(users).set({
+      trustScore: sql`greatest(0, least(100, trust_score + ${-15}))`,
+      updatedAt: new Date(),
+    }).where(eq(users.id, rental.renterId));
 
     await recordAudit({
       req,

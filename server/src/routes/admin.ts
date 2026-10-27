@@ -4,6 +4,8 @@
 
 import { Router } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
+import { z } from "zod";
 import { db } from "../db/index.js";
 import {
   users,
@@ -19,6 +21,8 @@ import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+
+const RoleEnum = z.enum(["renter", "owner", "inspector", "operations", "admin", "super_admin"]);
 
 const router = Router();
 
@@ -132,10 +136,10 @@ router.get(
   authenticate,
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
-    const role = (req.query.role as string | undefined) ?? undefined;
+    const roleParam = req.query.role ? RoleEnum.parse(req.query.role) : undefined;
     const query = db.select().from(users);
-    const rows = role
-      ? await query.where(eq(users.role, role as any)).limit(200)
+    const rows = roleParam
+      ? await query.where(eq(users.role, roleParam)).limit(200)
       : await query.limit(200);
     res.json(rows);
   })
@@ -178,12 +182,17 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
+    const { email, fullName, role, password } = req.body as {
       email: string;
       fullName: string;
       role: "admin" | "operations" | "inspector";
-      passwordHash: string;
+      password: string;
     };
+    if (!password || password.length < 8) {
+      res.status(400).json({ error: "Password must be at least 8 characters" });
+      return;
+    }
+    const passwordHash = await bcrypt.hash(password, 12);
     const [user] = await db
       .insert(users)
       .values({
