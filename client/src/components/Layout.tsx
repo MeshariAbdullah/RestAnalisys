@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -19,9 +20,12 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  CheckCheck,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
-import { clearSession, getCurrentUser } from "@/lib/auth";
+import { notificationsApi, type AppNotification } from "@/lib/api";
+import { clearSession, getCurrentUser, isAuthenticated } from "@/lib/auth";
 
 interface NavItem {
   href: string;
@@ -67,6 +71,108 @@ function roleLabel(role: Role): string {
     admin: "Admin",
     super_admin: "Super Admin",
   }[role];
+}
+
+function NotificationBell({ collapsed }: { collapsed: boolean }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+
+  const { data: countData } = useQuery({
+    queryKey: ["notifications-unread"],
+    queryFn: () => notificationsApi.unreadCount(),
+    refetchInterval: 30_000,
+    enabled: isAuthenticated(),
+  });
+
+  const { data: notifs } = useQuery({
+    queryKey: ["notifications-list"],
+    queryFn: () => notificationsApi.list(),
+    enabled: open && isAuthenticated(),
+  });
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const unread = countData?.count ?? 0;
+
+  async function markAllRead() {
+    await notificationsApi.markAllRead();
+    queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
+    queryClient.invalidateQueries({ queryKey: ["notifications-list"] });
+  }
+
+  async function markOne(id: number) {
+    await notificationsApi.markRead(id);
+    queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
+    queryClient.invalidateQueries({ queryKey: ["notifications-list"] });
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="relative p-1.5 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white"
+        title="Notifications"
+      >
+        <Bell className="w-4 h-4" />
+        {unread > 0 && (
+          <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-amber-500 text-neutral-950 rounded-full text-[10px] font-bold flex items-center justify-center px-1">
+            {unread > 99 ? "99+" : unread}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-0 mb-2 w-80 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800">
+            <p className="text-sm font-semibold text-white">Notifications</p>
+            {unread > 0 && (
+              <button
+                onClick={markAllRead}
+                className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1"
+              >
+                <CheckCheck className="w-3 h-3" /> Mark all read
+              </button>
+            )}
+          </div>
+          <div className="max-h-72 overflow-y-auto">
+            {!notifs || notifs.length === 0 ? (
+              <p className="text-neutral-500 text-sm text-center py-8">No notifications yet</p>
+            ) : (
+              notifs.map((n: AppNotification) => (
+                <button
+                  key={n.id}
+                  onClick={() => !n.isRead && markOne(n.id)}
+                  className={cn(
+                    "w-full text-left px-4 py-3 border-b border-neutral-800 hover:bg-neutral-800/50 transition-colors",
+                    !n.isRead && "bg-amber-500/5"
+                  )}
+                >
+                  <div className="flex items-start gap-2">
+                    {!n.isRead && (
+                      <span className="mt-1.5 w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-white truncate">{n.title}</p>
+                      <p className="text-xs text-neutral-400 mt-0.5 line-clamp-2">{n.message}</p>
+                      <p className="text-[10px] text-neutral-600 mt-1">
+                        {new Date(n.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -142,6 +248,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   {user ? roleLabel(user.role) : ""}
                 </p>
               </div>
+              <NotificationBell collapsed={!sidebarOpen} />
               <button
                 onClick={handleLogout}
                 className="p-1.5 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white"
@@ -151,13 +258,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           ) : (
-            <button
-              onClick={handleLogout}
-              className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400"
-              title="Logout"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            <div className="flex flex-col items-center gap-2">
+              <NotificationBell collapsed={true} />
+              <button
+                onClick={handleLogout}
+                className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           )}
         </div>
       </aside>

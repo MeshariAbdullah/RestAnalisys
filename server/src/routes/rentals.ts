@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyUser } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -278,6 +279,15 @@ router.post(
       entityType: "rental",
       entityId: rental.id,
       after: { rental, decision },
+    });
+
+    await notifyUser({
+      userId: asset.ownerId,
+      type: "rental_created",
+      title: "Asset reserved",
+      message: `Your asset "${asset.title}" has been reserved for rental (${rental.reference}).`,
+      entityType: "rental",
+      entityId: rental.id,
     });
 
     res.status(201).json({
@@ -516,6 +526,22 @@ router.post(
         entityId: id,
         after: updated,
       });
+      await notifyUser({
+        userId: rental.ownerId,
+        type: "rental_closed",
+        title: "Rental completed",
+        message: `Rental ${rental.reference} has been closed successfully. Your asset is back in inventory.`,
+        entityType: "rental",
+        entityId: id,
+      });
+      await notifyUser({
+        userId: rental.renterId,
+        type: "rental_closed",
+        title: "Rental completed",
+        message: `Your rental ${rental.reference} has been closed. Thank you for using MLR.`,
+        entityType: "rental",
+        entityId: id,
+      });
       return res.json(updated);
     }
 
@@ -546,6 +572,22 @@ router.post(
         entityType: "rental",
         entityId: id,
         after: { updated, penaltyHalalas },
+      });
+      await notifyUser({
+        userId: rental.renterId,
+        type: "rental_penalty",
+        title: "Rental closed with penalty",
+        message: `Your rental ${rental.reference} was closed with a penalty charge.`,
+        entityType: "rental",
+        entityId: id,
+      });
+      await notifyUser({
+        userId: rental.ownerId,
+        type: "rental_penalty",
+        title: "Rental closed with penalty",
+        message: `Rental ${rental.reference} for your asset was closed with a penalty charge applied to the renter.`,
+        entityType: "rental",
+        entityId: id,
       });
       return res.json(updated);
     }
