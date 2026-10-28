@@ -19,6 +19,7 @@ import { InspectionReportSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyUser } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -89,6 +90,15 @@ router.post(
       entityType: "inspection",
       entityId: inspection.id,
       after: inspection,
+    });
+
+    await notifyUser({
+      userId: asset.ownerId,
+      type: "inspection_complete",
+      title: "Inspection complete",
+      message: `Your asset "${asset.title}" has been inspected. Grade: ${input.conditionGrade}. Please review the valuation.`,
+      entityType: "asset",
+      entityId: asset.id,
     });
 
     res.status(201).json(inspection);
