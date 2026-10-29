@@ -4,6 +4,7 @@
 
 import { Router } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 import { db } from "../db/index.js";
 import {
   users,
@@ -18,6 +19,7 @@ import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
+import { CreateStaffSchema } from "../utils/schemas.js";
 import { recordAudit } from "../services/auditService.js";
 
 const router = Router();
@@ -178,18 +180,14 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
-      email: string;
-      fullName: string;
-      role: "admin" | "operations" | "inspector";
-      passwordHash: string;
-    };
+    const input = CreateStaffSchema.parse(req.body);
+    const passwordHash = await bcrypt.hash(input.password, 10);
     const [user] = await db
       .insert(users)
       .values({
-        email,
-        fullName,
-        role,
+        email: input.email,
+        fullName: input.fullName,
+        role: input.role,
         passwordHash,
         nafathVerified: true,
         kycStatus: "verified",
@@ -200,7 +198,7 @@ router.post(
       action: "user.create_staff",
       entityType: "user",
       entityId: user.id,
-      after: { email, role },
+      after: { email: input.email, role: input.role },
     });
     res.status(201).json(user);
   })

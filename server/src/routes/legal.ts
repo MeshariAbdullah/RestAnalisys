@@ -26,7 +26,7 @@ import {
 } from "../utils/errors.js";
 import { requestNafathSignature } from "../services/nafathService.js";
 import { issueSanad, signSanad, dischargeSanad, executeSanad } from "../services/nafithService.js";
-import { recordAudit } from "../services/auditService.js";
+import { recordAudit, recordIntegrationEvent } from "../services/auditService.js";
 
 const router = Router();
 
@@ -92,6 +92,13 @@ router.post(
       documentHash: commitment.contractTextHash ?? "",
       documentTitle: `MLR Legal Commitment #${commitment.id}`,
     });
+    await recordIntegrationEvent({
+      provider: "nafath",
+      eventType: "signature",
+      referenceId: `commitment:${commitment.id}`,
+      payload: sig,
+    });
+
     if (sig.status !== "signed") {
       throw new LegalStateError(`Signature rejected (${sig.status})`);
     }
@@ -126,8 +133,21 @@ router.post(
       description: `Legal commitment for rental ${rental!.reference}`,
     });
 
+    await recordIntegrationEvent({
+      provider: "nafith",
+      eventType: "sanad_issued",
+      referenceId: rental!.reference,
+      payload: nafith,
+    });
+
     if (nafith.status === "rejected") {
       throw new Error("Nafith rejected the Sanad issuance request");
+    }
+
+    // 3b) Sign the Sanad (renter acknowledges the promissory note)
+    const sanadSign = await signSanad(nafith.nafithReference);
+    if (sanadSign.status !== "signed") {
+      throw new LegalStateError(`Sanad signing failed (${sanadSign.status})`);
     }
 
     const [sanad] = await db
@@ -136,10 +156,11 @@ router.post(
         rentalId: rental!.id,
         legalCommitmentId: commitment.id,
         renterId: userId,
-        status: nafith.status,
+        status: "signed",
         nafithReference: nafith.nafithReference,
         nafithRequestId: nafith.requestId,
         issuedAt: nafith.issuedAt ? new Date(nafith.issuedAt) : null,
+        signedAt: sanadSign.signedAt ? new Date(sanadSign.signedAt) : new Date(),
         maturityDate,
         principalHalalas: commitment.commitmentHalalas,
         dueHalalas: commitment.commitmentHalalas,

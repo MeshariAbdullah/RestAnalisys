@@ -18,7 +18,7 @@ import {
 } from "../utils/errors.js";
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
-import { recordAudit } from "../services/auditService.js";
+import { recordAudit, recordIntegrationEvent } from "../services/auditService.js";
 
 const router = Router();
 
@@ -43,6 +43,13 @@ router.post(
       rentalReference: rental.reference,
       renterUserId: req.user!.userId,
       paymentMethodToken,
+    });
+
+    await recordIntegrationEvent({
+      provider: result.gateway,
+      eventType: "charge",
+      referenceId: rental.reference,
+      payload: result,
     });
 
     const [payment] = await db
@@ -88,6 +95,13 @@ router.post(
         },
       ],
       totalHalalas: rental.totalPayableHalalas,
+    });
+
+    await recordIntegrationEvent({
+      provider: "zatca",
+      eventType: "invoice_generated",
+      referenceId: invoice.invoiceNumber,
+      payload: invoice,
     });
 
     await db

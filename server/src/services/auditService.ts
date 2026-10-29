@@ -4,7 +4,7 @@
  */
 
 import { db } from "../db/index.js";
-import { auditLogs } from "../db/schema.js";
+import { auditLogs, integrationEvents } from "../db/schema.js";
 import type { AuthedRequest } from "../middleware/auth.js";
 
 export interface AuditInput {
@@ -39,5 +39,28 @@ export async function recordAudit(input: AuditInput): Promise<void> {
   } catch (err) {
     // Never let audit failures break the primary flow
     console.error("[audit] write failed:", err);
+  }
+}
+
+export async function recordIntegrationEvent(params: {
+  provider: string;
+  eventType: string;
+  referenceId?: string;
+  payload: unknown;
+  processed?: boolean;
+  error?: string;
+}): Promise<void> {
+  try {
+    await db.insert(integrationEvents).values({
+      provider: params.provider,
+      eventType: params.eventType,
+      referenceId: params.referenceId,
+      payloadJson: params.payload as object,
+      processed: params.processed ?? true,
+      processedAt: params.processed !== false ? new Date() : undefined,
+      error: params.error,
+    });
+  } catch {
+    // Don't let integration logging failures break the main flow
   }
 }

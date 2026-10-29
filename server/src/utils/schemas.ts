@@ -227,3 +227,14 @@ export const ShipmentUpdateSchema = z.object({
   ]),
   trackingNumber: z.string().optional(),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin — staff user creation
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const CreateStaffSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().min(2),
+  role: z.enum(["admin", "operations", "inspector"]),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
