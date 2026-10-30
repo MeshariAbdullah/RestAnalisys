@@ -5,20 +5,26 @@
 
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { users } from "../db/schema.js";
+import { users, rentals } from "../db/schema.js";
 import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
 import { LoginSchema, RegisterSchema, NafathVerifySchema } from "../utils/schemas.js";
 import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
 import { recordAudit } from "../services/auditService.js";
+import { rateLimiter } from "../middleware/rateLimiter.js";
 
 const router = Router();
 
+const loginLimiter = rateLimiter(15 * 60 * 1000, 5);
+const registerLimiter = rateLimiter(15 * 60 * 1000, 3);
+const nafathLimiter = rateLimiter(10 * 60 * 1000, 3);
+
 router.post(
   "/register",
+  registerLimiter,
   asyncHandler(async (req, res) => {
     const input = RegisterSchema.parse(req.body);
 
@@ -77,6 +83,7 @@ router.post(
 
 router.post(
   "/login",
+  loginLimiter,
   asyncHandler(async (req, res) => {
     const { email, password } = LoginSchema.parse(req.body);
     const [user] = await db
@@ -122,6 +129,7 @@ router.post(
 
 router.post(
   "/nafath/initiate",
+  nafathLimiter,
   authenticate,
   asyncHandler(async (req: AuthedRequest, res) => {
     const { nationalId } = NafathVerifySchema.parse(req.body);

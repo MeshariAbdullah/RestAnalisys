@@ -265,13 +265,41 @@ export const authApi = {
 // Assets
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface ListingParams {
+  category?: string;
+  brand?: string;
+  search?: string;
+  minDaily?: number;
+  maxDaily?: number;
+  minPrice?: number;
+  maxPrice?: number;
+  sort?: "price_asc" | "price_desc" | "newest" | "oldest";
+  page?: number;
+  limit?: number;
+}
+
+export interface PaginatedListings {
+  items: Asset[];
+  count: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: ListingParams) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.minDaily) qs.set("minDaily", String(params.minDaily));
+    if (params?.maxDaily) qs.set("maxDaily", String(params.maxDaily));
+    if (params?.minPrice) qs.set("minPrice", String(params.minPrice));
+    if (params?.maxPrice) qs.set("maxPrice", String(params.maxPrice));
+    if (params?.sort) qs.set("sort", params.sort);
+    if (params?.page) qs.set("page", String(params.page));
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    return request<PaginatedListings>(`/assets/listings?${qs}`);
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
