@@ -12,6 +12,7 @@ import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyAdmins } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -59,6 +60,13 @@ router.post(
       entityId: dispute.id,
       after: dispute,
     });
+
+    notifyAdmins(
+      "dispute_opened",
+      "New dispute opened",
+      `Dispute #${dispute.id} (${input.category}) on rental #${rental.id}: ${input.summary}`,
+      { disputeId: dispute.id, rentalId: rental.id, category: input.category }
+    );
 
     res.status(201).json(dispute);
   })

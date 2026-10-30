@@ -223,6 +223,22 @@ export interface RentalQuote {
   totalPayableHalalas: number;
 }
 
+export interface UserProfile extends User {
+  phoneVerified: boolean;
+  emailVerified: boolean;
+  accountAgeDays: number;
+  createdAt: string;
+  lastLoginAt?: string;
+  rentalStats: {
+    totalRentals: number;
+    completedRentals: number;
+    activeRentals: number;
+    cancelledRentals: number;
+    disputedRentals: number;
+    totalSpentHalalas: number;
+  };
+}
+
 export interface AdminKPIs {
   users: number;
   listedAssets: number;
@@ -254,6 +270,7 @@ export const authApi = {
       body: JSON.stringify({ email, password, fullName, role }),
     }),
   me: () => request<User>("/auth/me"),
+  profile: () => request<UserProfile>("/auth/profile"),
   nafathVerify: (nationalId: string) =>
     request<{ transactionId: string; status: string }>("/auth/nafath/initiate", {
       method: "POST",
@@ -610,6 +627,38 @@ export const adminApi = {
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  metadataJson?: Record<string, unknown> | null;
+  read: boolean;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (params?: { unreadOnly?: boolean; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.unreadOnly) qs.set("unreadOnly", "true");
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    return request<AppNotification[]>(`/notifications?${qs}`);
+  },
+  unreadCount: () => request<{ unread: number }>("/notifications/count"),
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+  remove: (id: number) =>
+    request<{ ok: boolean }>(`/notifications/${id}`, { method: "DELETE" }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

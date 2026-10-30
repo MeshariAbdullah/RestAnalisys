@@ -197,4 +197,64 @@ router.get(
   })
 );
 
+router.get(
+  "/profile",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const [stats] = await db
+      .select({
+        totalRentals: sql<number>`count(*)::int`,
+        completedRentals: sql<number>`count(*) filter (where ${rentals.status} in ('closed'))::int`,
+        activeRentals: sql<number>`count(*) filter (where ${rentals.status} in ('active', 'confirmed', 'out_for_delivery'))::int`,
+        cancelledRentals: sql<number>`count(*) filter (where ${rentals.status} = 'cancelled')::int`,
+        disputedRentals: sql<number>`count(*) filter (where ${rentals.status} in ('in_dispute', 'enforcement'))::int`,
+        totalSpentHalalas: sql<number>`coalesce(sum(${rentals.totalPayableHalalas}) filter (where ${rentals.status} not in ('cancelled')), 0)::bigint`,
+      })
+      .from(rentals)
+      .where(eq(rentals.renterId, userId));
+
+    const accountAgeDays = Math.max(
+      0,
+      Math.floor(
+        (Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+      )
+    );
+
+    return res.json({
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      phoneE164: user.phoneE164,
+      nationalId: user.nationalId,
+      nafathVerified: user.nafathVerified,
+      kycStatus: user.kycStatus,
+      phoneVerified: user.phoneVerified,
+      emailVerified: user.emailVerified,
+      trustScore: user.trustScore,
+      riskCategory: user.riskCategory,
+      isBlocked: user.isBlocked,
+      accountAgeDays,
+      createdAt: user.createdAt,
+      lastLoginAt: user.lastLoginAt,
+      rentalStats: {
+        totalRentals: stats?.totalRentals ?? 0,
+        completedRentals: stats?.completedRentals ?? 0,
+        activeRentals: stats?.activeRentals ?? 0,
+        cancelledRentals: stats?.cancelledRentals ?? 0,
+        disputedRentals: stats?.disputedRentals ?? 0,
+        totalSpentHalalas: Number(stats?.totalSpentHalalas ?? 0),
+      },
+    });
+  })
+);
+
 export default router;

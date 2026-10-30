@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
+import NotificationBell from "./NotificationBell";
 
 interface NavItem {
   href: string;
@@ -133,15 +134,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="p-3 border-t border-neutral-800">
           {sidebarOpen ? (
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">
-                <Shield className="w-4 h-4 text-neutral-950" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
-                <p className="text-[11px] text-neutral-400 truncate">
-                  {user ? roleLabel(user.role) : ""}
-                </p>
-              </div>
+              <Link href="/profile">
+                <a className="flex items-center gap-3 flex-1 min-w-0 rounded-lg px-1 py-1 -mx-1 hover:bg-neutral-800 transition-colors">
+                  <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">
+                    <Shield className="w-4 h-4 text-neutral-950" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
+                    <p className="text-[11px] text-neutral-400 truncate">
+                      {user ? roleLabel(user.role) : ""}
+                    </p>
+                  </div>
+                </a>
+              </Link>
               <button
                 onClick={handleLogout}
                 className="p-1.5 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white"
@@ -151,18 +156,30 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           ) : (
-            <button
-              onClick={handleLogout}
-              className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400"
-              title="Logout"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            <div className="space-y-2">
+              <Link href="/profile">
+                <a className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400" title="Profile">
+                  <Shield className="w-4 h-4" />
+                </a>
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           )}
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="shrink-0 flex items-center justify-end px-6 py-2 border-b border-neutral-200 bg-white">
+          <NotificationBell />
+        </header>
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
     </div>
   );
 }
