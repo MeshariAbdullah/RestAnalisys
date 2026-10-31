@@ -52,14 +52,37 @@ import {
   computeRentalQuote,
   DEFAULT_PLATFORM_FEE_PCT,
 } from "../utils/money.js";
-import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
+import { computeRiskDecision, RiskFeatures, trustScoreToCategory } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyRentalStatusChange } from "../services/notificationService.js";
 
 const router = Router();
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+async function updateTrustScore(
+  renterId: number,
+  outcome: "clean" | "penalty" | "major_damage" | "loss"
+) {
+  const [user] = await db.select().from(users).where(eq(users.id, renterId)).limit(1);
+  if (!user) return;
+
+  const deltas: Record<string, number> = {
+    clean: +3,
+    penalty: -5,
+    major_damage: -15,
+    loss: -25,
+  };
+  const newScore = Math.max(0, Math.min(100, user.trustScore + (deltas[outcome] ?? 0)));
+  const newCategory = trustScoreToCategory(newScore);
+
+  await db
+    .update(users)
+    .set({ trustScore: newScore, riskCategory: newCategory, updatedAt: new Date() })
+    .where(eq(users.id, renterId));
+}
 
 function daysBetween(startIso: string, endIso: string): number {
   const start = new Date(startIso + "T00:00:00Z").getTime();
@@ -84,10 +107,11 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      lateReturns: sql<number>`count(*) filter (where returned_at is not null and returned_at::date > end_date::date)`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, lateReturns: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +123,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.lateReturns ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -393,6 +417,7 @@ router.post(
       toAddressJson: rental.deliveryAddressJson as object,
     });
 
+    await notifyRentalStatusChange(rental.renterId, rental.reference, id, "out_for_delivery");
     await recordAudit({
       req,
       action: "rental.fulfill",
@@ -433,6 +458,7 @@ router.post(
       .set({ status: "rented_out", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
 
+    await notifyRentalStatusChange(rental.renterId, rental.reference, id, "active");
     await recordAudit({
       req,
       action: "rental.delivered",
@@ -469,6 +495,7 @@ router.post(
       .set({ status: "returned_under_inspection", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
 
+    await notifyRentalStatusChange(rental.renterId, rental.reference, id, "under_inspection");
     await recordAudit({
       req,
       action: "rental.returned",
@@ -509,6 +536,8 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await updateTrustScore(rental.renterId, "clean");
+      await notifyRentalStatusChange(rental.renterId, rental.reference, id, "closed");
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -540,6 +569,8 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+      await updateTrustScore(rental.renterId, "penalty");
+      await notifyRentalStatusChange(rental.renterId, rental.reference, id, "closed_with_penalty");
       await recordAudit({
         req,
         action: "rental.close_penalty",
@@ -573,6 +604,9 @@ router.post(
       message: `Rental ${rental.reference} requires Sanad execution for ${outcome}.`,
       payloadJson: { outcome, rentalId: id },
     });
+
+    await updateTrustScore(rental.renterId, outcome);
+    await notifyRentalStatusChange(rental.renterId, rental.reference, id, "enforcement");
 
     await recordAudit({
       req,
@@ -620,6 +654,7 @@ router.post(
       .set({ status: "listed", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
 
+    await notifyRentalStatusChange(rental.renterId, rental.reference, id, "cancelled");
     await recordAudit({
       req,
       action: "rental.cancel",

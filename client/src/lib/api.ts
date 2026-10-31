@@ -580,6 +580,30 @@ export const adminApi = {
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
 };
 
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  linkUrl: string | null;
+  read: boolean;
+  readAt: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (limit = 20) =>
+    request<Notification[]>(`/notifications?limit=${limit}`),
+  unreadCount: () =>
+    request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<Notification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+};
+
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };

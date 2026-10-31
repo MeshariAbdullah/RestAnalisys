@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { assetsApi } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 export default function SubmitAsset() {
   const [, navigate] = useLocation();
@@ -27,6 +28,7 @@ export default function SubmitAsset() {
   const [imageDraft, setImageDraft] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   function addImage() {
     if (imageDraft && imageUrls.length < 10) {
@@ -56,9 +58,12 @@ export default function SubmitAsset() {
         ownerDeclaredValueHalalas: value,
         submissionImages: imageUrls,
       });
+      toast({ title: "Asset submitted!", description: "Our team will inspect and evaluate your item.", variant: "success" });
       navigate("/owner");
     } catch (err) {
-      setError((err as Error).message ?? "Submission failed");
+      const msg = (err as Error).message ?? "Submission failed";
+      setError(msg);
+      toast({ title: "Submission failed", description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
     }

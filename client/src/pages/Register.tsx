@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api";
 import { saveSession, homeForRole } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Register() {
   const [, navigate] = useLocation();
@@ -15,6 +16,7 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { toast } = useToast();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -23,9 +25,12 @@ export default function Register() {
     try {
       const res = await authApi.register(email, password, fullName, role);
       saveSession(res.token, res.user);
+      toast({ title: "Account created!", description: `Welcome to MLR, ${res.user.fullName}`, variant: "success" });
       navigate(homeForRole(res.user.role));
     } catch (err) {
-      setError((err as Error).message ?? "Registration failed");
+      const msg = (err as Error).message ?? "Registration failed";
+      setError(msg);
+      toast({ title: "Registration failed", description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
     }

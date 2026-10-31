@@ -5,10 +5,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, formatSar, type Asset } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AssetApprovals() {
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const { data, isLoading } = useQuery({
     queryKey: ["assets-pending"],
@@ -24,8 +26,15 @@ export default function AssetApprovals() {
       if (!approved && !reason) return;
       await assetsApi.review(id, approved, reason);
       await qc.invalidateQueries({ queryKey: ["assets-pending"] });
+      toast({
+        title: approved ? "Asset approved" : "Asset rejected",
+        description: approved ? "Asset moved to inspection queue." : "Owner has been notified.",
+        variant: "success",
+      });
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message;
+      setError(msg);
+      toast({ title: "Action failed", description: msg, variant: "destructive" });
     }
   }
 
@@ -34,8 +43,11 @@ export default function AssetApprovals() {
     try {
       await assetsApi.publish(id);
       await qc.invalidateQueries({ queryKey: ["assets-pending"] });
+      toast({ title: "Listing published", description: "Asset is now visible to renters.", variant: "success" });
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message;
+      setError(msg);
+      toast({ title: "Publish failed", description: msg, variant: "destructive" });
     }
   }
 
