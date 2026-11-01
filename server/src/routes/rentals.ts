@@ -20,7 +20,7 @@
  */
 
 import { Router } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   assets,
@@ -61,6 +61,20 @@ const router = Router();
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
+async function countLateReturns(userId: number): Promise<number> {
+  const result = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        inArray(rentals.status, ["closed", "closed_with_penalty"]),
+        sql`returned_at > (end_date::date + interval '1 day')`
+      )
+    );
+  return Number(result[0]?.count ?? 0);
+}
+
 function daysBetween(startIso: string, endIso: string): number {
   const start = new Date(startIso + "T00:00:00Z").getTime();
   const end = new Date(endIso + "T00:00:00Z").getTime();
@@ -99,7 +113,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await countLateReturns(userId),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,

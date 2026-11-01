@@ -27,6 +27,7 @@ import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { authLimiter, apiLimiter, writeLimiter } from "./middleware/rateLimit.js";
 
 dotenv.config();
 
@@ -41,6 +42,9 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+app.use("/api/auth", authLimiter);
+app.use("/api", apiLimiter);
 
 // Health
 app.get("/api/health", (_req, res) => {

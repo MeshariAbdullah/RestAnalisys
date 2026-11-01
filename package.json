@@ -10,9 +10,13 @@
     "build": "cd client && npm run build && cd ../server && npm run build",
     "db:migrate": "cd server && npm run db:migrate",
     "db:seed": "cd server && npx tsx src/db/seed.ts",
-    "db:generate": "cd server && npm run db:generate"
+    "db:generate": "cd server && npm run db:generate",
+    "test": "cd server && npm test"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@types/supertest": "^7.2.1",
+    "concurrently": "^8.2.2",
+    "supertest": "^7.3.1",
+    "vitest": "^5.0.5"
   }
 }

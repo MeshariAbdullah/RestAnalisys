@@ -85,13 +85,13 @@ Password for all: `Mlr@2024!`
 
 | Role         | Email              |
 | ------------ | ------------------ |
-| super_admin  | admin@mlr.sa       |
-| admin        | admin2@mlr.sa      |
+| super_admin  | super@mlr.sa       |
+| admin        | admin@mlr.sa       |
 | inspector    | inspector@mlr.sa   |
 | operations   | ops@mlr.sa         |
-| owner        | owner@demo.sa      |
-| renter       | renter@demo.sa     |
-| new renter   | newbie@demo.sa     |
+| owner        | owner@mlr.sa       |
+| renter       | renter@mlr.sa      |
+| new renter   | new.renter@mlr.sa  |
 
 ---
 
@@ -107,6 +107,7 @@ production mode.
 | Nafith Sanad    | `server/src/services/nafithService.ts` | `NAFITH_API_BASE`, `NAFITH_API_KEY` |
 | Payment gateway | `server/src/services/paymentService.ts`| `PAYMENT_GATEWAY_*`               |
 | ZATCA invoicing | `server/src/services/paymentService.ts`| `ZATCA_API_*`                     |
+| Email / SMS     | `server/src/services/notificationService.ts` | `EMAIL_API_KEY`, `SMS_API_KEY` |
 | National Address| (planned)                              | `SPL_API_KEY`                     |
 
 ---
