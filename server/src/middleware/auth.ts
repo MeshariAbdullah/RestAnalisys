@@ -3,6 +3,10 @@ import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "mlr-platform-dev-secret-change-me";
 
+if (!process.env.JWT_SECRET) {
+  console.warn("[auth] JWT_SECRET not set — using insecure default. Set JWT_SECRET in production.");
+}
+
 export type Role =
   | "renter"
   | "owner"

@@ -229,6 +229,7 @@ router.post(
 router.get(
   "/payouts/mine",
   authenticate,
+  requirePermission("payout.read"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const rows = await db
       .select()

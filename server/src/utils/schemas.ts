@@ -187,6 +187,10 @@ export const DisputeOpenSchema = z.object({
   evidence: z.array(z.string().url()).default([]),
 });
 
+export const DisputeAssignSchema = z.object({
+  assigneeUserId: z.number().int().positive(),
+});
+
 export const DisputeResolveSchema = z.object({
   disputeId: z.number().int().positive(),
   resolution: z.enum([

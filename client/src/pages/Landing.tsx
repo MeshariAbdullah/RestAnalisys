@@ -77,7 +77,7 @@ export default function Landing() {
           renters get verified luxury.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Link href="/register">
+          <Link href="/browse">
             <Button
               size="lg"
               className="bg-amber-500 text-neutral-950 hover:bg-amber-400 text-base px-8"

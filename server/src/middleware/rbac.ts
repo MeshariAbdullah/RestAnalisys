@@ -40,6 +40,7 @@ export type Permission =
   | "payment.refund"
   | "payment.read"
   | "payout.release"
+  | "payout.read"
   | "user.read"
   | "user.block"
   | "user.create_staff"
@@ -72,6 +73,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "asset.withdraw",
     "rental.read.own",
     "payment.read",
+    "payout.read",
     "dispute.open",
   ],
   inspector: [
@@ -151,7 +153,7 @@ export function requirePermission(...required: Permission[]) {
 }
 
 /**
- * Require that the authenticated user has *all* of the given roles.
+ * Require that the authenticated user has one of the given roles.
  */
 export function requireRole(...roles: Role[]) {
   return (req: AuthedRequest, res: Response, next: NextFunction): void => {

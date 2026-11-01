@@ -21,7 +21,7 @@ export default function ItemDetail({ id }: { id: number }) {
     []
   );
   const weekOut = useMemo(
-    () => toISODate(new Date(Date.now() + 10 * 86400000)),
+    () => toISODate(new Date(Date.now() + 7 * 86400000)),
     []
   );
 

@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Package, CheckCircle, Clock, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -63,12 +64,11 @@ export default function MyRentals() {
           <CardContent className="p-12 text-center text-neutral-500">
             <Package className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
             <p>You haven't rented anything yet.</p>
-            <a
-              href="/browse"
-              className="text-amber-600 hover:underline text-sm mt-2 inline-block"
-            >
-              Browse the collection →
-            </a>
+            <Link href="/browse">
+              <a className="text-amber-600 hover:underline text-sm mt-2 inline-block">
+                Browse the collection →
+              </a>
+            </Link>
           </CardContent>
         </Card>
       ) : (
