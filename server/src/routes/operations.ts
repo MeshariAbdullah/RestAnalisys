@@ -3,7 +3,7 @@
  */
 
 import { Router } from "express";
-import { and, desc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   shipments,
@@ -62,6 +62,35 @@ router.get(
         count: Number(r.count),
       })),
     });
+  })
+);
+
+// ── Overdue rentals ───────────────────────────────────────────────────────
+router.get(
+  "/overdue",
+  authenticate,
+  requirePermission("operations.read"),
+  asyncHandler(async (_req, res) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = await db
+      .select({
+        id: rentals.id,
+        reference: rentals.reference,
+        assetId: rentals.assetId,
+        renterId: rentals.renterId,
+        endDate: rentals.endDate,
+        status: rentals.status,
+        daysOverdue: sql<number>`(current_date - end_date::date)`,
+      })
+      .from(rentals)
+      .where(
+        and(
+          inArray(rentals.status, ["active", "return_in_transit"]),
+          lte(rentals.endDate, today)
+        )
+      )
+      .orderBy(asc(rentals.endDate));
+    res.json(rows);
   })
 );
 

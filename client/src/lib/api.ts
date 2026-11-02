@@ -310,6 +310,19 @@ export const assetsApi = {
   get: (id: number) => request<Asset>(`/assets/${id}`),
   withdraw: (id: number) =>
     request<Asset>(`/assets/${id}/withdraw`, { method: "POST" }),
+  myActivity: () =>
+    request<Array<{
+      rentalId: number;
+      reference: string;
+      assetId: number;
+      assetTitle: string;
+      renterName: string;
+      status: string;
+      startDate: string;
+      endDate: string;
+      rentalSubtotalHalalas: number;
+      createdAt: string;
+    }>>("/assets/mine/activity"),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -421,6 +434,20 @@ export const rentalsApi = {
     request<Rental>(`/rentals/${id}/close`, {
       method: "POST",
       body: JSON.stringify({ outcome, penaltyHalalas }),
+    }),
+  extend: (id: number, newEndDate: string) =>
+    request<{
+      rental: Rental;
+      extension: {
+        extraDays: number;
+        extraSubtotal: number;
+        extraPlatformFee: number;
+        extraVat: number;
+        extraTotal: number;
+      };
+    }>(`/rentals/${id}/extend`, {
+      method: "POST",
+      body: JSON.stringify({ newEndDate }),
     }),
 };
 
@@ -554,6 +581,16 @@ export const operationsApi = {
     ),
   resolveAlert: (id: number) =>
     request(`/operations/alerts/${id}/resolve`, { method: "POST" }),
+  overdue: () =>
+    request<Array<{
+      id: number;
+      reference: string;
+      assetId: number;
+      renterId: number;
+      endDate: string;
+      status: string;
+      daysOverdue: number;
+    }>>("/operations/overdue"),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

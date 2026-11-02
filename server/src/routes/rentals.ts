@@ -20,7 +20,7 @@
  */
 
 import { Router } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   assets,
@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { recalculateTrustScore } from "../services/trustScoreService.js";
 
 const router = Router();
 
@@ -89,6 +90,15 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     .where(eq(rentals.renterId, userId));
   const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
 
+  const lateCount = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(and(
+      eq(rentals.renterId, userId),
+      inArray(rentals.status, ['closed', 'closed_with_penalty']),
+      sql`returned_at > (end_date || 'T23:59:59Z')::timestamp`
+    ));
+
   const accountAgeDays = Math.max(
     0,
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
@@ -99,7 +109,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateCount[0]?.count ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -326,6 +336,79 @@ router.get(
   })
 );
 
+// ── Renter: request rental extension ──────────────────────────────────
+router.post(
+  "/:id/extend",
+  authenticate,
+  requirePermission("rental.create"),
+  requireNafath,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const id = Number(req.params.id);
+    const { newEndDate } = req.body as { newEndDate: string };
+
+    if (!newEndDate || !/^\d{4}-\d{2}-\d{2}$/.test(newEndDate)) {
+      throw new LegalStateError("newEndDate must be YYYY-MM-DD");
+    }
+
+    const [rental] = await db.select().from(rentals).where(eq(rentals.id, id)).limit(1);
+    if (!rental) throw new NotFoundError("Rental");
+    if (rental.renterId !== req.user!.userId) throw new ForbiddenError();
+    if (rental.status !== "active") {
+      throw new LegalStateError(`Can only extend active rentals (status=${rental.status})`);
+    }
+
+    const currentEnd = new Date(rental.endDate + "T00:00:00Z");
+    const newEnd = new Date(newEndDate + "T00:00:00Z");
+    if (newEnd <= currentEnd) {
+      throw new LegalStateError("New end date must be after current end date");
+    }
+
+    const extraDays = Math.round((newEnd.getTime() - currentEnd.getTime()) / (1000 * 60 * 60 * 24));
+    const extraSubtotal = rental.dailyPriceHalalas * extraDays;
+    const extraPlatformFee = Math.round(extraSubtotal * DEFAULT_PLATFORM_FEE_PCT);
+    const extraVat = Math.round((extraSubtotal + extraPlatformFee) * 0.15);
+    const extraTotal = extraSubtotal + extraPlatformFee + extraVat;
+
+    const newDuration = rental.durationDays + extraDays;
+
+    const [updated] = await db
+      .update(rentals)
+      .set({
+        endDate: newEndDate,
+        durationDays: newDuration,
+        rentalSubtotalHalalas: rental.rentalSubtotalHalalas + extraSubtotal,
+        platformFeeHalalas: rental.platformFeeHalalas + extraPlatformFee,
+        vatHalalas: rental.vatHalalas + extraVat,
+        totalPayableHalalas: rental.totalPayableHalalas + extraTotal,
+        updatedAt: new Date(),
+      })
+      .where(eq(rentals.id, id))
+      .returning();
+
+    await db.insert(payments).values({
+      rentalId: id,
+      userId: req.user!.userId,
+      type: "rental_fee",
+      status: "pending",
+      amountHalalas: extraTotal,
+    });
+
+    await recordAudit({
+      req,
+      action: "rental.extend",
+      entityType: "rental",
+      entityId: id,
+      before: { endDate: rental.endDate, durationDays: rental.durationDays },
+      after: { endDate: newEndDate, durationDays: newDuration, extraTotal },
+    });
+
+    res.json({
+      rental: updated,
+      extension: { extraDays, extraSubtotal, extraPlatformFee, extraVat, extraTotal },
+    });
+  })
+);
+
 // ── View a single rental (respects ownership) ──────────────────────────────
 router.get(
   "/:id",
@@ -469,6 +552,17 @@ router.post(
       .set({ status: "returned_under_inspection", updatedAt: new Date() })
       .where(eq(assets.id, rental.assetId));
 
+    if (new Date() > new Date(rental.endDate + 'T23:59:59Z')) {
+      await db.insert(operationalAlerts).values({
+        type: 'late_return',
+        severity: 'high',
+        subjectType: 'rental',
+        subjectId: id,
+        message: `Rental ${rental.reference} returned late (due ${rental.endDate}).`,
+        payloadJson: { rentalId: id, dueDate: rental.endDate },
+      });
+    }
+
     await recordAudit({
       req,
       action: "rental.returned",
@@ -516,6 +610,7 @@ router.post(
         entityId: id,
         after: updated,
       });
+      await recalculateTrustScore(rental.renterId);
       return res.json(updated);
     }
 
@@ -547,6 +642,7 @@ router.post(
         entityId: id,
         after: { updated, penaltyHalalas },
       });
+      await recalculateTrustScore(rental.renterId);
       return res.json(updated);
     }
 
@@ -582,6 +678,7 @@ router.post(
       after: { updated, outcome },
     });
 
+    await recalculateTrustScore(rental.renterId);
     res.json(updated);
   })
 );
