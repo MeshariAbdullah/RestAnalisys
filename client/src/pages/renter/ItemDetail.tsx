@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import { assetsApi, rentalsApi, formatSar } from "@/lib/api";
 
 function toISODate(d: Date): string {
@@ -50,6 +51,7 @@ export default function ItemDetail({ id }: { id: number }) {
         startDate,
         endDate,
       });
+      toast.success("Rental reserved — please sign your contract");
       navigate(`/legal/${res.legal.commitmentId}`);
     } catch (err) {
       setError((err as Error).message ?? "Unable to book");

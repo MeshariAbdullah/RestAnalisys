@@ -4,6 +4,7 @@ import { Diamond, CheckCircle2, X as XIcon, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import { assetsApi, formatSar } from "@/lib/api";
 
 export default function AssetDetail({ id }: { id: number }) {
@@ -23,6 +24,7 @@ export default function AssetDetail({ id }: { id: number }) {
         approved,
         approved ? undefined : "Owner rejected the proposed valuation"
       );
+      toast.success(approved ? "Valuation approved" : "Valuation rejected");
       await qc.invalidateQueries({ queryKey: ["asset", id] });
     } catch (err) {
       setActionError((err as Error).message);
@@ -34,6 +36,7 @@ export default function AssetDetail({ id }: { id: number }) {
     setActionError(null);
     try {
       await assetsApi.withdraw(id);
+      toast.success("Asset withdrawn from listing");
       await qc.invalidateQueries({ queryKey: ["asset", id] });
     } catch (err) {
       setActionError((err as Error).message);
@@ -46,7 +49,7 @@ export default function AssetDetail({ id }: { id: number }) {
     ...(asset.studioImagesJson ?? []),
     ...(asset.submissionImagesJson ?? []),
   ];
-  const awaitingOwner = asset.status === "awaiting_owner_approval";
+  const awaitingOwner = asset.status === "inspection_reported";
 
   return (
     <div className="p-8 max-w-5xl mx-auto">

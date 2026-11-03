@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 import { disputesApi, type Dispute } from "@/lib/api";
 
 type Resolution =
@@ -46,6 +47,7 @@ export default function DisputesPage() {
     setError(null);
     try {
       await disputesApi.resolve({ disputeId: id, resolution, notes });
+      toast.success("Dispute resolved");
       setOpenId(null);
       setNotes("");
       await qc.invalidateQueries({ queryKey: ["disputes"] });

@@ -4,6 +4,7 @@ import { CheckCircle2, X as XIcon, Diamond } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import { assetsApi, formatSar, type Asset } from "@/lib/api";
 
 export default function AssetApprovals() {
@@ -23,6 +24,7 @@ export default function AssetApprovals() {
         : prompt("Rejection reason?") ?? undefined;
       if (!approved && !reason) return;
       await assetsApi.review(id, approved, reason);
+      toast.success(approved ? "Asset approved" : "Asset rejected");
       await qc.invalidateQueries({ queryKey: ["assets-pending"] });
     } catch (err) {
       setError((err as Error).message);
@@ -33,6 +35,7 @@ export default function AssetApprovals() {
     setError(null);
     try {
       await assetsApi.publish(id);
+      toast.success("Listing published");
       await qc.invalidateQueries({ queryKey: ["assets-pending"] });
     } catch (err) {
       setError((err as Error).message);
@@ -114,8 +117,7 @@ export default function AssetApprovals() {
                       </Button>
                     </>
                   )}
-                  {asset.status === "in_inspection" ||
-                  asset.status === "in_vault" ? (
+                  {asset.status === "ready_for_listing" ? (
                     <Button
                       className="bg-amber-500 text-neutral-950 hover:bg-amber-400"
                       onClick={() => publish(asset.id)}

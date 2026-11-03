@@ -4,6 +4,7 @@ import { Diamond } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 import { authApi } from "@/lib/api";
 import { saveSession, homeForRole } from "@/lib/auth";
 
@@ -23,9 +24,12 @@ export default function Register() {
     try {
       const res = await authApi.register(email, password, fullName, role);
       saveSession(res.token, res.user);
+      toast.success("Account created successfully");
       navigate(homeForRole(res.user.role));
     } catch (err) {
-      setError((err as Error).message ?? "Registration failed");
+      const msg = (err as Error).message ?? "Registration failed";
+      toast.error(msg);
+      setError(msg);
     } finally {
       setLoading(false);
     }

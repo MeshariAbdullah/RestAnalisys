@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 import { operationsApi, type Shipment } from "@/lib/api";
 
 const STATUSES = [
@@ -20,7 +21,7 @@ const STATUSES = [
   "in_transit",
   "delivered",
   "failed",
-  "returned_to_warehouse",
+  "returned",
 ] as const;
 
 export default function Shipments() {
@@ -39,6 +40,7 @@ export default function Shipments() {
       status: editStatus,
       trackingNumber: editTracking || undefined,
     });
+    toast.success("Shipment updated");
     setEditingId(null);
     setEditTracking("");
     await qc.invalidateQueries({ queryKey: ["shipments"] });

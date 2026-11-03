@@ -5,6 +5,7 @@ import { FileSignature, ShieldCheck, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import { legalApi, paymentsApi, formatSar } from "@/lib/api";
 
 export default function LegalCommitmentPage({
@@ -30,6 +31,7 @@ export default function LegalCommitmentPage({
     setError(null);
     try {
       await legalApi.sign(commitmentId);
+      toast.success("Contract signed successfully");
       await qc.invalidateQueries({ queryKey: ["commitment", commitmentId] });
     } catch (err) {
       setError((err as Error).message ?? "Signing failed");
@@ -44,6 +46,7 @@ export default function LegalCommitmentPage({
     setError(null);
     try {
       await paymentsApi.charge(data.rental.id);
+      toast.success("Payment processed — rental confirmed");
       navigate("/my-rentals");
     } catch (err) {
       setError((err as Error).message ?? "Payment failed");

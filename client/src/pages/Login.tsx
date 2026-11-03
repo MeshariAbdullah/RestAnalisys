@@ -4,6 +4,7 @@ import { Diamond } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 import { authApi } from "@/lib/api";
 import { saveSession, homeForRole } from "@/lib/auth";
 
@@ -21,9 +22,12 @@ export default function Login() {
     try {
       const res = await authApi.login(email, password);
       saveSession(res.token, res.user);
+      toast.success(`Welcome back, ${res.user.fullName}`);
       navigate(homeForRole(res.user.role));
     } catch (err) {
-      setError((err as Error).message ?? "Login failed");
+      const msg = (err as Error).message ?? "Login failed";
+      toast.error(msg);
+      setError(msg);
     } finally {
       setLoading(false);
     }

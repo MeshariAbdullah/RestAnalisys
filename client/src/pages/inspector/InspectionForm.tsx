@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 import { assetsApi, inspectionsApi } from "@/lib/api";
 
 type Grade = "A" | "B" | "C" | "D";
@@ -60,6 +61,7 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
         recommendedDailyPriceHalalas,
         riskCategory,
       });
+      toast.success("Inspection report submitted");
       navigate("/inspector");
     } catch (err) {
       setError((err as Error).message ?? "Submission failed");
