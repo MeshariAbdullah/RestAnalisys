@@ -1,6 +1,7 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Package, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { useLocation } from "wouter";
+import { Package, CheckCircle, Clock, AlertCircle, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { rentalsApi, formatSar, type Rental } from "@/lib/api";
@@ -37,6 +38,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function MyRentals() {
+  const [, setLocation] = useLocation();
   const { data, isLoading } = useQuery({
     queryKey: ["rentals-mine"],
     queryFn: () => rentalsApi.mine(),
@@ -74,7 +76,11 @@ export default function MyRentals() {
       ) : (
         <div className="space-y-4">
           {data.map((r: Rental) => (
-            <Card key={r.id}>
+            <Card
+              key={r.id}
+              className="cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => setLocation(`/my-rentals/${r.id}`)}
+            >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between gap-6 flex-wrap">
                   <div className="flex-1 min-w-0">
@@ -91,15 +97,18 @@ export default function MyRentals() {
                       <StatusBadge status={r.status} />
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-neutral-500 uppercase">Total paid</p>
-                    <p className="font-bold text-lg">
-                      {formatSar(r.totalPayableHalalas)}
-                    </p>
-                    <p className="text-[11px] text-neutral-500 mt-1">
-                      Commitment {formatSar(r.legalCommitmentHalalas)} (
-                      {r.legalCommitmentPct}%)
-                    </p>
+                  <div className="text-right flex items-center gap-3">
+                    <div>
+                      <p className="text-xs text-neutral-500 uppercase">Total paid</p>
+                      <p className="font-bold text-lg">
+                        {formatSar(r.totalPayableHalalas)}
+                      </p>
+                      <p className="text-[11px] text-neutral-500 mt-1">
+                        Commitment {formatSar(r.legalCommitmentHalalas)} (
+                        {r.legalCommitmentPct}%)
+                      </p>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-neutral-300" />
                   </div>
                 </div>
               </CardContent>

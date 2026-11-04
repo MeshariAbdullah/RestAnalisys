@@ -19,6 +19,7 @@ import {
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { createNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -120,6 +121,19 @@ router.post(
       after: { payment, invoice },
     });
 
+    try {
+      if (result.status === "captured") {
+        await createNotification(
+          req.user!.userId,
+          "payment_received",
+          "Payment confirmed",
+          `Payment of ${(rental.totalPayableHalalas / 100).toFixed(2)} SAR for rental ${rental.reference} was captured successfully.`,
+          "payment",
+          payment.id
+        );
+      }
+    } catch { /* never break the main flow */ }
+
     res.json({ payment, invoice });
   })
 );
@@ -220,6 +234,17 @@ router.post(
       entityId: payout.id,
       after: payout,
     });
+
+    try {
+      await createNotification(
+        rental.ownerId,
+        "payout_released",
+        "Payout released",
+        `A payout of ${(payoutCalc.netHalalas / 100).toFixed(2)} SAR has been released for your rental.`,
+        "payout",
+        payout.id
+      );
+    } catch { /* never break the main flow */ }
 
     res.json(payout);
   })

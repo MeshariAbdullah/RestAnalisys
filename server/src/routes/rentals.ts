@@ -52,10 +52,11 @@ import {
   computeRentalQuote,
   DEFAULT_PLATFORM_FEE_PCT,
 } from "../utils/money.js";
-import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
+import { computeRiskDecision, RiskFeatures, trustScoreToCategory } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { createNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -99,7 +100,18 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await (async () => {
+      const [lateRow] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(rentals)
+        .where(
+          and(
+            eq(rentals.renterId, userId),
+            sql`returned_at IS NOT NULL AND returned_at::date > end_date::date`
+          )
+        );
+      return Number(lateRow?.count ?? 0);
+    })(),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -109,6 +121,41 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     userRole: user.role,
     countryIsSaudi: true,
   };
+}
+
+async function updateUserTrustScore(userId: number): Promise<void> {
+  const stats = await db
+    .select({
+      completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
+      disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
+      total: sql<number>`count(*)`,
+      late: sql<number>`count(*) filter (where returned_at IS NOT NULL AND returned_at::date > end_date::date)`,
+    })
+    .from(rentals)
+    .where(eq(rentals.renterId, userId));
+  const row = stats[0] ?? { completed: 0, disputed: 0, total: 0, late: 0 };
+  const completed = Number(row.completed ?? 0);
+  const disputed = Number(row.disputed ?? 0);
+  const late = Number(row.late ?? 0);
+  const total = Number(row.total ?? 0);
+
+  let score = 50;
+  if (completed >= 10) score += 20;
+  else if (completed >= 5) score += 12;
+  else if (completed >= 1) score += 5;
+  if (disputed > 0) score -= 15 * disputed;
+  if (late > 0) score -= 5 * late;
+  if (total > 0 && disputed / total > 0.2) score -= 10;
+  score = Math.max(0, Math.min(100, score));
+
+  await db
+    .update(users)
+    .set({
+      trustScore: score,
+      riskCategory: trustScoreToCategory(score),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId));
 }
 
 // ── Quote (no side effects) ─────────────────────────────────────────────────
@@ -401,6 +448,17 @@ router.post(
       after: updated,
     });
 
+    try {
+      await createNotification(
+        rental.renterId,
+        "rental_status_change",
+        "Your rental is on its way",
+        `Rental ${rental.reference} is out for delivery.`,
+        "rental",
+        id
+      );
+    } catch { /* never break the main flow */ }
+
     res.json(updated);
   })
 );
@@ -441,6 +499,17 @@ router.post(
       after: updated,
     });
 
+    try {
+      await createNotification(
+        rental.renterId,
+        "rental_status_change",
+        "Item delivered",
+        `Rental ${rental.reference} has been delivered. Enjoy your item!`,
+        "rental",
+        id
+      );
+    } catch { /* never break the main flow */ }
+
     res.json(updated);
   })
 );
@@ -476,6 +545,17 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    try {
+      await createNotification(
+        rental.renterId,
+        "rental_status_change",
+        "Item returned — under inspection",
+        `Rental ${rental.reference}: your item has been received and is under inspection.`,
+        "rental",
+        id
+      );
+    } catch { /* never break the main flow */ }
 
     res.json(updated);
   })
@@ -516,6 +596,28 @@ router.post(
         entityId: id,
         after: updated,
       });
+
+      try { await updateUserTrustScore(rental.renterId); } catch { /* best-effort */ }
+
+      try {
+        await createNotification(
+          rental.renterId,
+          "rental_status_change",
+          "Rental closed",
+          `Rental ${rental.reference} has been closed successfully. Thank you!`,
+          "rental",
+          id
+        );
+        await createNotification(
+          rental.ownerId,
+          "rental_status_change",
+          "Rental completed",
+          `Rental ${rental.reference} for your asset has been completed. Payout will be released shortly.`,
+          "rental",
+          id
+        );
+      } catch { /* never break the main flow */ }
+
       return res.json(updated);
     }
 
@@ -547,6 +649,20 @@ router.post(
         entityId: id,
         after: { updated, penaltyHalalas },
       });
+
+      try { await updateUserTrustScore(rental.renterId); } catch { /* best-effort */ }
+
+      try {
+        await createNotification(
+          rental.renterId,
+          "rental_status_change",
+          "Rental closed with penalty",
+          `Rental ${rental.reference} has been closed with a penalty charge.`,
+          "rental",
+          id
+        );
+      } catch { /* never break the main flow */ }
+
       return res.json(updated);
     }
 
@@ -581,6 +697,27 @@ router.post(
       entityId: id,
       after: { updated, outcome },
     });
+
+    try { await updateUserTrustScore(rental.renterId); } catch { /* best-effort */ }
+
+    try {
+      await createNotification(
+        rental.renterId,
+        "rental_status_change",
+        "Rental under enforcement",
+        `Rental ${rental.reference} has been escalated due to ${outcome === "loss" ? "loss" : "major damage"}.`,
+        "rental",
+        id
+      );
+      await createNotification(
+        rental.ownerId,
+        "rental_status_change",
+        "Asset issue — enforcement initiated",
+        `Rental ${rental.reference}: enforcement has been initiated. You will be compensated.`,
+        "rental",
+        id
+      );
+    } catch { /* never break the main flow */ }
 
     res.json(updated);
   })
@@ -627,6 +764,17 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    try {
+      await createNotification(
+        rental.renterId,
+        "rental_status_change",
+        "Rental cancelled",
+        `Rental ${rental.reference} has been cancelled.`,
+        "rental",
+        id
+      );
+    } catch { /* never break the main flow */ }
 
     res.json(updated);
   })

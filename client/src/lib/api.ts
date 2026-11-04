@@ -223,6 +223,19 @@ export interface RentalQuote {
   totalPayableHalalas: number;
 }
 
+export interface AuditLog {
+  id: number;
+  actorUserId: number | null;
+  actorRole: string | null;
+  action: string;
+  entityType: string;
+  entityId: number | null;
+  beforeJson: unknown;
+  afterJson: unknown;
+  ip: string | null;
+  createdAt: string;
+}
+
 export interface AdminKPIs {
   users: number;
   listedAssets: number;
@@ -578,11 +591,70 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: {
+    page?: number;
+    limit?: number;
+    entityType?: string;
+    entityId?: number;
+    actorUserId?: number;
+    action?: string;
+    startDate?: string;
+    endDate?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.entityId) qs.set("entityId", String(params.entityId));
+    if (params?.actorUserId) qs.set("actorUserId", String(params.actorUserId));
+    if (params?.action) qs.set("action", params.action);
+    if (params?.startDate) qs.set("startDate", params.startDate);
+    if (params?.endDate) qs.set("endDate", params.endDate);
+    return request<{ items: AuditLog[]; total: number; page: number; limit: number }>(
+      `/admin/audit-logs?${qs}`
+    );
+  },
+  auditLogActions: () => request<string[]>("/admin/audit-logs/actions"),
+  entityAuditLogs: (entityType: string, entityId: number) =>
+    request<AuditLog[]>(`/admin/audit-logs/entity/${entityType}/${entityId}`),
 };
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Notification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  entityType: string | null;
+  entityId: number | null;
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (params?: { unreadOnly?: boolean; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.unreadOnly) qs.set("unreadOnly", "true");
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    return request<{ items: Notification[]; total: number }>(`/notifications?${qs}`);
+  },
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request("/notifications/read-all", { method: "POST" }),
+};
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Money helpers (frontend copies of the backend constants)

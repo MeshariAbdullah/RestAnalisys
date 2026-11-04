@@ -24,6 +24,7 @@ import {
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { createNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -256,6 +257,19 @@ router.post(
       after: updated,
     });
 
+    try {
+      await createNotification(
+        asset.ownerId,
+        "asset_status_change",
+        approved ? "Asset approved" : "Asset rejected",
+        approved
+          ? `Your asset "${asset.title}" has been approved and is awaiting shipment.`
+          : `Your asset "${asset.title}" was not approved.${rejectionReason ? ` Reason: ${rejectionReason}` : ""}`,
+        "asset",
+        assetId
+      );
+    } catch { /* never break the main flow */ }
+
     res.json(updated);
   })
 );
@@ -396,6 +410,17 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    try {
+      await createNotification(
+        asset.ownerId,
+        "asset_status_change",
+        "Asset listed",
+        `Your asset "${asset.title}" is now live on the catalog and available for rental.`,
+        "asset",
+        id
+      );
+    } catch { /* never break the main flow */ }
 
     res.json(updated);
   })

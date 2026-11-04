@@ -12,6 +12,7 @@ import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { createNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -149,6 +150,18 @@ router.post(
       entityId: input.disputeId,
       after: updated,
     });
+
+    try {
+      const resolution = input.resolution.replace(/_/g, " ");
+      await createNotification(
+        dispute.openedByUserId,
+        "dispute_update",
+        "Dispute resolved",
+        `Your dispute #${dispute.id} has been resolved: ${resolution}.`,
+        "dispute",
+        dispute.id
+      );
+    } catch { /* never break the main flow */ }
 
     res.json(updated);
   })
