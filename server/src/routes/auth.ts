@@ -160,6 +160,42 @@ router.post(
   })
 );
 
+router.post(
+  "/refresh",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, req.user!.userId))
+      .limit(1);
+    if (!user) throw new NotFoundError("User");
+    if (user.isBlocked) {
+      throw new UnauthorizedError(`Account blocked: ${user.blockedReason ?? "contact support"}`);
+    }
+
+    const token = signToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      nafathVerified: user.nafathVerified,
+    });
+
+    return res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        nafathVerified: user.nafathVerified,
+        kycStatus: user.kycStatus,
+        trustScore: user.trustScore,
+      },
+    });
+  })
+);
+
 router.get(
   "/me",
   authenticate,

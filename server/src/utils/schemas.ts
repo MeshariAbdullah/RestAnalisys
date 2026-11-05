@@ -119,7 +119,7 @@ export const OwnerValuationResponseSchema = z.object({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const RentalQuoteRequestSchema = z.object({
-  assetId: z.number().int().positive(),
+  assetId: z.coerce.number().int().positive(),
   startDate: IsoDate,
   endDate: IsoDate,
 });
@@ -226,4 +226,24 @@ export const ShipmentUpdateSchema = z.object({
     "returned",
   ]),
   trackingNumber: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const StaffCreateSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  fullName: z.string().min(2),
+  role: z.enum(["admin", "operations", "inspector"]),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pagination (shared)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const PaginationSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 });
