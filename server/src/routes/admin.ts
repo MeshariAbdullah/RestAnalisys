@@ -19,6 +19,7 @@ import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import bcrypt from "bcryptjs";
 
 const router = Router();
 
@@ -126,17 +127,32 @@ router.get(
   })
 );
 
-// ── User list ──────────────────────────────────────────────────────────────
+// ── User list (excludes passwordHash) ─────────────────────────────────────
 router.get(
   "/users",
   authenticate,
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
+    const cols = {
+      id: users.id,
+      email: users.email,
+      fullName: users.fullName,
+      role: users.role,
+      phoneE164: users.phoneE164,
+      nationalId: users.nationalId,
+      nafathVerified: users.nafathVerified,
+      kycStatus: users.kycStatus,
+      trustScore: users.trustScore,
+      riskCategory: users.riskCategory,
+      isBlocked: users.isBlocked,
+      blockedReason: users.blockedReason,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
+    };
     const rows = role
-      ? await query.where(eq(users.role, role as any)).limit(200)
-      : await query.limit(200);
+      ? await db.select(cols).from(users).where(eq(users.role, role as any)).limit(200)
+      : await db.select(cols).from(users).limit(200);
     res.json(rows);
   })
 );
@@ -159,14 +175,22 @@ router.post(
         updatedAt: new Date(),
       })
       .where(eq(users.id, id))
-      .returning();
+      .returning({
+        id: users.id,
+        email: users.email,
+        fullName: users.fullName,
+        role: users.role,
+        isBlocked: users.isBlocked,
+        blockedReason: users.blockedReason,
+        updatedAt: users.updatedAt,
+      });
     await recordAudit({
       req,
       action: block ? "user.block" : "user.unblock",
       entityType: "user",
       entityId: id,
-      before: user,
-      after: updated,
+      before: { isBlocked: user.isBlocked },
+      after: { isBlocked: updated.isBlocked },
     });
     res.json(updated);
   })
@@ -178,12 +202,16 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
+    const { email, fullName, role, password } = req.body as {
       email: string;
       fullName: string;
       role: "admin" | "operations" | "inspector";
-      passwordHash: string;
+      password: string;
     };
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+    const passwordHash = await bcrypt.hash(password, 12);
     const [user] = await db
       .insert(users)
       .values({
@@ -194,7 +222,13 @@ router.post(
         nafathVerified: true,
         kycStatus: "verified",
       })
-      .returning();
+      .returning({
+        id: users.id,
+        email: users.email,
+        fullName: users.fullName,
+        role: users.role,
+        createdAt: users.createdAt,
+      });
     await recordAudit({
       req,
       action: "user.create_staff",

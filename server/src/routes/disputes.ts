@@ -3,7 +3,7 @@
  */
 
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { disputes, rentals } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -27,6 +27,24 @@ router.post(
       .where(eq(rentals.id, input.rentalId))
       .limit(1);
     if (!rental) throw new NotFoundError("Rental");
+
+    if (["cancelled", "closed"].includes(rental.status)) {
+      throw new LegalStateError(`Cannot open dispute on a ${rental.status} rental`);
+    }
+
+    const existingOpen = await db
+      .select({ id: disputes.id })
+      .from(disputes)
+      .where(
+        and(
+          eq(disputes.rentalId, input.rentalId),
+          inArray(disputes.status, ["open", "investigating", "awaiting_evidence"])
+        )
+      )
+      .limit(1);
+    if (existingOpen.length > 0) {
+      throw new LegalStateError("An open dispute already exists for this rental");
+    }
 
     const actorId = req.user!.userId;
     const actorIsParty =

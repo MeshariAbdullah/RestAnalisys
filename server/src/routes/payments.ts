@@ -4,7 +4,7 @@
  */
 
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { payments, rentals, users, assets, payouts } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
@@ -35,6 +35,21 @@ router.post(
     if (rental.renterId !== req.user!.userId) throw new ForbiddenError();
     if (rental.status !== "pending_payment") {
       throw new LegalStateError(`Rental not awaiting payment (status=${rental.status})`);
+    }
+
+    const existingPayment = await db
+      .select({ id: payments.id })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.rentalId, rentalId),
+          eq(payments.type, "rental_fee"),
+          inArray(payments.status, ["captured", "pending"])
+        )
+      )
+      .limit(1);
+    if (existingPayment.length > 0) {
+      throw new LegalStateError("A payment already exists for this rental");
     }
 
     const result = await chargeCard({

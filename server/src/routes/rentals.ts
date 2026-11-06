@@ -52,12 +52,33 @@ import {
   computeRentalQuote,
   DEFAULT_PLATFORM_FEE_PCT,
 } from "../utils/money.js";
-import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
+import { computeRiskDecision, RiskFeatures, trustScoreToCategory } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
 
 const router = Router();
+
+// ── Trust score persistence ─────────────────────────────────────────────────
+
+async function updateUserTrustScore(userId: number): Promise<void> {
+  const features = await buildRiskFeatures(userId, 0);
+  const decision = computeRiskDecision({
+    ...features,
+    nafathVerified: true,
+    kycVerified: true,
+    requestedAssetValueHalalas: 0,
+  });
+  const category = trustScoreToCategory(decision.finalScore);
+  await db
+    .update(users)
+    .set({
+      trustScore: decision.finalScore,
+      riskCategory: category,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId));
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -94,12 +115,23 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
   );
 
+  const lateRows = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`returned_at IS NOT NULL AND returned_at > (end_date::date + interval '1 day')`
+      )
+    );
+  const lateReturns = Number(lateRows[0]?.count ?? 0);
+
   return {
     accountAgeDays,
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns,
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -516,6 +548,7 @@ router.post(
         entityId: id,
         after: updated,
       });
+      await updateUserTrustScore(rental.renterId);
       return res.json(updated);
     }
 
@@ -547,6 +580,7 @@ router.post(
         entityId: id,
         after: { updated, penaltyHalalas },
       });
+      await updateUserTrustScore(rental.renterId);
       return res.json(updated);
     }
 
@@ -581,6 +615,7 @@ router.post(
       entityId: id,
       after: { updated, outcome },
     });
+    await updateUserTrustScore(rental.renterId);
 
     res.json(updated);
   })
