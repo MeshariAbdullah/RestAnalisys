@@ -2,7 +2,20 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Receipt, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { adminApi, formatSar } from "@/lib/api";
+import { adminApi, formatSar, halalasToSar } from "@/lib/api";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
+
+function SarTooltipFormatter(value: number) {
+  return formatSar(value * 100);
+}
 
 export default function FinancialOverview() {
   const kpisQuery = useQuery({
@@ -17,10 +30,16 @@ export default function FinancialOverview() {
 
   const kpis = kpisQuery.data;
   const trend = trendQuery.data ?? [];
-  const maxTotal = Math.max(
-    ...trend.map((t) => Number(t.total_halalas ?? 0)),
-    1
-  );
+
+  const chartData = trend.map((t) => ({
+    day: new Date(t.day).toLocaleDateString("en-SA", {
+      month: "short",
+      day: "numeric",
+    }),
+    revenue: halalasToSar(Number(t.total_halalas ?? 0)),
+    fees: halalasToSar(Number(t.fee_halalas ?? 0)),
+    rentals: Number(t.rentals ?? 0),
+  }));
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -68,36 +87,55 @@ export default function FinancialOverview() {
       <h2 className="text-lg font-semibold mb-3">Last 30 days</h2>
       <Card>
         <CardContent className="p-6">
-          {trend.length === 0 ? (
+          {trendQuery.isLoading ? (
+            <div className="h-[350px] flex items-center justify-center">
+              <p className="text-neutral-400 text-sm">Loading chart…</p>
+            </div>
+          ) : chartData.length === 0 ? (
             <p className="text-neutral-500 text-sm">No recent rentals.</p>
           ) : (
-            <div className="space-y-2">
-              {trend.map((t) => {
-                const pct = (Number(t.total_halalas) / maxTotal) * 100;
-                return (
-                  <div
-                    key={t.day}
-                    className="flex items-center gap-3 text-sm"
-                  >
-                    <span className="w-24 text-neutral-500 shrink-0">
-                      {new Date(t.day).toLocaleDateString()}
-                    </span>
-                    <div className="flex-1 h-6 bg-neutral-100 rounded">
-                      <div
-                        className="h-full bg-amber-500 rounded"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="w-24 text-right font-mono">
-                      {formatSar(Number(t.total_halalas))}
-                    </span>
-                    <span className="w-16 text-right text-xs text-neutral-500">
-                      {t.rentals} rentals
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+            <ResponsiveContainer width="100%" height={350}>
+              <BarChart
+                data={chartData}
+                margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 12, fill: "#737373" }}
+                  tickLine={false}
+                  axisLine={{ stroke: "#e5e5e5" }}
+                />
+                <YAxis
+                  tick={{ fontSize: 12, fill: "#737373" }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v: number) => `${v.toLocaleString()} SAR`}
+                  width={100}
+                />
+                <Tooltip
+                  formatter={SarTooltipFormatter}
+                  labelStyle={{ fontWeight: 600 }}
+                  contentStyle={{
+                    borderRadius: 8,
+                    border: "1px solid #e5e5e5",
+                    fontSize: 13,
+                  }}
+                />
+                <Bar
+                  dataKey="revenue"
+                  name="Revenue"
+                  fill="#f59e0b"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="fees"
+                  name="Platform fees"
+                  fill="#a3a3a3"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
           )}
         </CardContent>
       </Card>

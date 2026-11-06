@@ -20,7 +20,7 @@ export default function Browse() {
   const [category, setCategory] = useState<string | undefined>(undefined);
   const [search, setSearch] = useState("");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["listings", category],
     queryFn: () => assetsApi.listings({ category }),
   });
@@ -78,6 +78,13 @@ export default function Browse() {
               className="h-80 rounded-xl bg-neutral-100 animate-pulse"
             />
           ))}
+        </div>
+      ) : isError ? (
+        <div className="text-center py-20">
+          <p className="text-red-600 font-medium">Failed to load listings</p>
+          <p className="text-sm text-neutral-500 mt-1">
+            {(error as Error)?.message ?? "Please try again later."}
+          </p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-20 text-neutral-500">

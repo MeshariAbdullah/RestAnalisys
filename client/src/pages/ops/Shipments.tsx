@@ -28,6 +28,8 @@ export default function Shipments() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editStatus, setEditStatus] = useState<string>("in_transit");
   const [editTracking, setEditTracking] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["shipments"],
@@ -35,13 +37,21 @@ export default function Shipments() {
   });
 
   async function handleUpdate(id: number) {
-    await operationsApi.updateShipment(id, {
-      status: editStatus,
-      trackingNumber: editTracking || undefined,
-    });
-    setEditingId(null);
-    setEditTracking("");
-    await qc.invalidateQueries({ queryKey: ["shipments"] });
+    setSaving(true);
+    setError(null);
+    try {
+      await operationsApi.updateShipment(id, {
+        status: editStatus,
+        trackingNumber: editTracking || undefined,
+      });
+      setEditingId(null);
+      setEditTracking("");
+      await qc.invalidateQueries({ queryKey: ["shipments"] });
+    } catch (e: any) {
+      setError(e.message ?? "Failed to update shipment");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -50,6 +60,12 @@ export default function Shipments() {
       <p className="text-neutral-500 mb-8">
         Outbound deliveries to renters and returns to warehouse.
       </p>
+
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">
+          {error}
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>
@@ -127,9 +143,10 @@ export default function Shipments() {
                     />
                     <Button
                       onClick={() => handleUpdate(s.id)}
+                      disabled={saving}
                       className="bg-amber-500 text-neutral-950 hover:bg-amber-400"
                     >
-                      Save
+                      {saving ? "Saving…" : "Save"}
                     </Button>
                   </div>
                 )}

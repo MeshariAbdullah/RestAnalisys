@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,14 +15,25 @@ function severityColor(s: string): string {
 
 export default function AlertsPage() {
   const qc = useQueryClient();
+  const [resolvingId, setResolvingId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
   const { data, isLoading } = useQuery({
     queryKey: ["alerts"],
     queryFn: () => operationsApi.alerts(),
   });
 
   async function resolve(id: number) {
-    await operationsApi.resolveAlert(id);
-    await qc.invalidateQueries({ queryKey: ["alerts"] });
+    setResolvingId(id);
+    setError(null);
+    try {
+      await operationsApi.resolveAlert(id);
+      await qc.invalidateQueries({ queryKey: ["alerts"] });
+    } catch (e: any) {
+      setError(e.message ?? "Failed to resolve alert");
+    } finally {
+      setResolvingId(null);
+    }
   }
 
   return (
@@ -31,6 +42,12 @@ export default function AlertsPage() {
       <p className="text-neutral-500 mb-8">
         Risk events detected by the platform that need human attention.
       </p>
+
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">
+          {error}
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>
@@ -71,9 +88,10 @@ export default function AlertsPage() {
                   <Button
                     variant="outline"
                     size="sm"
+                    disabled={resolvingId === a.id}
                     onClick={() => resolve(a.id)}
                   >
-                    Resolve
+                    {resolvingId === a.id ? "Resolving…" : "Resolve"}
                   </Button>
                 )}
               </CardContent>
