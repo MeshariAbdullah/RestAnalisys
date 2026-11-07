@@ -227,3 +227,30 @@ export const ShipmentUpdateSchema = z.object({
   ]),
   trackingNumber: z.string().optional(),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const AdminBlockUserSchema = z.object({
+  block: z.boolean(),
+  reason: z.string().optional(),
+});
+
+export const AdminCreateStaffSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().min(2),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  role: z.enum(["admin", "operations", "inspector"]),
+});
+
+export const AdminUserListFilter = z.object({
+  role: z
+    .enum(["renter", "owner", "inspector", "operations", "admin", "super_admin"])
+    .optional(),
+});
+
+export const RentalCloseSchema = z.object({
+  outcome: z.enum(["clean", "penalty", "major_damage", "loss"]),
+  penaltyHalalas: HalalasAmount.optional(),
+});

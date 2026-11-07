@@ -7,10 +7,23 @@ import { Badge } from "@/components/ui/badge";
 import { operationsApi } from "@/lib/api";
 
 export default function OpsDashboard() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["ops-summary"],
     queryFn: () => operationsApi.summary(),
   });
+
+  if (isError) {
+    return (
+      <div className="p-8 max-w-6xl mx-auto">
+        <h1 className="text-3xl font-bold mb-2">Operations dashboard</h1>
+        <div className="mt-8 rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+          <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+          <p className="text-red-700 font-medium">Failed to load data</p>
+          <p className="text-sm text-red-600 mt-1">{(error as Error).message}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 max-w-6xl mx-auto">

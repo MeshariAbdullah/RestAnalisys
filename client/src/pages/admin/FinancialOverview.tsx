@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Receipt, TrendingUp } from "lucide-react";
+import { Receipt, TrendingUp, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { adminApi, formatSar } from "@/lib/api";
 
@@ -14,6 +14,22 @@ export default function FinancialOverview() {
     queryKey: ["revenue-trend"],
     queryFn: () => adminApi.revenueTrend(),
   });
+
+  const isError = kpisQuery.isError || trendQuery.isError;
+  const error = kpisQuery.error || trendQuery.error;
+
+  if (isError) {
+    return (
+      <div className="p-8 max-w-5xl mx-auto">
+        <h1 className="text-3xl font-bold mb-2">Financial overview</h1>
+        <div className="mt-8 rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+          <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+          <p className="text-red-700 font-medium">Failed to load data</p>
+          <p className="text-sm text-red-600 mt-1">{(error as Error).message}</p>
+        </div>
+      </div>
+    );
+  }
 
   const kpis = kpisQuery.data;
   const trend = trendQuery.data ?? [];

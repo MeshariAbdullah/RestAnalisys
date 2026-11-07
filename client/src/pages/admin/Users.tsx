@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users as UsersIcon, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Users as UsersIcon, ShieldAlert, ShieldCheck, Plus, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -12,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { adminApi, type User } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 function riskColor(c: string): string {
   if (c === "low") return "bg-green-100 text-green-700";
@@ -24,10 +27,17 @@ export default function UsersPage() {
   const qc = useQueryClient();
   const [role, setRole] = useState<string>("all");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["admin-users", role],
     queryFn: () => adminApi.users(role === "all" ? undefined : role),
   });
+
+  const [showCreate, setShowCreate] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newRole, setNewRole] = useState<"admin" | "operations" | "inspector">("operations");
+  const [creating, setCreating] = useState(false);
 
   async function toggleBlock(u: User) {
     const block = !u.isBlocked;
@@ -35,8 +45,31 @@ export default function UsersPage() {
       ? prompt("Reason for blocking?") ?? undefined
       : undefined;
     if (block && !reason) return;
-    await adminApi.blockUser(u.id, block, reason);
-    await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    try {
+      await adminApi.blockUser(u.id, block, reason);
+      toast({ title: block ? "User blocked" : "User unblocked", variant: "success" });
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (err) {
+      toast({ title: "Action failed", description: (err as Error).message, variant: "destructive" });
+    }
+  }
+
+  async function handleCreateStaff(e: React.FormEvent) {
+    e.preventDefault();
+    setCreating(true);
+    try {
+      await adminApi.createStaff({ email: newEmail, fullName: newName, password: newPassword, role: newRole });
+      toast({ title: "Staff user created", description: `${newEmail} (${newRole})`, variant: "success" });
+      setShowCreate(false);
+      setNewEmail("");
+      setNewName("");
+      setNewPassword("");
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (err) {
+      toast({ title: "Failed to create user", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
@@ -45,6 +78,45 @@ export default function UsersPage() {
       <p className="text-neutral-500 mb-6">
         All accounts across the platform.
       </p>
+
+      {showCreate && (
+        <Card className="mb-6 border-amber-200 bg-amber-50/30">
+          <CardContent className="p-6">
+            <h3 className="font-semibold mb-4">Create staff account</h3>
+            <form onSubmit={handleCreateStaff} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs">Full name</Label>
+                <Input value={newName} onChange={(e) => setNewName(e.target.value)} required minLength={2} />
+              </div>
+              <div>
+                <Label className="text-xs">Email</Label>
+                <Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required />
+              </div>
+              <div>
+                <Label className="text-xs">Password</Label>
+                <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} />
+              </div>
+              <div>
+                <Label className="text-xs">Role</Label>
+                <Select value={newRole} onValueChange={(v) => setNewRole(v as typeof newRole)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="operations">Operations</SelectItem>
+                    <SelectItem value="inspector">Inspector</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="md:col-span-2 flex gap-2">
+                <Button type="submit" disabled={creating} className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
+                  {creating ? "Creating…" : "Create account"}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex items-center gap-3 mb-5">
         <Select value={role} onValueChange={setRole}>
@@ -60,9 +132,20 @@ export default function UsersPage() {
             <SelectItem value="admin">Admin</SelectItem>
           </SelectContent>
         </Select>
+        {!showCreate && (
+          <Button onClick={() => setShowCreate(true)} className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
+            <Plus className="w-4 h-4 mr-1.5" /> Create staff
+          </Button>
+        )}
       </div>
 
-      {isLoading ? (
+      {isError ? (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+          <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+          <p className="text-red-700 font-medium">Failed to load data</p>
+          <p className="text-sm text-red-600 mt-1">{(error as Error).message}</p>
+        </div>
+      ) : isLoading ? (
         <p className="text-neutral-500">Loading…</p>
       ) : !data || data.length === 0 ? (
         <Card>

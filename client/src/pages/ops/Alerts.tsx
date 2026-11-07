@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { operationsApi } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 function severityColor(s: string): string {
   if (s === "critical") return "bg-red-600 text-white";
@@ -15,14 +16,19 @@ function severityColor(s: string): string {
 
 export default function AlertsPage() {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["alerts"],
     queryFn: () => operationsApi.alerts(),
   });
 
   async function resolve(id: number) {
-    await operationsApi.resolveAlert(id);
-    await qc.invalidateQueries({ queryKey: ["alerts"] });
+    try {
+      await operationsApi.resolveAlert(id);
+      toast({ title: "Alert resolved", variant: "success" });
+      await qc.invalidateQueries({ queryKey: ["alerts"] });
+    } catch (err) {
+      toast({ title: "Failed to resolve", description: (err as Error).message, variant: "destructive" });
+    }
   }
 
   return (
@@ -32,7 +38,13 @@ export default function AlertsPage() {
         Risk events detected by the platform that need human attention.
       </p>
 
-      {isLoading ? (
+      {isError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+          <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+          <p className="text-red-700 font-medium">Failed to load data</p>
+          <p className="text-sm text-red-600 mt-1">{(error as Error).message}</p>
+        </div>
+      ) : isLoading ? (
         <p className="text-neutral-500">Loading…</p>
       ) : !data || data.length === 0 ? (
         <Card>

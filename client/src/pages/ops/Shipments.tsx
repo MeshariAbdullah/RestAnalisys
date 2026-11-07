@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Truck } from "lucide-react";
+import { Truck, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { operationsApi, type Shipment } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 const STATUSES = [
   "scheduled",
@@ -29,19 +30,24 @@ export default function Shipments() {
   const [editStatus, setEditStatus] = useState<string>("in_transit");
   const [editTracking, setEditTracking] = useState("");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["shipments"],
     queryFn: () => operationsApi.shipments(),
   });
 
   async function handleUpdate(id: number) {
-    await operationsApi.updateShipment(id, {
-      status: editStatus,
-      trackingNumber: editTracking || undefined,
-    });
-    setEditingId(null);
-    setEditTracking("");
-    await qc.invalidateQueries({ queryKey: ["shipments"] });
+    try {
+      await operationsApi.updateShipment(id, {
+        status: editStatus,
+        trackingNumber: editTracking || undefined,
+      });
+      toast({ title: "Shipment updated", variant: "success" });
+      setEditingId(null);
+      setEditTracking("");
+      await qc.invalidateQueries({ queryKey: ["shipments"] });
+    } catch (err) {
+      toast({ title: "Update failed", description: (err as Error).message, variant: "destructive" });
+    }
   }
 
   return (
@@ -51,7 +57,13 @@ export default function Shipments() {
         Outbound deliveries to renters and returns to warehouse.
       </p>
 
-      {isLoading ? (
+      {isError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+          <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+          <p className="text-red-700 font-medium">Failed to load data</p>
+          <p className="text-sm text-red-600 mt-1">{(error as Error).message}</p>
+        </div>
+      ) : isLoading ? (
         <p className="text-neutral-500">Loading…</p>
       ) : !data || data.length === 0 ? (
         <Card>

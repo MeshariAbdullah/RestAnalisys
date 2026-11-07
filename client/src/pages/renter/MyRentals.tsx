@@ -1,6 +1,7 @@
 import React from "react";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Package, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { Package, CheckCircle, Clock, AlertCircle, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { rentalsApi, formatSar, type Rental } from "@/lib/api";
@@ -37,7 +38,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function MyRentals() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["rentals-mine"],
     queryFn: () => rentalsApi.mine(),
   });
@@ -49,7 +50,13 @@ export default function MyRentals() {
         Track contracts, shipments and returns.
       </p>
 
-      {isLoading ? (
+      {isError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+          <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+          <p className="text-red-700 font-medium">Failed to load data</p>
+          <p className="text-sm text-red-600 mt-1">{(error as Error).message}</p>
+        </div>
+      ) : isLoading ? (
         <div className="space-y-4">
           {Array.from({ length: 3 }).map((_, i) => (
             <div
@@ -74,36 +81,40 @@ export default function MyRentals() {
       ) : (
         <div className="space-y-4">
           {data.map((r: Rental) => (
-            <Card key={r.id}>
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between gap-6 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-mono text-xs text-neutral-500">
-                      {r.reference}
-                    </p>
-                    <p className="font-semibold mt-1">
-                      {r.startDate} → {r.endDate}{" "}
-                      <span className="text-neutral-500 font-normal">
-                        ({r.durationDays} days)
-                      </span>
-                    </p>
-                    <div className="mt-3">
-                      <StatusBadge status={r.status} />
+            <Link key={r.id} href={`/my-rentals/${r.id}`}>
+              <a className="block">
+                <Card className="hover:shadow-md transition-shadow cursor-pointer">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between gap-6 flex-wrap">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-mono text-xs text-neutral-500">
+                          {r.reference}
+                        </p>
+                        <p className="font-semibold mt-1">
+                          {r.startDate} → {r.endDate}{" "}
+                          <span className="text-neutral-500 font-normal">
+                            ({r.durationDays} days)
+                          </span>
+                        </p>
+                        <div className="mt-3">
+                          <StatusBadge status={r.status} />
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-neutral-500 uppercase">Total paid</p>
+                        <p className="font-bold text-lg">
+                          {formatSar(r.totalPayableHalalas)}
+                        </p>
+                        <p className="text-[11px] text-neutral-500 mt-1">
+                          Commitment {formatSar(r.legalCommitmentHalalas)} (
+                          {r.legalCommitmentPct}%)
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-neutral-500 uppercase">Total paid</p>
-                    <p className="font-bold text-lg">
-                      {formatSar(r.totalPayableHalalas)}
-                    </p>
-                    <p className="text-[11px] text-neutral-500 mt-1">
-                      Commitment {formatSar(r.legalCommitmentHalalas)} (
-                      {r.legalCommitmentPct}%)
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+              </a>
+            </Link>
           ))}
         </div>
       )}

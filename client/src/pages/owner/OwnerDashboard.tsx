@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Diamond, Plus, TrendingUp, Package, Wallet } from "lucide-react";
+import { Diamond, Plus, TrendingUp, Package, Wallet, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,22 @@ export default function OwnerDashboard() {
     queryKey: ["my-payouts"],
     queryFn: () => paymentsApi.myPayouts(),
   });
+
+  const isError = assetsQuery.isError || payoutsQuery.isError;
+  const error = assetsQuery.error || payoutsQuery.error;
+
+  if (isError) {
+    return (
+      <div className="p-8 max-w-6xl mx-auto">
+        <h1 className="text-3xl font-bold mb-2">Owner dashboard</h1>
+        <div className="mt-8 rounded-lg border border-red-200 bg-red-50 p-6 text-center">
+          <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+          <p className="text-red-700 font-medium">Failed to load data</p>
+          <p className="text-sm text-red-600 mt-1">{(error as Error).message}</p>
+        </div>
+      </div>
+    );
+  }
 
   const assets = assetsQuery.data ?? [];
   const totalValue = assets.reduce(

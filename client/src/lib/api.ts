@@ -223,6 +223,19 @@ export interface RentalQuote {
   totalPayableHalalas: number;
 }
 
+export interface AuditLog {
+  id: number;
+  actorUserId?: number;
+  actorRole?: string;
+  action: string;
+  entityType: string;
+  entityId?: number;
+  beforeJson?: Record<string, unknown>;
+  afterJson?: Record<string, unknown>;
+  ip?: string;
+  createdAt: string;
+}
+
 export interface AdminKPIs {
   users: number;
   listedAssets: number;
@@ -578,6 +591,28 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  createStaff: (data: {
+    email: string;
+    fullName: string;
+    password: string;
+    role: "admin" | "operations" | "inspector";
+  }) =>
+    request<User>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  auditLogs: (params?: { limit?: number; offset?: number; entityType?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    return request<{
+      items: AuditLog[];
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/admin/audit-logs?${qs}`);
+  },
 };
 
 export const healthApi = {

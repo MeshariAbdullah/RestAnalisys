@@ -4,6 +4,7 @@
 
 import { Router } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 import { db } from "../db/index.js";
 import {
   users,
@@ -13,12 +14,18 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import {
+  AdminBlockUserSchema,
+  AdminCreateStaffSchema,
+  AdminUserListFilter,
+} from "../utils/schemas.js";
 
 const router = Router();
 
@@ -132,10 +139,10 @@ router.get(
   authenticate,
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
-    const role = (req.query.role as string | undefined) ?? undefined;
+    const { role } = AdminUserListFilter.parse(req.query);
     const query = db.select().from(users);
     const rows = role
-      ? await query.where(eq(users.role, role as any)).limit(200)
+      ? await query.where(eq(users.role, role)).limit(200)
       : await query.limit(200);
     res.json(rows);
   })
@@ -148,7 +155,7 @@ router.post(
   requirePermission("user.block"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { reason, block } = req.body as { reason?: string; block: boolean };
+    const { reason, block } = AdminBlockUserSchema.parse(req.body);
     const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
     if (!user) throw new NotFoundError("User");
     const [updated] = await db
@@ -178,12 +185,8 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
-      email: string;
-      fullName: string;
-      role: "admin" | "operations" | "inspector";
-      passwordHash: string;
-    };
+    const { email, fullName, role, password } = AdminCreateStaffSchema.parse(req.body);
+    const passwordHash = await bcrypt.hash(password, 12);
     const [user] = await db
       .insert(users)
       .values({
@@ -218,6 +221,37 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+    const entityType = req.query.entityType as string | undefined;
+
+    const conditions = entityType
+      ? eq(auditLogs.entityType, entityType)
+      : undefined;
+
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(conditions)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [total] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(auditLogs)
+      .where(conditions);
+
+    res.json({ items: rows, total: Number(total?.count ?? 0), limit, offset });
   })
 );
 
