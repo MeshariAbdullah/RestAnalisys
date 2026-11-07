@@ -53,7 +53,7 @@ export default function MyRentals() {
       {isError ? (
         <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
           <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" />
-          <p className="text-red-700 font-medium">Failed to load data</p>
+          <p className="text-red-700 font-medium">Failed to load rentals</p>
           <p className="text-sm text-red-600 mt-1">{(error as Error).message}</p>
         </div>
       ) : isLoading ? (
