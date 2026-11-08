@@ -35,6 +35,13 @@ router.post(
       ["admin", "operations", "super_admin"].includes(req.user!.role);
     if (!actorIsParty) throw new ForbiddenError();
 
+    const nonDisputableStatuses = ["closed", "cancelled", "enforcement", "in_dispute"];
+    if (nonDisputableStatuses.includes(rental.status)) {
+      throw new LegalStateError(
+        `Cannot open a dispute for a rental in status '${rental.status}'`
+      );
+    }
+
     const [dispute] = await db
       .insert(disputes)
       .values({

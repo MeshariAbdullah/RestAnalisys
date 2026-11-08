@@ -206,6 +206,12 @@ router.post(
       .where(eq(sanadRecords.id, id))
       .returning();
 
+    // Sync legal commitment status
+    await db
+      .update(legalCommitments)
+      .set({ status: "discharged", dischargedAt: new Date(), updatedAt: new Date() })
+      .where(eq(legalCommitments.id, sanad.legalCommitmentId));
+
     await recordAudit({
       req,
       action: "legal.sanad_discharge",
@@ -258,6 +264,12 @@ router.post(
       .update(rentals)
       .set({ status: "enforcement", updatedAt: new Date() })
       .where(eq(rentals.id, sanad.rentalId));
+
+    // Sync legal commitment status to breached
+    await db
+      .update(legalCommitments)
+      .set({ status: "breached", breachedAt: new Date(), breachReason: reason, updatedAt: new Date() })
+      .where(eq(legalCommitments.id, sanad.legalCommitmentId));
 
     await recordAudit({
       req,

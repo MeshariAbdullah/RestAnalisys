@@ -119,7 +119,7 @@ export const OwnerValuationResponseSchema = z.object({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const RentalQuoteRequestSchema = z.object({
-  assetId: z.number().int().positive(),
+  assetId: z.coerce.number().int().positive(),
   startDate: IsoDate,
   endDate: IsoDate,
 });
@@ -226,4 +226,15 @@ export const ShipmentUpdateSchema = z.object({
     "returned",
   ]),
   trackingNumber: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin — staff management
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const StaffCreateSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().min(2),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  role: z.enum(["admin", "operations", "inspector"]),
 });

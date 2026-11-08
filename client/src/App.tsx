@@ -1,6 +1,7 @@
 import React from "react";
 import { Route, Switch, Redirect } from "wouter";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
@@ -11,6 +12,7 @@ import Browse from "./pages/renter/Browse";
 import ItemDetail from "./pages/renter/ItemDetail";
 import LegalCommitmentPage from "./pages/renter/LegalCommitment";
 import MyRentals from "./pages/renter/MyRentals";
+import RentalDetail from "./pages/renter/RentalDetail";
 
 // Owner
 import OwnerDashboard from "./pages/owner/OwnerDashboard";
@@ -38,6 +40,7 @@ import SanadTracking from "./pages/admin/SanadTracking";
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <Switch>
       {/* Public */}
       <Route path="/" component={Landing} />
@@ -59,6 +62,13 @@ export default function App() {
         {(params) => (
           <ProtectedRoute roles={["renter"]}>
             <LegalCommitmentPage commitmentId={Number(params.commitmentId)} />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/my-rentals/:id">
+        {(params) => (
+          <ProtectedRoute roles={["renter"]}>
+            <RentalDetail id={Number(params.id)} />
           </ProtectedRoute>
         )}
       </Route>
@@ -134,5 +144,6 @@ export default function App() {
         <Redirect to="/" />
       </Route>
     </Switch>
+    </ErrorBoundary>
   );
 }

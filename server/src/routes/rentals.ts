@@ -52,7 +52,7 @@ import {
   computeRentalQuote,
   DEFAULT_PLATFORM_FEE_PCT,
 } from "../utils/money.js";
-import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
+import { computeRiskDecision, RiskFeatures, trustScoreToCategory } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
@@ -71,7 +71,8 @@ function daysBetween(startIso: string, endIso: string): number {
 function generateRentalReference(): string {
   const year = new Date().getFullYear();
   const rand = Math.floor(100000 + Math.random() * 900000);
-  return `MLR-${year}-${rand}`;
+  const ts = Date.now().toString(36).slice(-4).toUpperCase();
+  return `MLR-${year}-${rand}${ts}`;
 }
 
 async function buildRiskFeatures(userId: number, assetValueHalalas: number): Promise<RiskFeatures> {
@@ -84,10 +85,11 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      lateReturns: sql<number>`count(*) filter (where returned_at > (end_date::timestamp + interval '1 day') and returned_at is not null)`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, lateReturns: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +101,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.lateReturns ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -109,6 +111,39 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     userRole: user.role,
     countryIsSaudi: true,
   };
+}
+
+async function updateTrustScore(userId: number): Promise<void> {
+  const stats = await db
+    .select({
+      completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
+      disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
+      total: sql<number>`count(*)`,
+      lateReturns: sql<number>`count(*) filter (where returned_at > (end_date::timestamp + interval '1 day') and returned_at is not null)`,
+    })
+    .from(rentals)
+    .where(eq(rentals.renterId, userId));
+  const row = stats[0];
+  const completed = Number(row?.completed ?? 0);
+  const disputed = Number(row?.disputed ?? 0);
+  const lateReturns = Number(row?.lateReturns ?? 0);
+
+  let score = 50;
+  if (completed >= 10) score += 20;
+  else if (completed >= 5) score += 12;
+  else if (completed >= 1) score += 5;
+  score -= disputed * 10;
+  score -= lateReturns * 5;
+  score = Math.max(0, Math.min(100, score));
+
+  await db
+    .update(users)
+    .set({
+      trustScore: score,
+      riskCategory: trustScoreToCategory(score),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId));
 }
 
 // ── Quote (no side effects) ─────────────────────────────────────────────────
@@ -509,6 +544,20 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      // Auto-discharge Sanad and update legal commitment
+      await db
+        .update(sanadRecords)
+        .set({ status: "discharged", updatedAt: new Date() })
+        .where(eq(sanadRecords.rentalId, id));
+      await db
+        .update(legalCommitments)
+        .set({ status: "discharged", dischargedAt: new Date(), updatedAt: new Date() })
+        .where(eq(legalCommitments.rentalId, id));
+
+      // Update renter trust score
+      await updateTrustScore(rental.renterId);
+
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -540,6 +589,9 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      await updateTrustScore(rental.renterId);
+
       await recordAudit({
         req,
         action: "rental.close_penalty",
@@ -564,6 +616,19 @@ router.post(
         updatedAt: new Date(),
       })
       .where(eq(assets.id, rental.assetId));
+
+    // Mark Sanad as defaulted and legal commitment as breached
+    await db
+      .update(sanadRecords)
+      .set({ status: "active", updatedAt: new Date() })
+      .where(eq(sanadRecords.rentalId, id));
+    await db
+      .update(legalCommitments)
+      .set({ status: "breached", breachedAt: new Date(), breachReason: outcome, updatedAt: new Date() })
+      .where(eq(legalCommitments.rentalId, id));
+
+    // Update renter trust score (negative impact)
+    await updateTrustScore(rental.renterId);
 
     await db.insert(operationalAlerts).values({
       type: "sanad_execution_required",

@@ -26,7 +26,7 @@ const router = Router();
 router.post(
   "/charge",
   authenticate,
-  requirePermission("rental.create"),
+  requirePermission("payment.charge"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const { rentalId, paymentMethodToken } = PaymentChargeSchema.parse(req.body);
 
