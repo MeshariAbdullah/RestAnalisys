@@ -20,10 +20,13 @@ import {
   AssetSubmissionSchema,
   AssetApprovalSchema,
   AssetListingFilter,
+  OwnerValuationResponseSchema,
+  AssetReceivedSchema,
 } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -121,10 +124,7 @@ router.post(
   requirePermission("asset.read.own"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { approved, rejectionReason } = req.body as {
-      approved: boolean;
-      rejectionReason?: string;
-    };
+    const { approved, rejectionReason } = OwnerValuationResponseSchema.parse(req.body);
 
     const [asset] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
     if (!asset) throw new NotFoundError("Asset");
@@ -256,6 +256,17 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: asset.ownerId,
+      type: approved ? "asset_approved" : "asset_rejected",
+      title: approved ? "Asset Approved" : "Asset Rejected",
+      message: approved
+        ? `Your asset "${asset.title}" has been approved and is awaiting shipment to our facility.`
+        : `Your asset "${asset.title}" was not approved. Reason: ${rejectionReason ?? "Not specified"}.`,
+      entityType: "asset",
+      entityId: assetId,
+    });
+
     res.json(updated);
   })
 );
@@ -267,7 +278,7 @@ router.post(
   requirePermission("operations.update"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { warehouseLocationCode } = req.body as { warehouseLocationCode: string };
+    const { warehouseLocationCode } = AssetReceivedSchema.parse(req.body);
 
     const [asset] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
     if (!asset) throw new NotFoundError("Asset");
@@ -395,6 +406,15 @@ router.post(
       entityType: "asset",
       entityId: id,
       after: updated,
+    });
+
+    await notify({
+      userId: asset.ownerId,
+      type: "asset_published",
+      title: "Asset Listed",
+      message: `Your asset "${asset.title}" is now live and visible to renters!`,
+      entityType: "asset",
+      entityId: id,
     });
 
     res.json(updated);

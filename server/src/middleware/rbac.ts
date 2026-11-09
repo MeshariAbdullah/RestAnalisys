@@ -50,6 +50,7 @@ export type Permission =
   | "dispute.resolve"
   | "operations.read"
   | "operations.update"
+  | "notification.read"
   | "system.audit"
   | "system.impersonate";
 
@@ -65,6 +66,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "legal.sign",
     "payment.read",
     "dispute.open",
+    "notification.read",
   ],
   owner: [
     "asset.submit",
@@ -73,12 +75,14 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "rental.read.own",
     "payment.read",
     "dispute.open",
+    "notification.read",
   ],
   inspector: [
     "asset.read.any",
     "inspection.create",
     "inspection.update",
     "inspection.read",
+    "notification.read",
   ],
   operations: [
     "asset.read.any",
@@ -89,6 +93,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "operations.update",
     "dispute.open",
     "inspection.read",
+    "notification.read",
   ],
   admin: [
     "asset.read.any",
@@ -110,6 +115,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "dispute.assign",
     "dispute.resolve",
     "operations.read",
+    "notification.read",
     "system.audit",
   ],
   super_admin: [], // computed below

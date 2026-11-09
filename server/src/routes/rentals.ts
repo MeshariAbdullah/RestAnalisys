@@ -40,6 +40,7 @@ import {
   RentalQuoteRequestSchema,
   RentalCreateSchema,
   RentalCancelSchema,
+  RentalCloseSchema,
 } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
@@ -54,8 +55,9 @@ import {
 } from "../utils/money.js";
 import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
-import { issueSanad } from "../services/nafithService.js";
+import { issueSanad, dischargeSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify, notifyMany } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -280,6 +282,25 @@ router.post(
       after: { rental, decision },
     });
 
+    await notifyMany([
+      {
+        userId: renterId,
+        type: "rental_created",
+        title: "Rental Created",
+        message: `Your rental ${rental.reference} has been created. Please sign the legal commitment to proceed.`,
+        entityType: "rental",
+        entityId: rental.id,
+      },
+      {
+        userId: asset.ownerId,
+        type: "rental_created",
+        title: "New Rental on Your Asset",
+        message: `Your asset "${asset.title}" has been reserved under rental ${rental.reference}.`,
+        entityType: "rental",
+        entityId: rental.id,
+      },
+    ]);
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -401,6 +422,15 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: rental.renterId,
+      type: "rental_status_changed",
+      title: "Rental Out for Delivery",
+      message: `Your rental ${rental.reference} is out for delivery.`,
+      entityType: "rental",
+      entityId: id,
+    });
+
     res.json(updated);
   })
 );
@@ -441,6 +471,15 @@ router.post(
       after: updated,
     });
 
+    await notify({
+      userId: rental.renterId,
+      type: "rental_status_changed",
+      title: "Rental Delivered",
+      message: `Your rental ${rental.reference} has been delivered. Enjoy!`,
+      entityType: "rental",
+      entityId: id,
+    });
+
     res.json(updated);
   })
 );
@@ -477,6 +516,25 @@ router.post(
       after: updated,
     });
 
+    await notifyMany([
+      {
+        userId: rental.renterId,
+        type: "rental_status_changed",
+        title: "Return Received",
+        message: `Your return for rental ${rental.reference} has been received and is under inspection.`,
+        entityType: "rental",
+        entityId: id,
+      },
+      {
+        userId: rental.ownerId,
+        type: "rental_status_changed",
+        title: "Asset Returned",
+        message: `The rented asset from rental ${rental.reference} has been returned and is under inspection.`,
+        entityType: "rental",
+        entityId: id,
+      },
+    ]);
+
     res.json(updated);
   })
 );
@@ -488,10 +546,7 @@ router.post(
   requirePermission("rental.close"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { outcome, penaltyHalalas } = req.body as {
-      outcome: "clean" | "penalty" | "major_damage" | "loss";
-      penaltyHalalas?: number;
-    };
+    const { outcome, penaltyHalalas } = RentalCloseSchema.parse(req.body);
 
     const [rental] = await db.select().from(rentals).where(eq(rentals.id, id)).limit(1);
     if (!rental) throw new NotFoundError("Rental");
@@ -509,6 +564,31 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      // Auto-discharge the Sanad on clean closure
+      const [sanad] = await db
+        .select()
+        .from(sanadRecords)
+        .where(eq(sanadRecords.rentalId, id))
+        .limit(1);
+      if (sanad?.nafithReference && sanad.status !== "discharged") {
+        const dischargeResult = await dischargeSanad(sanad.nafithReference);
+        await db
+          .update(sanadRecords)
+          .set({
+            status: "discharged",
+            updatedAt: new Date(),
+            rawResponseJson: dischargeResult as unknown as object,
+          })
+          .where(eq(sanadRecords.id, sanad.id));
+      }
+
+      // Discharge the legal commitment
+      await db
+        .update(legalCommitments)
+        .set({ status: "discharged", dischargedAt: new Date(), updatedAt: new Date() })
+        .where(eq(legalCommitments.rentalId, id));
+
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -516,6 +596,26 @@ router.post(
         entityId: id,
         after: updated,
       });
+
+      await notifyMany([
+        {
+          userId: rental.renterId,
+          type: "rental_status_changed",
+          title: "Rental Closed",
+          message: `Your rental ${rental.reference} has been closed successfully. Thank you!`,
+          entityType: "rental",
+          entityId: id,
+        },
+        {
+          userId: rental.ownerId,
+          type: "rental_status_changed",
+          title: "Rental Closed — Payout Pending",
+          message: `Rental ${rental.reference} for your asset closed cleanly. Your payout will be processed shortly.`,
+          entityType: "rental",
+          entityId: id,
+        },
+      ]);
+
       return res.json(updated);
     }
 
@@ -547,6 +647,16 @@ router.post(
         entityId: id,
         after: { updated, penaltyHalalas },
       });
+
+      await notify({
+        userId: rental.renterId,
+        type: "rental_status_changed",
+        title: "Rental Closed with Penalty",
+        message: `Your rental ${rental.reference} has been closed with a minor damage penalty.`,
+        entityType: "rental",
+        entityId: id,
+      });
+
       return res.json(updated);
     }
 
@@ -581,6 +691,25 @@ router.post(
       entityId: id,
       after: { updated, outcome },
     });
+
+    await notifyMany([
+      {
+        userId: rental.renterId,
+        type: "rental_status_changed",
+        title: "Rental Under Enforcement",
+        message: `Your rental ${rental.reference} has been closed due to ${outcome}. Legal enforcement may follow.`,
+        entityType: "rental",
+        entityId: id,
+      },
+      {
+        userId: rental.ownerId,
+        type: "rental_status_changed",
+        title: "Rental Enforcement Initiated",
+        message: `Rental ${rental.reference} for your asset resulted in ${outcome}. Enforcement is being initiated to protect your asset value.`,
+        entityType: "rental",
+        entityId: id,
+      },
+    ]);
 
     res.json(updated);
   })
@@ -627,6 +756,25 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    await notifyMany([
+      {
+        userId: rental.renterId,
+        type: "rental_status_changed",
+        title: "Rental Cancelled",
+        message: `Rental ${rental.reference} has been cancelled.`,
+        entityType: "rental",
+        entityId: id,
+      },
+      {
+        userId: rental.ownerId,
+        type: "rental_status_changed",
+        title: "Rental Cancelled",
+        message: `Rental ${rental.reference} for your asset has been cancelled. The asset is back on the market.`,
+        entityType: "rental",
+        entityId: id,
+      },
+    ]);
 
     res.json(updated);
   })

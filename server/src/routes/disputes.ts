@@ -3,15 +3,16 @@
  */
 
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { disputes, rentals } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
-import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
+import { DisputeOpenSchema, DisputeResolveSchema, DisputeAssignSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
+import { NotFoundError, ForbiddenError, LegalStateError, ConflictError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -34,6 +35,20 @@ router.post(
       rental.ownerId === actorId ||
       ["admin", "operations", "super_admin"].includes(req.user!.role);
     if (!actorIsParty) throw new ForbiddenError();
+
+    const existingOpen = await db
+      .select({ id: disputes.id })
+      .from(disputes)
+      .where(
+        and(
+          eq(disputes.rentalId, input.rentalId),
+          inArray(disputes.status, ["open", "investigating", "awaiting_evidence"])
+        )
+      )
+      .limit(1);
+    if (existingOpen.length > 0) {
+      throw new ConflictError("An open dispute already exists for this rental");
+    }
 
     const [dispute] = await db
       .insert(disputes)
@@ -84,7 +99,7 @@ router.post(
   requirePermission("dispute.assign"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { assigneeUserId } = req.body as { assigneeUserId: number };
+    const { assigneeUserId } = DisputeAssignSchema.parse(req.body);
     const [updated] = await db
       .update(disputes)
       .set({
@@ -148,6 +163,15 @@ router.post(
       entityType: "dispute",
       entityId: input.disputeId,
       after: updated,
+    });
+
+    await notify({
+      userId: dispute.openedByUserId,
+      type: "dispute_resolved",
+      title: "Dispute Resolved",
+      message: `Your dispute #${dispute.id} has been resolved: ${input.resolution.replace(/_/g, " ")}.`,
+      entityType: "dispute",
+      entityId: dispute.id,
     });
 
     res.json(updated);

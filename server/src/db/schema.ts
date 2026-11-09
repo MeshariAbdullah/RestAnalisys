@@ -169,6 +169,21 @@ export const shipmentDirectionEnum = pgEnum("shipment_direction", [
   "platform_to_owner",
 ]);
 
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "rental_created",
+  "rental_status_changed",
+  "asset_approved",
+  "asset_rejected",
+  "asset_published",
+  "payment_captured",
+  "payout_released",
+  "dispute_opened",
+  "dispute_resolved",
+  "sanad_issued",
+  "inspection_complete",
+  "legal_signed",
+]);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Core identity
 // ─────────────────────────────────────────────────────────────────────────────
@@ -697,6 +712,30 @@ export const integrationEvents = pgTable("integration_events", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// In-app notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    type: notificationTypeEnum("type").notNull(),
+    title: text("title").notNull(),
+    message: text("message").notNull(),
+    entityType: text("entity_type"),
+    entityId: integer("entity_id"),
+    read: boolean("read").notNull().default(false),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    userUnreadIdx: index("notifications_user_unread_idx").on(t.userId, t.read),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Type exports
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -713,3 +752,4 @@ export type SanadRecord = typeof sanadRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
 export type Shipment = typeof shipments.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
