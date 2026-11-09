@@ -13,12 +13,16 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { NotFoundError } from "../utils/errors.js";
+import { NotFoundError, ConflictError } from "../utils/errors.js";
+import { StaffCreateSchema, UserBlockSchema } from "../utils/schemas.js";
 import { recordAudit } from "../services/auditService.js";
+import { detectOverdueRentals } from "../services/scheduledTasks.js";
+import bcrypt from "bcryptjs";
 
 const router = Router();
 
@@ -126,17 +130,35 @@ router.get(
   })
 );
 
-// ── User list ──────────────────────────────────────────────────────────────
+// ── User list (excludes sensitive fields) ─────────────────────────────────
 router.get(
   "/users",
   authenticate,
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
+    const safeFields = {
+      id: users.id,
+      email: users.email,
+      fullName: users.fullName,
+      phoneE164: users.phoneE164,
+      role: users.role,
+      nafathVerified: users.nafathVerified,
+      kycStatus: users.kycStatus,
+      trustScore: users.trustScore,
+      riskCategory: users.riskCategory,
+      isBlocked: users.isBlocked,
+      blockedReason: users.blockedReason,
+      createdAt: users.createdAt,
+      lastLoginAt: users.lastLoginAt,
+    };
     const rows = role
-      ? await query.where(eq(users.role, role as any)).limit(200)
-      : await query.limit(200);
+      ? await db
+          .select(safeFields)
+          .from(users)
+          .where(eq(users.role, role as any))
+          .limit(200)
+      : await db.select(safeFields).from(users).limit(200);
     res.json(rows);
   })
 );
@@ -148,21 +170,21 @@ router.post(
   requirePermission("user.block"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { reason, block } = req.body as { reason?: string; block: boolean };
+    const { blocked, reason } = UserBlockSchema.parse(req.body);
     const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
     if (!user) throw new NotFoundError("User");
     const [updated] = await db
       .update(users)
       .set({
-        isBlocked: block,
-        blockedReason: block ? reason ?? "blocked by admin" : null,
+        isBlocked: blocked,
+        blockedReason: blocked ? reason ?? "blocked by admin" : null,
         updatedAt: new Date(),
       })
       .where(eq(users.id, id))
       .returning();
     await recordAudit({
       req,
-      action: block ? "user.block" : "user.unblock",
+      action: blocked ? "user.block" : "user.unblock",
       entityType: "user",
       entityId: id,
       before: user,
@@ -178,18 +200,23 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
-      email: string;
-      fullName: string;
-      role: "admin" | "operations" | "inspector";
-      passwordHash: string;
-    };
+    const input = StaffCreateSchema.parse(req.body);
+
+    const existing = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, input.email))
+      .limit(1);
+    if (existing.length > 0) throw new ConflictError("Email already registered");
+
+    const passwordHash = await bcrypt.hash(input.password, 10);
     const [user] = await db
       .insert(users)
       .values({
-        email,
-        fullName,
-        role,
+        email: input.email,
+        fullName: input.fullName,
+        phoneE164: input.phone,
+        role: input.role,
         passwordHash,
         nafathVerified: true,
         kycStatus: "verified",
@@ -200,9 +227,14 @@ router.post(
       action: "user.create_staff",
       entityType: "user",
       entityId: user.id,
-      after: { email, role },
+      after: { email: input.email, role: input.role },
     });
-    res.status(201).json(user);
+    res.status(201).json({
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+    });
   })
 );
 
@@ -217,6 +249,50 @@ router.get(
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
+    res.json(rows);
+  })
+);
+
+// ── Trigger overdue rental detection ──────────────────────────────────────
+router.post(
+  "/run-overdue-check",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const result = await detectOverdueRentals();
+    await recordAudit({
+      req,
+      action: "admin.overdue_check",
+      entityType: "system",
+      entityId: 0,
+      after: result,
+    });
+    res.json(result);
+  })
+);
+
+// ── Audit logs ────────────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const entityType = req.query.entityType as string | undefined;
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+
+    const rows = entityType
+      ? await db
+          .select()
+          .from(auditLogs)
+          .where(eq(auditLogs.entityType, entityType))
+          .orderBy(desc(auditLogs.createdAt))
+          .limit(limit)
+      : await db
+          .select()
+          .from(auditLogs)
+          .orderBy(desc(auditLogs.createdAt))
+          .limit(limit);
+
     res.json(rows);
   })
 );

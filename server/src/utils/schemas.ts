@@ -109,7 +109,7 @@ export const InspectionReportSchema = z.object({
 });
 
 export const OwnerValuationResponseSchema = z.object({
-  inspectionId: z.number().int().positive(),
+  inspectionId: z.number().int().positive().optional(),
   approved: z.boolean(),
   rejectionReason: z.string().optional(),
 });
@@ -142,6 +142,12 @@ export const RentalCreateSchema = z.object({
 
 export const RentalCancelSchema = z.object({
   reason: z.string().min(3),
+});
+
+export const RentalCloseSchema = z.object({
+  outcome: z.enum(["clean", "penalty", "major_damage", "loss"]),
+  penaltyHalalas: HalalasAmount.optional(),
+  notes: z.string().optional(),
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -200,6 +206,48 @@ export const DisputeResolveSchema = z.object({
 // ─────────────────────────────────────────────────────────────────────────────
 // Inventory / Shipments
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin — staff creation, user blocking
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const StaffCreateSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  fullName: z.string().min(2),
+  role: z.enum(["inspector", "operations", "admin"]),
+  phone: SaudiPhone.optional(),
+});
+
+export const UserBlockSchema = z.object({
+  blocked: z.boolean(),
+  reason: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Disputes — assignment
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const DisputeAssignSchema = z.object({
+  assigneeUserId: z.number().int().positive(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Assets — warehouse receipt
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const AssetReceivedSchema = z.object({
+  warehouseLocationCode: z.string().min(1),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ProfileUpdateSchema = z.object({
+  fullName: z.string().min(2).optional(),
+  phone: SaudiPhone.optional(),
+});
 
 export const ShipmentScheduleSchema = z.object({
   assetId: z.number().int().positive(),
