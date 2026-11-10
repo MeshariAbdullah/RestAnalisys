@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { operationsApi } from "@/lib/api";
 
 export default function OpsDashboard() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["ops-summary"],
     queryFn: () => operationsApi.summary(),
   });
@@ -18,6 +18,12 @@ export default function OpsDashboard() {
       <p className="text-neutral-500 mb-8">
         Real-time picture of rentals, shipments, inventory and alerts.
       </p>
+
+      {error && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3 mb-4">
+          {(error as Error).message}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <Card>

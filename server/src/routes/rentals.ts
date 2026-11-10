@@ -20,7 +20,7 @@
  */
 
 import { Router } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
   assets,
@@ -40,6 +40,7 @@ import {
   RentalQuoteRequestSchema,
   RentalCreateSchema,
   RentalCancelSchema,
+  RentalCloseSchema,
 } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
@@ -488,10 +489,7 @@ router.post(
   requirePermission("rental.close"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { outcome, penaltyHalalas } = req.body as {
-      outcome: "clean" | "penalty" | "major_damage" | "loss";
-      penaltyHalalas?: number;
-    };
+    const { outcome, penaltyHalalas } = RentalCloseSchema.parse(req.body);
 
     const [rental] = await db.select().from(rentals).where(eq(rentals.id, id)).limit(1);
     if (!rental) throw new NotFoundError("Rental");
@@ -509,6 +507,29 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      // Auto-discharge the associated Sanad
+      await db
+        .update(sanadRecords)
+        .set({ status: "discharged", updatedAt: new Date() })
+        .where(
+          and(
+            eq(sanadRecords.rentalId, id),
+            inArray(sanadRecords.status, ["issued", "signed", "active"])
+          )
+        );
+
+      // Discharge the legal commitment
+      await db
+        .update(legalCommitments)
+        .set({ status: "discharged", dischargedAt: new Date(), updatedAt: new Date() })
+        .where(eq(legalCommitments.rentalId, id));
+
+      // Boost renter trust score (capped at 100)
+      await db.execute(
+        sql`UPDATE users SET trust_score = LEAST(trust_score + 5, 100), updated_at = now() WHERE id = ${rental.renterId}`
+      );
+
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -540,6 +561,23 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      // Auto-discharge the Sanad (penalty was paid, item returned)
+      await db
+        .update(sanadRecords)
+        .set({ status: "discharged", updatedAt: new Date() })
+        .where(
+          and(
+            eq(sanadRecords.rentalId, id),
+            inArray(sanadRecords.status, ["issued", "signed", "active"])
+          )
+        );
+
+      // Reduce renter trust score (floored at 0)
+      await db.execute(
+        sql`UPDATE users SET trust_score = GREATEST(trust_score - 10, 0), updated_at = now() WHERE id = ${rental.renterId}`
+      );
+
       await recordAudit({
         req,
         action: "rental.close_penalty",
@@ -564,6 +602,28 @@ router.post(
         updatedAt: new Date(),
       })
       .where(eq(assets.id, rental.assetId));
+
+    // Move Sanad to matured (pending execution)
+    await db
+      .update(sanadRecords)
+      .set({ status: "matured", updatedAt: new Date() })
+      .where(
+        and(
+          eq(sanadRecords.rentalId, id),
+          inArray(sanadRecords.status, ["issued", "signed", "active"])
+        )
+      );
+
+    // Breach the legal commitment
+    await db
+      .update(legalCommitments)
+      .set({ status: "breached", breachedAt: new Date(), breachReason: outcome, updatedAt: new Date() })
+      .where(eq(legalCommitments.rentalId, id));
+
+    // Severe trust score penalty
+    await db.execute(
+      sql`UPDATE users SET trust_score = GREATEST(trust_score - 30, 0), risk_category = 'high', updated_at = now() WHERE id = ${rental.renterId}`
+    );
 
     await db.insert(operationalAlerts).values({
       type: "sanad_execution_required",

@@ -3,12 +3,12 @@
  */
 
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, or } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { disputes, rentals } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
-import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
+import { DisputeOpenSchema, DisputeResolveSchema, DisputeAssignSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
@@ -64,6 +64,28 @@ router.post(
   })
 );
 
+// ── Renter/Owner: view own disputes ─────────────────────────────────────────
+router.get(
+  "/mine",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const rows = await db
+      .select()
+      .from(disputes)
+      .innerJoin(rentals, eq(disputes.rentalId, rentals.id))
+      .where(
+        or(
+          eq(rentals.renterId, userId),
+          eq(rentals.ownerId, userId)
+        )
+      )
+      .orderBy(desc(disputes.openedAt))
+      .limit(100);
+    res.json(rows.map((r) => r.disputes));
+  })
+);
+
 router.get(
   "/",
   authenticate,
@@ -84,7 +106,7 @@ router.post(
   requirePermission("dispute.assign"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { assigneeUserId } = req.body as { assigneeUserId: number };
+    const { assigneeUserId } = DisputeAssignSchema.parse(req.body);
     const [updated] = await db
       .update(disputes)
       .set({
