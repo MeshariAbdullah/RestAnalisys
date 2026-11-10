@@ -2,12 +2,14 @@ import React, { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Diamond, Calendar, Shield, Info } from "lucide-react";
+import NafathVerification from "@/components/NafathVerification";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, rentalsApi, formatSar } from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth";
 
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -29,6 +31,8 @@ export default function ItemDetail({ id }: { id: number }) {
   const [endDate, setEndDate] = useState(weekOut);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nafathDone, setNafathDone] = useState(false);
+  const isVerified = getCurrentUser()?.nafathVerified || nafathDone;
 
   const assetQuery = useQuery({
     queryKey: ["asset", id],
@@ -134,6 +138,12 @@ export default function ItemDetail({ id }: { id: number }) {
             Every item is authenticated, insured and shipped by MLR operations.
           </div>
 
+          {!isVerified && (
+            <div className="mt-6">
+              <NafathVerification onVerified={() => setNafathDone(true)} />
+            </div>
+          )}
+
           {/* Booking card */}
           <Card className="mt-6 border-amber-100 bg-amber-50/30">
             <CardContent className="p-6">
@@ -197,7 +207,7 @@ export default function ItemDetail({ id }: { id: number }) {
 
               <Button
                 onClick={handleBook}
-                disabled={creating || !quoteQuery.data}
+                disabled={creating || !quoteQuery.data || !isVerified}
                 className="w-full mt-5 bg-amber-500 text-neutral-950 hover:bg-amber-400"
               >
                 {creating ? "Reserving…" : "Reserve & sign contract"}
