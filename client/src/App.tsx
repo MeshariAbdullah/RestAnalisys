@@ -5,6 +5,8 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Notifications from "./pages/Notifications";
+import Profile from "./pages/Profile";
 
 // Renter
 import Browse from "./pages/renter/Browse";
@@ -43,6 +45,14 @@ export default function App() {
       <Route path="/" component={Landing} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+
+      {/* Shared authenticated */}
+      <Route path="/notifications">
+        <ProtectedRoute><Notifications /></ProtectedRoute>
+      </Route>
+      <Route path="/profile">
+        <ProtectedRoute><Profile /></ProtectedRoute>
+      </Route>
 
       {/* Renter */}
       <Route path="/browse">

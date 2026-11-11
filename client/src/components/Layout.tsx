@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
@@ -19,9 +19,12 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  UserCircle,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
-import { clearSession, getCurrentUser } from "@/lib/auth";
+import { notificationsApi } from "@/lib/api";
+import { clearSession, getCurrentUser, isAuthenticated } from "@/lib/auth";
 
 interface NavItem {
   href: string;
@@ -72,7 +75,17 @@ function roleLabel(role: Role): string {
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
   const user: User | null = getCurrentUser();
+
+  useEffect(() => {
+    if (!isAuthenticated()) return;
+    notificationsApi.unreadCount().then((r) => setUnreadCount(r.count)).catch(() => {});
+    const iv = setInterval(() => {
+      notificationsApi.unreadCount().then((r) => setUnreadCount(r.count)).catch(() => {});
+    }, 30000);
+    return () => clearInterval(iv);
+  }, []);
 
   const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
 
@@ -129,6 +142,40 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+
+        <div className="px-2 pb-1 space-y-1">
+          <Link href="/notifications">
+            <a
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors relative",
+                location === "/notifications"
+                  ? "bg-amber-500 text-neutral-950 font-medium"
+                  : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+              )}
+            >
+              <Bell className="w-5 h-5 shrink-0" />
+              {sidebarOpen && <span>Notifications</span>}
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 left-7 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </a>
+          </Link>
+          <Link href="/profile">
+            <a
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
+                location === "/profile"
+                  ? "bg-amber-500 text-neutral-950 font-medium"
+                  : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+              )}
+            >
+              <UserCircle className="w-5 h-5 shrink-0" />
+              {sidebarOpen && <span>Profile</span>}
+            </a>
+          </Link>
+        </div>
 
         <div className="p-3 border-t border-neutral-800">
           {sidebarOpen ? (

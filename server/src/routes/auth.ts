@@ -189,4 +189,85 @@ router.get(
   })
 );
 
+router.patch(
+  "/profile",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const { fullName, phoneE164 } = req.body as {
+      fullName?: string;
+      phoneE164?: string;
+    };
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (fullName && fullName.trim().length >= 2) updates.fullName = fullName.trim();
+    if (phoneE164 !== undefined) updates.phoneE164 = phoneE164 || null;
+
+    const [updated] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning();
+    if (!updated) throw new NotFoundError("User");
+
+    await recordAudit({
+      req,
+      action: "auth.profile.update",
+      entityType: "user",
+      entityId: userId,
+      after: updates,
+    });
+
+    return res.json({
+      id: updated.id,
+      email: updated.email,
+      fullName: updated.fullName,
+      role: updated.role,
+      phoneE164: updated.phoneE164,
+      nationalId: updated.nationalId,
+      nafathVerified: updated.nafathVerified,
+      kycStatus: updated.kycStatus,
+      phoneVerified: updated.phoneVerified,
+      emailVerified: updated.emailVerified,
+      trustScore: updated.trustScore,
+      riskCategory: updated.riskCategory,
+      isBlocked: updated.isBlocked,
+    });
+  })
+);
+
+router.put(
+  "/password",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const userId = req.user!.userId;
+    const { currentPassword, newPassword } = req.body as {
+      currentPassword: string;
+      newPassword: string;
+    };
+
+    if (!currentPassword || !newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: "New password must be at least 8 characters" });
+    }
+
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) throw new UnauthorizedError("Current password is incorrect");
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, userId));
+
+    await recordAudit({
+      req,
+      action: "auth.password.change",
+      entityType: "user",
+      entityId: userId,
+    });
+
+    return res.json({ ok: true });
+  })
+);
+
 export default router;
