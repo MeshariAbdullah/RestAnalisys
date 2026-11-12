@@ -7,12 +7,14 @@ import {
   PackageSearch,
   FileText,
   Shield,
+  ShieldCheck,
   Truck,
   Gavel,
   ClipboardCheck,
   Receipt,
   AlertTriangle,
   Users as UsersIcon,
+  UserCircle,
   LogOut,
   Menu,
   X,
@@ -128,6 +130,41 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+
+          {/* Common links for all authenticated users */}
+          {user && (
+            <>
+              <div className="my-2 border-t border-neutral-800" />
+              <Link href="/profile">
+                <a
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
+                    location === "/profile"
+                      ? "bg-amber-500 text-neutral-950 font-medium"
+                      : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+                  )}
+                >
+                  <UserCircle className="w-5 h-5 shrink-0" />
+                  {sidebarOpen && <span>Profile</span>}
+                </a>
+              </Link>
+              {!user.nafathVerified && (
+                <Link href="/verify">
+                  <a
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
+                      location === "/verify"
+                        ? "bg-amber-500 text-neutral-950 font-medium"
+                        : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+                    )}
+                  >
+                    <ShieldCheck className="w-5 h-5 shrink-0" />
+                    {sidebarOpen && <span>Verify Identity</span>}
+                  </a>
+                </Link>
+              )}
+            </>
+          )}
         </nav>
 
         <div className="p-3 border-t border-neutral-800">

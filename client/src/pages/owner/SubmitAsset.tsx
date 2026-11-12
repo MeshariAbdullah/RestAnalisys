@@ -68,7 +68,7 @@ export default function SubmitAsset() {
     <div className="p-8 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-2 text-sm text-neutral-500">
         <Diamond className="w-4 h-4" />
-        Submit asset · step 1 of 2
+        Submit asset
       </div>
       <h1 className="text-3xl font-bold mb-2">Submit a new asset</h1>
       <p className="text-neutral-500 mb-8">

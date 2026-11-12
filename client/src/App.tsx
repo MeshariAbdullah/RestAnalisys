@@ -1,5 +1,5 @@
 import React from "react";
-import { Route, Switch, Redirect } from "wouter";
+import { Route, Switch } from "wouter";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import Landing from "./pages/Landing";
@@ -11,6 +11,8 @@ import Browse from "./pages/renter/Browse";
 import ItemDetail from "./pages/renter/ItemDetail";
 import LegalCommitmentPage from "./pages/renter/LegalCommitment";
 import MyRentals from "./pages/renter/MyRentals";
+import RentalDetail from "./pages/renter/RentalDetail";
+import OpenDispute from "./pages/renter/OpenDispute";
 
 // Owner
 import OwnerDashboard from "./pages/owner/OwnerDashboard";
@@ -21,6 +23,7 @@ import Payouts from "./pages/owner/Payouts";
 // Inspector
 import InspectorDashboard from "./pages/inspector/InspectorDashboard";
 import InspectionForm from "./pages/inspector/InspectionForm";
+import ReturnInspectionForm from "./pages/inspector/ReturnInspectionForm";
 
 // Ops
 import OpsDashboard from "./pages/ops/OpsDashboard";
@@ -35,6 +38,11 @@ import UsersPage from "./pages/admin/Users";
 import DisputesPage from "./pages/admin/Disputes";
 import FinancialOverview from "./pages/admin/FinancialOverview";
 import SanadTracking from "./pages/admin/SanadTracking";
+
+// Common
+import NafathVerify from "./pages/NafathVerify";
+import Profile from "./pages/Profile";
+import NotFound from "./pages/NotFound";
 
 export default function App() {
   return (
@@ -65,6 +73,20 @@ export default function App() {
       <Route path="/my-rentals">
         <ProtectedRoute roles={["renter"]}><MyRentals /></ProtectedRoute>
       </Route>
+      <Route path="/my-rentals/:id">
+        {(params) => (
+          <ProtectedRoute roles={["renter"]}>
+            <RentalDetail id={Number(params.id)} />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/dispute/:rentalId">
+        {(params) => (
+          <ProtectedRoute roles={["renter", "owner"]}>
+            <OpenDispute rentalId={Number(params.rentalId)} />
+          </ProtectedRoute>
+        )}
+      </Route>
 
       {/* Owner */}
       <Route path="/owner">
@@ -92,6 +114,13 @@ export default function App() {
         {(params) => (
           <ProtectedRoute roles={["inspector"]}>
             <InspectionForm assetId={Number(params.assetId)} />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/inspector/return/:rentalId">
+        {(params) => (
+          <ProtectedRoute roles={["inspector"]}>
+            <ReturnInspectionForm rentalId={Number(params.rentalId)} />
           </ProtectedRoute>
         )}
       </Route>
@@ -130,8 +159,20 @@ export default function App() {
         <ProtectedRoute roles={["admin", "super_admin"]}><SanadTracking /></ProtectedRoute>
       </Route>
 
+      {/* Common (all roles) */}
+      <Route path="/verify">
+        <ProtectedRoute roles={["renter", "owner", "inspector", "operations", "admin", "super_admin"]}>
+          <NafathVerify />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/profile">
+        <ProtectedRoute roles={["renter", "owner", "inspector", "operations", "admin", "super_admin"]}>
+          <Profile />
+        </ProtectedRoute>
+      </Route>
+
       <Route>
-        <Redirect to="/" />
+        <NotFound />
       </Route>
     </Switch>
   );

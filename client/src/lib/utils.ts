@@ -52,27 +52,68 @@ export function getSeverityLabel(severity: string) {
 
 export function getStatusLabel(status: string) {
   const labels: Record<string, string> = {
-    uploaded: "تم الرفع",
-    extracting_frames: "استخراج الإطارات",
-    analyzing_gpt: "تحليل GPT-4o",
-    analyzing_gemini: "تحليل Gemini",
-    saving_results: "حفظ النتائج",
-    done: "مكتمل",
+    pending_approval: "بانتظار الموافقة",
+    rejected: "مرفوض",
+    awaiting_shipment: "بانتظار الشحن",
+    in_inspection: "قيد الفحص",
+    inspection_reported: "تقرير الفحص",
+    listed: "معروض",
+    reserved: "محجوز",
+    rented_out: "مؤجر",
+    returned_under_inspection: "مرتجع قيد الفحص",
+    completed: "مكتمل",
+    withdrawn: "مسحوب",
+    pending_risk_review: "مراجعة المخاطر",
+    pending_legal_signing: "بانتظار التوقيع",
+    pending_payment: "بانتظار الدفع",
+    confirmed: "مؤكد",
+    out_for_delivery: "قيد التوصيل",
+    active: "نشط",
+    return_in_transit: "مرتجع في الطريق",
+    under_inspection: "قيد الفحص",
+    closed: "مغلق",
+    closed_with_penalty: "مغلق بغرامة",
+    in_dispute: "في نزاع",
+    enforcement: "تنفيذ",
+    cancelled: "ملغي",
+    open: "مفتوح",
+    investigating: "قيد التحقيق",
+    resolved: "تم الحل",
     error: "خطأ",
-    queued: "في الانتظار",
   };
   return labels[status] ?? status;
 }
 
-export function getStatusIcon(status: string) {
+export function getStatusColor(status: string) {
   switch (status) {
-    case "done": return "✅";
-    case "error": return "❌";
-    case "uploaded": return "📤";
-    case "extracting_frames": return "🎞️";
-    case "analyzing_gpt": return "🤖";
-    case "analyzing_gemini": return "💎";
-    case "saving_results": return "💾";
-    default: return "⏳";
+    case "active":
+    case "listed":
+    case "confirmed":
+    case "completed":
+    case "closed":
+      return "bg-green-100 text-green-800";
+    case "pending_approval":
+    case "pending_legal_signing":
+    case "pending_payment":
+    case "pending_risk_review":
+    case "in_inspection":
+    case "under_inspection":
+    case "investigating":
+      return "bg-yellow-100 text-yellow-800";
+    case "out_for_delivery":
+    case "return_in_transit":
+    case "reserved":
+    case "rented_out":
+      return "bg-blue-100 text-blue-800";
+    case "rejected":
+    case "cancelled":
+    case "error":
+      return "bg-red-100 text-red-800";
+    case "in_dispute":
+    case "enforcement":
+    case "closed_with_penalty":
+      return "bg-orange-100 text-orange-800";
+    default:
+      return "bg-gray-100 text-gray-800";
   }
 }
