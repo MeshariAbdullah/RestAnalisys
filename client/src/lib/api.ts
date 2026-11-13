@@ -254,6 +254,11 @@ export const authApi = {
       body: JSON.stringify({ email, password, fullName, role }),
     }),
   me: () => request<User>("/auth/me"),
+  updateProfile: (data: { fullName?: string; phoneE164?: string }) =>
+    request<User>("/auth/profile", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
   nafathVerify: (nationalId: string) =>
     request<{ transactionId: string; status: string }>("/auth/nafath/initiate", {
       method: "POST",
@@ -265,13 +270,23 @@ export const authApi = {
 // Assets
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  hasMore: boolean;
+  cursor?: number;
+  page?: number;
+  limit: number;
+}
+
 export const assetsApi = {
-  listings: (params?: { category?: string; brand?: string; limit?: number }) => {
+  listings: (params?: { category?: string; brand?: string; limit?: number; cursor?: number }) => {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
     if (params?.brand) qs.set("brand", params.brand);
     if (params?.limit) qs.set("limit", String(params.limit));
-    return request<{ items: Asset[]; count: number }>(`/assets/listings?${qs}`);
+    if (params?.cursor) qs.set("cursor", String(params.cursor));
+    return request<PaginatedResponse<Asset>>(`/assets/listings?${qs}`);
   },
   listingDetail: (id: number) => request<Asset>(`/assets/listings/${id}`),
   mine: () => request<Asset[]>("/assets/mine"),
@@ -567,9 +582,13 @@ export const adminApi = {
       "/admin/revenue-trend"
     ),
   lowTrustUsers: () => request<User[]>("/admin/risk/low-trust"),
-  users: (role?: string) => {
-    const qs = role ? `?role=${role}` : "";
-    return request<User[]>(`/admin/users${qs}`);
+  users: (role?: string, page?: number, limit?: number) => {
+    const qs = new URLSearchParams();
+    if (role) qs.set("role", role);
+    if (page) qs.set("page", String(page));
+    if (limit) qs.set("limit", String(limit));
+    const q = qs.toString();
+    return request<PaginatedResponse<User>>(`/admin/users${q ? `?${q}` : ""}`);
   },
   blockUser: (id: number, block: boolean, reason?: string) =>
     request<User>(`/admin/users/${id}/block`, {
@@ -579,6 +598,38 @@ export const adminApi = {
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (unreadOnly = false) =>
+    request<AppNotification[]>(
+      `/notifications${unreadOnly ? "?unread=true" : ""}`
+    ),
+  unreadCount: () => request<{ unread: number }>("/notifications/count"),
+  markRead: (id: number) =>
+    request(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Health
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),

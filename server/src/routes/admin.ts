@@ -4,6 +4,7 @@
 
 import { Router } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 import { db } from "../db/index.js";
 import {
   users,
@@ -19,6 +20,7 @@ import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { UserBlockSchema, CreateStaffSchema } from "../utils/schemas.js";
 
 const router = Router();
 
@@ -133,11 +135,49 @@ router.get(
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
-    const rows = role
-      ? await query.where(eq(users.role, role as any)).limit(200)
-      : await query.limit(200);
-    res.json(rows);
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
+    const offset = (page - 1) * limit;
+
+    const safeSelect = {
+      id: users.id,
+      email: users.email,
+      fullName: users.fullName,
+      role: users.role,
+      phoneE164: users.phoneE164,
+      nationalId: users.nationalId,
+      nafathVerified: users.nafathVerified,
+      kycStatus: users.kycStatus,
+      trustScore: users.trustScore,
+      riskCategory: users.riskCategory,
+      isBlocked: users.isBlocked,
+      blockedReason: users.blockedReason,
+      createdAt: users.createdAt,
+      lastLoginAt: users.lastLoginAt,
+    };
+
+    const whereClause = role ? eq(users.role, role as any) : undefined;
+
+    const [{ total }] = await db
+      .select({ total: sql<number>`count(*)` })
+      .from(users)
+      .where(whereClause);
+
+    const rows = await db
+      .select(safeSelect)
+      .from(users)
+      .where(whereClause)
+      .orderBy(desc(users.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    res.json({
+      items: rows,
+      total: Number(total),
+      page,
+      limit,
+      hasMore: offset + rows.length < Number(total),
+    });
   })
 );
 
@@ -148,7 +188,7 @@ router.post(
   requirePermission("user.block"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { reason, block } = req.body as { reason?: string; block: boolean };
+    const { reason, block } = UserBlockSchema.parse(req.body);
     const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
     if (!user) throw new NotFoundError("User");
     const [updated] = await db
@@ -178,12 +218,8 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
-      email: string;
-      fullName: string;
-      role: "admin" | "operations" | "inspector";
-      passwordHash: string;
-    };
+    const { email, fullName, role, password } = CreateStaffSchema.parse(req.body);
+    const passwordHash = await bcrypt.hash(password, 12);
     const [user] = await db
       .insert(users)
       .values({

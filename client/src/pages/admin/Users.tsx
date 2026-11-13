@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users as UsersIcon, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Users as UsersIcon, ShieldAlert, ShieldCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,11 +23,17 @@ function riskColor(c: string): string {
 export default function UsersPage() {
   const qc = useQueryClient();
   const [role, setRole] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 25;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["admin-users", role],
-    queryFn: () => adminApi.users(role === "all" ? undefined : role),
+    queryKey: ["admin-users", role, page],
+    queryFn: () => adminApi.users(role === "all" ? undefined : role, page, PAGE_SIZE),
   });
+
+  const users = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const hasMore = data?.hasMore ?? false;
 
   async function toggleBlock(u: User) {
     const block = !u.isBlocked;
@@ -47,7 +53,7 @@ export default function UsersPage() {
       </p>
 
       <div className="flex items-center gap-3 mb-5">
-        <Select value={role} onValueChange={setRole}>
+        <Select value={role} onValueChange={(v) => { setRole(v); setPage(1); }}>
           <SelectTrigger className="w-48">
             <SelectValue />
           </SelectTrigger>
@@ -64,7 +70,7 @@ export default function UsersPage() {
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>
-      ) : !data || data.length === 0 ? (
+      ) : users.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">
             <UsersIcon className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
@@ -87,7 +93,7 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.map((u) => (
+                {users.map((u) => (
                   <tr key={u.id} className="border-b last:border-0">
                     <td className="p-4 font-medium">{u.fullName}</td>
                     <td className="p-4 text-neutral-600">{u.email}</td>
@@ -142,6 +148,32 @@ export default function UsersPage() {
             </table>
           </CardContent>
         </Card>
+      )}
+
+      {total > PAGE_SIZE && (
+        <div className="flex items-center justify-between mt-4">
+          <p className="text-sm text-neutral-500">
+            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!hasMore}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );

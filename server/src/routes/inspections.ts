@@ -19,6 +19,7 @@ import { InspectionReportSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { createNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -91,6 +92,15 @@ router.post(
       after: inspection,
     });
 
+    await createNotification(
+      asset.ownerId,
+      "inspection_complete",
+      "Intake inspection complete",
+      `Your asset "${asset.title}" has been inspected. Please review the valuation.`,
+      "asset",
+      asset.id,
+    );
+
     res.status(201).json(inspection);
   })
 );
@@ -144,6 +154,15 @@ router.post(
       entityId: inspection.id,
       after: inspection,
     });
+
+    await createNotification(
+      rental.renterId,
+      "return_inspection_complete",
+      "Return inspection complete",
+      `The return inspection for rental ${rental.reference ?? rental.id} is complete. The rental will be closed shortly.`,
+      "rental",
+      rental.id,
+    );
 
     // Interpret outcome by condition grade — the actual rental closing is done
     // via POST /rentals/:id/close which reads this inspection.

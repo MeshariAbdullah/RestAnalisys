@@ -30,9 +30,11 @@ import {
   legalCommitments,
   sanadRecords,
   payments,
+  payouts,
   inspections,
   shipments,
   operationalAlerts,
+  ownerAgreements,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission, requireNafath } from "../middleware/rbac.js";
@@ -40,6 +42,7 @@ import {
   RentalQuoteRequestSchema,
   RentalCreateSchema,
   RentalCancelSchema,
+  RentalCloseSchema,
 } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
@@ -50,12 +53,14 @@ import {
 } from "../utils/errors.js";
 import {
   computeRentalQuote,
+  computeOwnerPayout,
   DEFAULT_PLATFORM_FEE_PCT,
 } from "../utils/money.js";
 import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
-import { issueSanad } from "../services/nafithService.js";
+import { issueSanad, dischargeSanad as dischargeSanadApi } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { createNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -84,10 +89,11 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      lateReturns: sql<number>`count(*) filter (where returned_at is not null and returned_at::date > end_date::date)`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, lateReturns: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +105,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.lateReturns ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -280,6 +286,24 @@ router.post(
       after: { rental, decision },
     });
 
+    await createNotification(
+      renterId,
+      "rental_created",
+      "Rental reserved",
+      `Your rental ${reference} has been reserved. Please sign the legal commitment to proceed.`,
+      "rental",
+      rental.id,
+    );
+
+    await createNotification(
+      asset.ownerId,
+      "asset_reserved",
+      "Your asset has been reserved",
+      `${asset.title} has been reserved for rental ${reference}.`,
+      "asset",
+      asset.id,
+    );
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -401,6 +425,15 @@ router.post(
       after: updated,
     });
 
+    await createNotification(
+      rental.renterId,
+      "rental_out_for_delivery",
+      "Your rental is on the way",
+      `Rental ${rental.reference} is out for delivery.`,
+      "rental",
+      id,
+    );
+
     res.json(updated);
   })
 );
@@ -441,6 +474,23 @@ router.post(
       after: updated,
     });
 
+    await createNotification(
+      rental.renterId,
+      "rental_delivered",
+      "Rental delivered",
+      `Rental ${rental.reference} has been delivered. Enjoy!`,
+      "rental",
+      id,
+    );
+    await createNotification(
+      rental.ownerId,
+      "rental_delivered",
+      "Asset delivered to renter",
+      `Your asset for rental ${rental.reference} has been delivered to the renter.`,
+      "rental",
+      id,
+    );
+
     res.json(updated);
   })
 );
@@ -477,6 +527,23 @@ router.post(
       after: updated,
     });
 
+    await createNotification(
+      rental.renterId,
+      "rental_returned",
+      "Return received",
+      `Your return for rental ${rental.reference} has been received and is under inspection.`,
+      "rental",
+      id,
+    );
+    await createNotification(
+      rental.ownerId,
+      "rental_returned",
+      "Asset returned",
+      `The asset from rental ${rental.reference} has been returned and is under inspection.`,
+      "rental",
+      id,
+    );
+
     res.json(updated);
   })
 );
@@ -488,15 +555,75 @@ router.post(
   requirePermission("rental.close"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { outcome, penaltyHalalas } = req.body as {
-      outcome: "clean" | "penalty" | "major_damage" | "loss";
-      penaltyHalalas?: number;
-    };
+    const { outcome, penaltyHalalas } = RentalCloseSchema.parse(req.body);
 
     const [rental] = await db.select().from(rentals).where(eq(rentals.id, id)).limit(1);
     if (!rental) throw new NotFoundError("Rental");
     if (rental.status !== "under_inspection") {
       throw new LegalStateError(`Expected under_inspection, got ${rental.status}`);
+    }
+
+    // Helper: update renter trust score based on outcome
+    async function adjustTrustScore(
+      renterId: number,
+      delta: number,
+    ) {
+      const [renter] = await db
+        .select({ trustScore: users.trustScore })
+        .from(users)
+        .where(eq(users.id, renterId))
+        .limit(1);
+      if (!renter) return;
+      const newScore = Math.max(0, Math.min(100, renter.trustScore + delta));
+      const newCategory =
+        newScore >= 80 ? "low" as const :
+        newScore >= 50 ? "medium" as const :
+        newScore >= 25 ? "high" as const :
+        "ultra_high" as const;
+      await db
+        .update(users)
+        .set({ trustScore: newScore, riskCategory: newCategory, updatedAt: new Date() })
+        .where(eq(users.id, renterId));
+    }
+
+    // Helper: discharge sanad for this rental
+    async function autoDischargeSanad(rentalId: number) {
+      const [sanad] = await db
+        .select()
+        .from(sanadRecords)
+        .where(eq(sanadRecords.rentalId, rentalId))
+        .limit(1);
+      if (sanad && ["active", "signed", "issued"].includes(sanad.status)) {
+        if (sanad.nafithReference) {
+          await dischargeSanadApi(sanad.nafithReference);
+        }
+        await db
+          .update(sanadRecords)
+          .set({ status: "discharged", updatedAt: new Date() })
+          .where(eq(sanadRecords.id, sanad.id));
+      }
+      // Also discharge the legal commitment
+      await db
+        .update(legalCommitments)
+        .set({ status: "discharged", dischargedAt: new Date(), updatedAt: new Date() })
+        .where(eq(legalCommitments.rentalId, rentalId));
+    }
+
+    // Helper: auto-create payout for the owner
+    async function autoCreatePayout(rental: typeof rentals.$inferSelect) {
+      const commissionPct = DEFAULT_PLATFORM_FEE_PCT;
+      const payout = computeOwnerPayout({
+        rentalSubtotalHalalas: rental.rentalSubtotalHalalas,
+        commissionPct,
+      });
+      await db.insert(payouts).values({
+        ownerId: rental.ownerId,
+        rentalId: rental.id,
+        grossHalalas: payout.grossHalalas,
+        commissionHalalas: payout.commissionHalalas,
+        netHalalas: payout.netHalalas,
+        status: "pending",
+      });
     }
 
     if (outcome === "clean") {
@@ -509,6 +636,28 @@ router.post(
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      await autoDischargeSanad(id);
+      await adjustTrustScore(rental.renterId, 5);
+      await autoCreatePayout(rental);
+
+      await createNotification(
+        rental.renterId,
+        "rental_closed",
+        "Rental completed",
+        `Your rental ${rental.reference} has been closed successfully. Your Sanad has been discharged.`,
+        "rental",
+        id,
+      );
+      await createNotification(
+        rental.ownerId,
+        "payout_pending",
+        "Payout pending",
+        `Rental ${rental.reference} completed. Your payout is being processed.`,
+        "rental",
+        id,
+      );
+
       await recordAudit({
         req,
         action: "rental.close_clean",
@@ -520,6 +669,9 @@ router.post(
     }
 
     if (outcome === "penalty") {
+      if (!penaltyHalalas || penaltyHalalas <= 0) {
+        throw new LegalStateError("penaltyHalalas is required and must be positive for penalty outcome");
+      }
       const [updated] = await db
         .update(rentals)
         .set({
@@ -534,12 +686,26 @@ router.post(
         userId: rental.renterId,
         type: "penalty",
         status: "pending",
-        amountHalalas: penaltyHalalas ?? 0,
+        amountHalalas: penaltyHalalas,
       });
       await db
         .update(assets)
         .set({ status: "listed", updatedAt: new Date() })
         .where(eq(assets.id, rental.assetId));
+
+      await autoDischargeSanad(id);
+      await adjustTrustScore(rental.renterId, -10);
+      await autoCreatePayout(rental);
+
+      await createNotification(
+        rental.renterId,
+        "rental_penalty",
+        "Rental closed with penalty",
+        `Your rental ${rental.reference} has been closed with a penalty of ${penaltyHalalas} halalas.`,
+        "rental",
+        id,
+      );
+
       await recordAudit({
         req,
         action: "rental.close_penalty",
@@ -565,6 +731,14 @@ router.post(
       })
       .where(eq(assets.id, rental.assetId));
 
+    // Mark legal commitment as breached
+    await db
+      .update(legalCommitments)
+      .set({ status: "breached", breachedAt: new Date(), breachReason: outcome, updatedAt: new Date() })
+      .where(eq(legalCommitments.rentalId, id));
+
+    await adjustTrustScore(rental.renterId, -25);
+
     await db.insert(operationalAlerts).values({
       type: "sanad_execution_required",
       severity: "critical",
@@ -573,6 +747,23 @@ router.post(
       message: `Rental ${rental.reference} requires Sanad execution for ${outcome}.`,
       payloadJson: { outcome, rentalId: id },
     });
+
+    await createNotification(
+      rental.renterId,
+      "rental_enforcement",
+      "Legal enforcement initiated",
+      `Your rental ${rental.reference} has entered legal enforcement due to ${outcome}.`,
+      "rental",
+      id,
+    );
+    await createNotification(
+      rental.ownerId,
+      "rental_enforcement",
+      "Asset enforcement initiated",
+      `Rental ${rental.reference} for your asset is under legal enforcement (${outcome}).`,
+      "rental",
+      id,
+    );
 
     await recordAudit({
       req,

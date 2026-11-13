@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
-import { LoginSchema, RegisterSchema, NafathVerifySchema } from "../utils/schemas.js";
+import { LoginSchema, RegisterSchema, NafathVerifySchema, ProfileUpdateSchema } from "../utils/schemas.js";
 import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
@@ -157,6 +157,51 @@ router.post(
       transactionId: result.transactionId,
       status: result.status,
     });
+  })
+);
+
+router.put(
+  "/profile",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const input = ProfileUpdateSchema.parse(req.body);
+    const userId = req.user!.userId;
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (input.fullName) updates.fullName = input.fullName;
+    if (input.phoneE164) updates.phoneE164 = input.phoneE164;
+
+    const [updated] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning({
+        id: users.id,
+        email: users.email,
+        fullName: users.fullName,
+        role: users.role,
+        phoneE164: users.phoneE164,
+        nationalId: users.nationalId,
+        nafathVerified: users.nafathVerified,
+        kycStatus: users.kycStatus,
+        phoneVerified: users.phoneVerified,
+        emailVerified: users.emailVerified,
+        trustScore: users.trustScore,
+        riskCategory: users.riskCategory,
+        isBlocked: users.isBlocked,
+      });
+
+    if (!updated) throw new NotFoundError("User");
+
+    await recordAudit({
+      req,
+      action: "auth.profile.update",
+      entityType: "user",
+      entityId: userId,
+      after: input,
+    });
+
+    return res.json(updated);
   })
 );
 

@@ -46,6 +46,11 @@ export const NafathVerifySchema = z.object({
   nationalId: SaudiNationalId,
 });
 
+export const ProfileUpdateSchema = z.object({
+  fullName: z.string().min(2).optional(),
+  phoneE164: SaudiPhone.optional(),
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Assets (owner submission + admin review)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,7 +124,7 @@ export const OwnerValuationResponseSchema = z.object({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const RentalQuoteRequestSchema = z.object({
-  assetId: z.number().int().positive(),
+  assetId: z.coerce.number().int().positive(),
   startDate: IsoDate,
   endDate: IsoDate,
 });
@@ -172,6 +177,36 @@ export const PaymentRefundSchema = z.object({
   paymentId: z.number().int().positive(),
   amountHalalas: HalalasAmount.optional(),
   reason: z.string().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Validation schemas for endpoints that previously used raw type assertions
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const AssetValuationResponseSchema = z.object({
+  approved: z.boolean(),
+  rejectionReason: z.string().optional(),
+});
+
+export const RentalCloseSchema = z.object({
+  outcome: z.enum(["clean", "penalty", "major_damage", "loss"]),
+  penaltyHalalas: HalalasAmount.optional(),
+});
+
+export const DisputeAssignSchema = z.object({
+  assigneeUserId: z.number().int().positive(),
+});
+
+export const UserBlockSchema = z.object({
+  block: z.boolean(),
+  reason: z.string().optional(),
+});
+
+export const CreateStaffSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  fullName: z.string().min(2),
+  role: z.enum(["admin", "operations", "inspector"]),
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

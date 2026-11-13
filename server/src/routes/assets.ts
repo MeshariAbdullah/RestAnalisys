@@ -20,10 +20,12 @@ import {
   AssetSubmissionSchema,
   AssetApprovalSchema,
   AssetListingFilter,
+  AssetValuationResponseSchema,
 } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ForbiddenError, NotFoundError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { createNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -121,10 +123,7 @@ router.post(
   requirePermission("asset.read.own"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { approved, rejectionReason } = req.body as {
-      approved: boolean;
-      rejectionReason?: string;
-    };
+    const { approved, rejectionReason } = AssetValuationResponseSchema.parse(req.body);
 
     const [asset] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
     if (!asset) throw new NotFoundError("Asset");
@@ -256,6 +255,17 @@ router.post(
       after: updated,
     });
 
+    await createNotification(
+      asset.ownerId,
+      approved ? "asset_approved" : "asset_rejected",
+      approved ? "Asset approved" : "Asset rejected",
+      approved
+        ? `Your asset "${asset.title}" has been approved. Please ship it to our warehouse.`
+        : `Your asset "${asset.title}" was not approved. Reason: ${rejectionReason ?? "Not specified"}.`,
+      "asset",
+      assetId,
+    );
+
     res.json(updated);
   })
 );
@@ -319,6 +329,15 @@ router.get(
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
 
+    const whereClause = and(...conditions);
+
+    const [{ total }] = await db
+      .select({ total: sql<number>`count(*)` })
+      .from(assets)
+      .where(whereClause);
+
+    const offset = filter.cursor ?? 0;
+
     const rows = await db
       .select({
         id: assets.id,
@@ -326,18 +345,29 @@ router.get(
         brand: assets.brand,
         model: assets.model,
         category: assets.category,
+        description: assets.description,
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
         studioImagesJson: assets.studioImagesJson,
+        submissionImagesJson: assets.submissionImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
+        status: assets.status,
       })
       .from(assets)
-      .where(and(...conditions))
+      .where(whereClause)
       .orderBy(desc(assets.updatedAt))
-      .limit(filter.limit);
+      .limit(filter.limit)
+      .offset(offset);
 
-    res.json({ items: rows, count: rows.length });
+    const nextCursor = offset + rows.length;
+    res.json({
+      items: rows,
+      total: Number(total),
+      cursor: nextCursor,
+      limit: filter.limit,
+      hasMore: nextCursor < Number(total),
+    });
   })
 );
 

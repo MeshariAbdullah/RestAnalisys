@@ -19,6 +19,7 @@ import {
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { createNotification } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -120,6 +121,17 @@ router.post(
       after: { payment, invoice },
     });
 
+    if (result.status === "captured") {
+      await createNotification(
+        req.user!.userId,
+        "payment_captured",
+        "Payment confirmed",
+        `Payment of ${rental.totalPayableHalalas} halalas for rental ${rental.reference} has been captured.`,
+        "payment",
+        payment.id,
+      );
+    }
+
     res.json({ payment, invoice });
   })
 );
@@ -163,6 +175,15 @@ router.post(
       entityId: input.paymentId,
       after: { updated, result },
     });
+
+    await createNotification(
+      payment.userId,
+      "payment_refunded",
+      "Payment refunded",
+      `A refund of ${input.amountHalalas ?? payment.amountHalalas} halalas has been processed.`,
+      "payment",
+      payment.id,
+    );
 
     res.json(updated);
   })
