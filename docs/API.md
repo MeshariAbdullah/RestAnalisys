@@ -119,6 +119,22 @@ Errors follow the shape `{ error: string, code?: string, details?: any }`.
 | POST   | `/users/:id/block`    | admin / super_admin   | Block or unblock a user                |
 | POST   | `/users`              | super_admin           | Create staff users                     |
 
+## Notifications — `/api/notifications`
+
+| Method | Path                   | Roles           | Purpose                        |
+| ------ | ---------------------- | --------------- | ------------------------------ |
+| GET    | `/`                    | authenticated   | My notifications (latest 50)   |
+| GET    | `/unread-count`        | authenticated   | Count of unread notifications  |
+| POST   | `/:id/read`            | authenticated   | Mark a notification as read    |
+| POST   | `/read-all`            | authenticated   | Mark all notifications as read |
+
+## Admin — Audit Log
+
+| Method | Path                  | Roles                 | Purpose                                |
+| ------ | --------------------- | --------------------- | -------------------------------------- |
+| GET    | `/admin/audit-logs`   | admin / super_admin   | Paginated audit log (filter by entity/action) |
+| GET    | `/admin/audit-logs/:id` | admin / super_admin | Full audit log entry with before/after |
+
 ## Health
 
 | Method | Path          | Roles  | Purpose                                |
