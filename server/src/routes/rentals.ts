@@ -61,6 +61,28 @@ const router = Router();
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
+async function updateTrustScore(userId: number): Promise<void> {
+  const stats = await db
+    .select({
+      completed: sql<number>`count(*) filter (where status in ('closed'))`,
+      penalties: sql<number>`count(*) filter (where status = 'closed_with_penalty')`,
+      disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
+      total: sql<number>`count(*)`,
+    })
+    .from(rentals)
+    .where(eq(rentals.renterId, userId));
+  const s = stats[0] ?? { completed: 0, penalties: 0, disputed: 0, total: 0 };
+  const score = Math.min(100, Math.max(0,
+    50 + (Number(s.completed) * 10) - (Number(s.penalties) * 5) - (Number(s.disputed) * 15)
+  ));
+  const category = score >= 80 ? "low" : score >= 50 ? "medium" : "high";
+  await db.update(users).set({
+    trustScore: score,
+    riskCategory: category,
+    updatedAt: new Date(),
+  }).where(eq(users.id, userId));
+}
+
 function daysBetween(startIso: string, endIso: string): number {
   const start = new Date(startIso + "T00:00:00Z").getTime();
   const end = new Date(endIso + "T00:00:00Z").getTime();
@@ -99,7 +121,17 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await db
+      .select({ count: sql<number>`count(*)` })
+      .from(rentals)
+      .where(
+        and(
+          eq(rentals.renterId, userId),
+          sql`returned_at > (end_date::date + interval '1 day')`,
+          sql`status in ('closed','closed_with_penalty')`
+        )
+      )
+      .then(r => Number(r[0]?.count ?? 0)),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -516,6 +548,7 @@ router.post(
         entityId: id,
         after: updated,
       });
+      await updateTrustScore(rental.renterId);
       return res.json(updated);
     }
 
@@ -547,6 +580,7 @@ router.post(
         entityId: id,
         after: { updated, penaltyHalalas },
       });
+      await updateTrustScore(rental.renterId);
       return res.json(updated);
     }
 
@@ -582,6 +616,7 @@ router.post(
       after: { updated, outcome },
     });
 
+    await updateTrustScore(rental.renterId);
     res.json(updated);
   })
 );

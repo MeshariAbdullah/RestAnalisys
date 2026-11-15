@@ -1,6 +1,7 @@
 import React from "react";
 import { Route, Switch, Redirect } from "wouter";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { ToastProvider } from "./components/ui/toast";
 
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
@@ -38,6 +39,7 @@ import SanadTracking from "./pages/admin/SanadTracking";
 
 export default function App() {
   return (
+    <ToastProvider>
     <Switch>
       {/* Public */}
       <Route path="/" component={Landing} />
@@ -134,5 +136,6 @@ export default function App() {
         <Redirect to="/" />
       </Route>
     </Switch>
+    </ToastProvider>
   );
 }
