@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Gavel } from "lucide-react";
+import { Gavel, UserCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -13,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { disputesApi, type Dispute } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
 
 type Resolution =
   | "resolved_for_renter"
@@ -30,7 +32,10 @@ function statusColor(s: string): string {
 
 export default function DisputesPage() {
   const qc = useQueryClient();
+  const { addToast } = useToast();
   const [openId, setOpenId] = useState<number | null>(null);
+  const [assignId, setAssignId] = useState<number | null>(null);
+  const [assigneeId, setAssigneeId] = useState("");
   const [resolution, setResolution] = useState<Resolution>(
     "resolved_for_renter"
   );
@@ -48,9 +53,24 @@ export default function DisputesPage() {
       await disputesApi.resolve({ disputeId: id, resolution, notes });
       setOpenId(null);
       setNotes("");
+      addToast("Dispute resolved");
       await qc.invalidateQueries({ queryKey: ["disputes"] });
     } catch (err) {
       setError((err as Error).message);
+    }
+  }
+
+  async function handleAssign(id: number) {
+    const uid = Number(assigneeId);
+    if (!uid || uid <= 0) { addToast("Enter a valid staff user ID", "error"); return; }
+    try {
+      await disputesApi.assign(id, uid);
+      addToast(`Dispute #${id} assigned to user ${uid}`);
+      setAssignId(null);
+      setAssigneeId("");
+      await qc.invalidateQueries({ queryKey: ["disputes"] });
+    } catch (err: any) {
+      addToast(err.message ?? "Failed to assign", "error");
     }
   }
 
@@ -98,15 +118,29 @@ export default function DisputesPage() {
                     d.status !== "resolved_for_platform" &&
                     d.status !== "resolved_for_owner" &&
                     d.status !== "escalated_to_legal" && (
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          setOpenId(openId === d.id ? null : d.id)
-                        }
-                        className="bg-neutral-900 hover:bg-neutral-800"
-                      >
-                        Resolve
-                      </Button>
+                      <div className="flex gap-2 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setAssignId(assignId === d.id ? null : d.id);
+                            setOpenId(null);
+                          }}
+                        >
+                          <UserCheck className="w-4 h-4 mr-1" />
+                          Assign
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setOpenId(openId === d.id ? null : d.id);
+                            setAssignId(null);
+                          }}
+                          className="bg-neutral-900 hover:bg-neutral-800"
+                        >
+                          Resolve
+                        </Button>
+                      </div>
                     )}
                 </div>
 
