@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users as UsersIcon, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Users as UsersIcon, ShieldAlert, ShieldCheck, UserPlus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -12,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { adminApi, type User } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
 
 function riskColor(c: string): string {
   if (c === "low") return "bg-green-100 text-green-700";
@@ -22,7 +25,11 @@ function riskColor(c: string): string {
 
 export default function UsersPage() {
   const qc = useQueryClient();
+  const { addToast } = useToast();
   const [role, setRole] = useState<string>("all");
+  const [showCreate, setShowCreate] = useState(false);
+  const [staffForm, setStaffForm] = useState({ email: "", fullName: "", role: "inspector" as "admin" | "operations" | "inspector", password: "" });
+  const [creating, setCreating] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users", role],
@@ -39,12 +46,71 @@ export default function UsersPage() {
     await qc.invalidateQueries({ queryKey: ["admin-users"] });
   }
 
+  async function handleCreateStaff(e: React.FormEvent) {
+    e.preventDefault();
+    setCreating(true);
+    try {
+      await adminApi.createStaff(staffForm);
+      addToast(`Staff user ${staffForm.email} created`);
+      setStaffForm({ email: "", fullName: "", role: "inspector", password: "" });
+      setShowCreate(false);
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (err: any) {
+      addToast(err.message ?? "Failed to create staff user", "error");
+    } finally {
+      setCreating(false);
+    }
+  }
+
   return (
     <div className="p-8 max-w-6xl mx-auto">
       <h1 className="text-3xl font-bold mb-2">Users</h1>
       <p className="text-neutral-500 mb-6">
         All accounts across the platform.
       </p>
+
+      <div className="mb-5">
+        <Button variant={showCreate ? "default" : "outline"} onClick={() => setShowCreate(!showCreate)} className="mb-4">
+          <UserPlus className="w-4 h-4 mr-2" />
+          {showCreate ? "Cancel" : "Create Staff User"}
+        </Button>
+        {showCreate && (
+          <Card className="mb-5">
+            <CardContent className="p-5">
+              <form onSubmit={handleCreateStaff} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Full Name</Label>
+                  <Input required value={staffForm.fullName} onChange={e => setStaffForm(p => ({ ...p, fullName: e.target.value }))} placeholder="Ahmed Ali" />
+                </div>
+                <div>
+                  <Label>Email</Label>
+                  <Input required type="email" value={staffForm.email} onChange={e => setStaffForm(p => ({ ...p, email: e.target.value }))} placeholder="staff@mlr.sa" />
+                </div>
+                <div>
+                  <Label>Role</Label>
+                  <Select value={staffForm.role} onValueChange={v => setStaffForm(p => ({ ...p, role: v as any }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="inspector">Inspector</SelectItem>
+                      <SelectItem value="operations">Operations</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Password</Label>
+                  <Input required type="password" minLength={8} value={staffForm.password} onChange={e => setStaffForm(p => ({ ...p, password: e.target.value }))} placeholder="Min 8 characters" />
+                </div>
+                <div className="md:col-span-2">
+                  <Button type="submit" disabled={creating} className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
+                    {creating ? "Creating..." : "Create Staff User"}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       <div className="flex items-center gap-3 mb-5">
         <Select value={role} onValueChange={setRole}>
