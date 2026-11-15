@@ -144,6 +144,24 @@ export default function DisputesPage() {
                     )}
                 </div>
 
+                {assignId === d.id && (
+                  <div className="mt-4 pt-4 border-t flex items-center gap-3">
+                    <Input
+                      type="number"
+                      placeholder="Staff user ID"
+                      value={assigneeId}
+                      onChange={e => setAssigneeId(e.target.value)}
+                      className="w-40"
+                    />
+                    <Button size="sm" onClick={() => handleAssign(d.id)} className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
+                      Assign
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => { setAssignId(null); setAssigneeId(""); }}>
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+
                 {openId === d.id && (
                   <div className="mt-4 pt-4 border-t space-y-3">
                     <Select
