@@ -15,6 +15,8 @@
 
 import express from "express";
 import cors from "cors";
+import path from "path";
+import fs from "fs";
 import dotenv from "dotenv";
 
 import authRouter from "./routes/auth.js";
@@ -26,7 +28,10 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import uploadsRouter from "./routes/uploads.js";
+import notificationsRouter from "./routes/notifications.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { apiLimiter, authLimiter } from "./middleware/rateLimiter.js";
 
 dotenv.config();
 
@@ -41,6 +46,9 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+app.use("/api", apiLimiter);
+app.use("/api/auth", authLimiter);
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -67,6 +75,15 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/uploads", uploadsRouter);
+app.use("/api/notifications", notificationsRouter);
+
+// Static file serving for uploaded images
+const uploadsDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use("/uploads", express.static(uploadsDir));
 
 // 404
 app.use((req, res) => {

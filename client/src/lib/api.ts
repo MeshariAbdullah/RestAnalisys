@@ -227,15 +227,21 @@ export interface AdminKPIs {
   users: number;
   listedAssets: number;
   rentedAssets: number;
+  activeRentals: number;
   rentalsThisMonth: number;
   revenue: {
     rentalSubtotalHalalas: number;
     platformFeeHalalas: number;
     vatHalalas: number;
   };
+  paymentBreakdown: Record<string, { totalHalalas: number; count: number }>;
+  totalCapturedHalalas: number;
   openDisputes: number;
   activeSanads: number;
   sanadsUnderExecution: number;
+  assetPipeline: Record<string, number>;
+  newUsersLast30Days: number;
+  riskDistribution: Record<string, number>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -578,6 +584,51 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  channel: string;
+  isRead: boolean;
+  readAt?: string;
+  entityType?: string;
+  entityId?: number;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (page = 1, limit = 20) =>
+    request<{ data: AppNotification[]; total: number; page: number; limit: number }>(
+      `/notifications?page=${page}&limit=${limit}`
+    ),
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "PATCH" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/mark-all-read", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Uploads
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const uploadsApi = {
+  images: (files: File[]) => {
+    const form = new FormData();
+    files.forEach((f) => form.append("images", f));
+    return request<{ images: { url: string; filename: string; size: number }[] }>(
+      "/uploads/images",
+      { method: "POST", body: form }
+    );
+  },
 };
 
 export const healthApi = {

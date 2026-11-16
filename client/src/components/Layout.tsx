@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
@@ -19,8 +19,10 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
 } from "lucide-react";
-import type { Role, User } from "@/lib/api";
+import type { Role, User, AppNotification } from "@/lib/api";
+import { notificationsApi } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
 
 interface NavItem {
@@ -74,7 +76,36 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const user: User | null = getCurrentUser();
 
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notificationsList, setNotificationsList] = useState<AppNotification[]>([]);
+
   const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
+
+  useEffect(() => {
+    if (!user) return;
+    notificationsApi.unreadCount().then((r) => setUnreadCount(r.count)).catch(() => {});
+    const interval = setInterval(() => {
+      notificationsApi.unreadCount().then((r) => setUnreadCount(r.count)).catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
+  async function toggleNotifications() {
+    if (!showNotifications) {
+      try {
+        const res = await notificationsApi.list(1, 10);
+        setNotificationsList(res.data);
+      } catch { /* ignore */ }
+    }
+    setShowNotifications(!showNotifications);
+  }
+
+  async function handleMarkAllRead() {
+    await notificationsApi.markAllRead();
+    setUnreadCount(0);
+    setNotificationsList((prev) => prev.map((n) => ({ ...n, isRead: true })));
+  }
 
   function handleLogout() {
     clearSession();
@@ -162,7 +193,60 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {user && (
+          <header className="flex items-center justify-end px-6 py-3 border-b border-neutral-200 bg-white shrink-0">
+            <div className="relative">
+              <button
+                onClick={toggleNotifications}
+                className="relative p-2 rounded-lg hover:bg-neutral-100 transition-colors"
+              >
+                <Bell className="w-5 h-5 text-neutral-600" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+              {showNotifications && (
+                <div className="absolute right-0 top-12 w-80 bg-white border border-neutral-200 rounded-xl shadow-xl z-50 max-h-96 overflow-y-auto">
+                  <div className="flex items-center justify-between p-3 border-b border-neutral-100">
+                    <span className="text-sm font-semibold">Notifications</span>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllRead}
+                        className="text-xs text-amber-600 hover:underline"
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+                  {notificationsList.length === 0 ? (
+                    <p className="p-4 text-sm text-neutral-400 text-center">No notifications</p>
+                  ) : (
+                    notificationsList.map((n) => (
+                      <div
+                        key={n.id}
+                        className={cn(
+                          "px-3 py-2.5 border-b border-neutral-50 last:border-0",
+                          !n.isRead && "bg-amber-50"
+                        )}
+                      >
+                        <p className="text-sm font-medium text-neutral-900">{n.title}</p>
+                        <p className="text-xs text-neutral-500 mt-0.5">{n.body}</p>
+                        <p className="text-[10px] text-neutral-400 mt-1">
+                          {new Date(n.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </header>
+        )}
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
     </div>
   );
 }

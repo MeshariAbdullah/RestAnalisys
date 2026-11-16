@@ -3,6 +3,7 @@
  */
 
 import { Router } from "express";
+import bcrypt from "bcryptjs";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import {
@@ -41,6 +42,10 @@ router.get(
       .select({ count: sql<number>`count(*)` })
       .from(rentals)
       .where(sql`created_at >= date_trunc('month', now())`);
+    const [activeRentals] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(rentals)
+      .where(inArray(rentals.status, ["confirmed", "out_for_delivery", "active"]));
 
     const revenue = await db
       .select({
@@ -50,6 +55,29 @@ router.get(
       })
       .from(rentals)
       .where(inArray(rentals.status, ["closed", "closed_with_penalty", "active"]));
+
+    const paymentBreakdown = await db
+      .select({
+        type: payments.type,
+        total: sql<string>`coalesce(sum(amount_halalas),0)`,
+        count: sql<number>`count(*)`,
+      })
+      .from(payments)
+      .where(eq(payments.status, "captured"))
+      .groupBy(payments.type);
+
+    const paymentsByType: Record<string, { totalHalalas: number; count: number }> = {};
+    for (const row of paymentBreakdown) {
+      paymentsByType[row.type] = {
+        totalHalalas: Number(row.total),
+        count: Number(row.count),
+      };
+    }
+
+    const [totalCaptured] = await db
+      .select({ total: sql<string>`coalesce(sum(amount_halalas),0)` })
+      .from(payments)
+      .where(eq(payments.status, "captured"));
 
     const [openDisputes] = await db
       .select({ count: sql<number>`count(*)` })
@@ -66,19 +94,56 @@ router.get(
       .from(sanadRecords)
       .where(eq(sanadRecords.status, "under_execution"));
 
+    const assetPipeline = await db
+      .select({
+        status: assets.status,
+        count: sql<number>`count(*)`,
+      })
+      .from(assets)
+      .groupBy(assets.status);
+
+    const assetsByStatus: Record<string, number> = {};
+    for (const row of assetPipeline) {
+      assetsByStatus[row.status] = Number(row.count);
+    }
+
+    const [newUsersLast30] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(users)
+      .where(sql`created_at >= now() - interval '30 days'`);
+
+    const riskDistribution = await db
+      .select({
+        riskCategory: users.riskCategory,
+        count: sql<number>`count(*)`,
+      })
+      .from(users)
+      .groupBy(users.riskCategory);
+
+    const usersByRisk: Record<string, number> = {};
+    for (const row of riskDistribution) {
+      usersByRisk[row.riskCategory] = Number(row.count);
+    }
+
     res.json({
       users: Number(usersCount?.count ?? 0),
       listedAssets: Number(listedCount?.count ?? 0),
       rentedAssets: Number(rentedCount?.count ?? 0),
+      activeRentals: Number(activeRentals?.count ?? 0),
       rentalsThisMonth: Number(rentalsMtd?.count ?? 0),
       revenue: {
         rentalSubtotalHalalas: Number(revenue[0]?.rentalSubtotal ?? 0),
         platformFeeHalalas: Number(revenue[0]?.platformFee ?? 0),
         vatHalalas: Number(revenue[0]?.vat ?? 0),
       },
+      paymentBreakdown: paymentsByType,
+      totalCapturedHalalas: Number(totalCaptured?.total ?? 0),
       openDisputes: Number(openDisputes?.count ?? 0),
       activeSanads: Number(activeSanads?.count ?? 0),
       sanadsUnderExecution: Number(underExecution?.count ?? 0),
+      assetPipeline: assetsByStatus,
+      newUsersLast30Days: Number(newUsersLast30?.count ?? 0),
+      riskDistribution: usersByRisk,
     });
   })
 );
@@ -178,12 +243,13 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
+    const { email, fullName, role, password } = req.body as {
       email: string;
       fullName: string;
       role: "admin" | "operations" | "inspector";
-      passwordHash: string;
+      password: string;
     };
+    const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db
       .insert(users)
       .values({

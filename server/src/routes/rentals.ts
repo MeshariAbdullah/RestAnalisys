@@ -68,10 +68,14 @@ function daysBetween(startIso: string, endIso: string): number {
   return Math.round((end - start) / (1000 * 60 * 60 * 24));
 }
 
-function generateRentalReference(): string {
+async function generateRentalReference(): Promise<string> {
   const year = new Date().getFullYear();
-  const rand = Math.floor(100000 + Math.random() * 900000);
-  return `MLR-${year}-${rand}`;
+  const [row] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(sql`extract(year from created_at) = ${year}`);
+  const seq = (Number(row?.count ?? 0) + 1).toString().padStart(6, "0");
+  return `MLR-${year}-${seq}`;
 }
 
 async function buildRiskFeatures(userId: number, assetValueHalalas: number): Promise<RiskFeatures> {
@@ -84,10 +88,11 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
       completed: sql<number>`count(*) filter (where status in ('closed','closed_with_penalty'))`,
       disputed: sql<number>`count(*) filter (where status in ('in_dispute','enforcement'))`,
       cancelled: sql<number>`count(*) filter (where status = 'cancelled')`,
+      lateReturns: sql<number>`count(*) filter (where returned_at is not null and returned_at::date > end_date::date)`,
     })
     .from(rentals)
     .where(eq(rentals.renterId, userId));
-  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0 };
+  const row = stats[0] ?? { completed: 0, disputed: 0, cancelled: 0, lateReturns: 0 };
 
   const accountAgeDays = Math.max(
     0,
@@ -99,7 +104,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(row.lateReturns ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -193,7 +198,7 @@ router.post(
     });
 
     // Rental row -----------------------------------------------------------
-    const reference = generateRentalReference();
+    const reference = await generateRentalReference();
     const [rental] = await db
       .insert(rentals)
       .values({
