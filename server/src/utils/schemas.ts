@@ -46,6 +46,25 @@ export const NafathVerifySchema = z.object({
   nationalId: SaudiNationalId,
 });
 
+export const ProfileUpdateSchema = z.object({
+  fullName: z.string().min(2).optional(),
+  phone: SaudiPhone.optional(),
+  nationalAddress: z
+    .object({
+      city: z.string(),
+      district: z.string(),
+      street: z.string(),
+      buildingNumber: z.string().optional(),
+      postalCode: z.string().optional(),
+    })
+    .optional(),
+});
+
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Assets (owner submission + admin review)
 // ─────────────────────────────────────────────────────────────────────────────

@@ -56,6 +56,7 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyRentalEvent } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -279,6 +280,7 @@ router.post(
       entityId: rental.id,
       after: { rental, decision },
     });
+    notifyRentalEvent(rental.id, "created");
 
     res.status(201).json({
       rental,
@@ -400,6 +402,7 @@ router.post(
       entityId: id,
       after: updated,
     });
+    notifyRentalEvent(id, "fulfilled");
 
     res.json(updated);
   })
@@ -440,6 +443,7 @@ router.post(
       entityId: id,
       after: updated,
     });
+    notifyRentalEvent(id, "delivered");
 
     res.json(updated);
   })
@@ -476,6 +480,7 @@ router.post(
       entityId: id,
       after: updated,
     });
+    notifyRentalEvent(id, "returned");
 
     res.json(updated);
   })
@@ -516,6 +521,7 @@ router.post(
         entityId: id,
         after: updated,
       });
+      notifyRentalEvent(id, "closed_clean");
       return res.json(updated);
     }
 
@@ -547,6 +553,7 @@ router.post(
         entityId: id,
         after: { updated, penaltyHalalas },
       });
+      notifyRentalEvent(id, "closed_penalty");
       return res.json(updated);
     }
 
@@ -581,6 +588,7 @@ router.post(
       entityId: id,
       after: { updated, outcome },
     });
+    notifyRentalEvent(id, "closed_enforcement");
 
     res.json(updated);
   })
@@ -627,6 +635,7 @@ router.post(
       entityId: id,
       after: updated,
     });
+    notifyRentalEvent(id, "cancelled");
 
     res.json(updated);
   })

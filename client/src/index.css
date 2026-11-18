@@ -60,8 +60,8 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: "Cairo", "Tajawal", Arial, sans-serif;
-    direction: rtl;
+    font-family: "Inter", "Cairo", Arial, sans-serif;
+    direction: ltr;
   }
 }
 

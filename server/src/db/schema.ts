@@ -697,6 +697,48 @@ export const integrationEvents = pgTable("integration_events", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications (in-app alerts for users)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "rental_created",
+  "rental_signed",
+  "rental_paid",
+  "rental_delivered",
+  "rental_returned",
+  "rental_closed",
+  "asset_approved",
+  "asset_rejected",
+  "asset_published",
+  "inspection_complete",
+  "payout_released",
+  "dispute_opened",
+  "dispute_resolved",
+  "sanad_issued",
+  "system_alert",
+]);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").references(() => users.id).notNull(),
+    type: notificationTypeEnum("type").notNull(),
+    title: text("title").notNull(),
+    message: text("message").notNull(),
+    entityType: text("entity_type"),
+    entityId: integer("entity_id"),
+    isRead: boolean("is_read").notNull().default(false),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId),
+    userUnreadIdx: index("notifications_user_unread_idx").on(t.userId, t.isRead),
+  })
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Type exports
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -713,3 +755,5 @@ export type SanadRecord = typeof sanadRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Dispute = typeof disputes.$inferSelect;
 export type Shipment = typeof shipments.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;

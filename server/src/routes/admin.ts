@@ -4,6 +4,8 @@
 
 import { Router } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
+import { z } from "zod";
 import { db } from "../db/index.js";
 import {
   users,
@@ -13,12 +15,20 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+
+const CreateStaffSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().min(2),
+  password: z.string().min(8),
+  role: z.enum(["admin", "operations", "inspector"]),
+});
 
 const router = Router();
 
@@ -178,12 +188,8 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
-      email: string;
-      fullName: string;
-      role: "admin" | "operations" | "inspector";
-      passwordHash: string;
-    };
+    const { email, fullName, password, role } = CreateStaffSchema.parse(req.body);
+    const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db
       .insert(users)
       .values({
@@ -217,6 +223,45 @@ router.get(
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
+    res.json(rows);
+  })
+);
+
+// ── Single user detail ────────────────────────────────────────────────────
+router.get(
+  "/users/:id",
+  authenticate,
+  requirePermission("user.read"),
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    if (!user) throw new NotFoundError("User");
+    res.json(user);
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Number(req.query.offset) || 0;
+    const entityType = req.query.entityType as string | undefined;
+    const entityId = req.query.entityId ? Number(req.query.entityId) : undefined;
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (entityId) conditions.push(eq(auditLogs.entityId, entityId));
+
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
     res.json(rows);
   })
 );
