@@ -4,6 +4,7 @@
 
 import { Router } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 import { db } from "../db/index.js";
 import {
   users,
@@ -133,7 +134,23 @@ router.get(
   requirePermission("user.read"),
   asyncHandler(async (req, res) => {
     const role = (req.query.role as string | undefined) ?? undefined;
-    const query = db.select().from(users);
+    const selectFields = {
+      id: users.id,
+      email: users.email,
+      fullName: users.fullName,
+      role: users.role,
+      phoneE164: users.phoneE164,
+      nationalId: users.nationalId,
+      nafathVerified: users.nafathVerified,
+      kycStatus: users.kycStatus,
+      trustScore: users.trustScore,
+      riskCategory: users.riskCategory,
+      isBlocked: users.isBlocked,
+      blockedReason: users.blockedReason,
+      createdAt: users.createdAt,
+      lastLoginAt: users.lastLoginAt,
+    };
+    const query = db.select(selectFields).from(users);
     const rows = role
       ? await query.where(eq(users.role, role as any)).limit(200)
       : await query.limit(200);
@@ -178,12 +195,13 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
+    const { email, fullName, role, password } = req.body as {
       email: string;
       fullName: string;
       role: "admin" | "operations" | "inspector";
-      passwordHash: string;
+      password: string;
     };
+    const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db
       .insert(users)
       .values({
