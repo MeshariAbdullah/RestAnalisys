@@ -36,6 +36,7 @@ import DisputesPage from "./pages/admin/Disputes";
 import FinancialOverview from "./pages/admin/FinancialOverview";
 import SanadTracking from "./pages/admin/SanadTracking";
 import Notifications from "./pages/Notifications";
+import Profile from "./pages/Profile";
 
 export default function App() {
   return (
@@ -135,6 +136,13 @@ export default function App() {
       <Route path="/notifications">
         <ProtectedRoute roles={["renter", "owner", "inspector", "operations", "admin", "super_admin"]}>
           <Notifications />
+        </ProtectedRoute>
+      </Route>
+
+      {/* Profile (all roles) */}
+      <Route path="/profile">
+        <ProtectedRoute roles={["renter", "owner", "inspector", "operations", "admin", "super_admin"]}>
+          <Profile />
         </ProtectedRoute>
       </Route>
 
