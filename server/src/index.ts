@@ -26,7 +26,10 @@ import paymentsRouter from "./routes/payments.js";
 import disputesRouter from "./routes/disputes.js";
 import operationsRouter from "./routes/operations.js";
 import adminRouter from "./routes/admin.js";
+import notificationsRouter from "./routes/notifications.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { createRateLimiter } from "./middleware/rateLimit.js";
+import { requestLogger } from "./middleware/requestLogger.js";
 
 dotenv.config();
 
@@ -41,6 +44,8 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(requestLogger);
+app.use(createRateLimiter({ windowMs: 60_000, maxRequests: 100 }));
 
 // Health
 app.get("/api/health", (_req, res) => {
@@ -58,6 +63,9 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+const authRateLimit = createRateLimiter({ windowMs: 60_000, maxRequests: 10, message: "Too many auth attempts" });
+app.use("/api/auth/login", authRateLimit);
+app.use("/api/auth/register", authRateLimit);
 app.use("/api/auth", authRouter);
 app.use("/api/assets", assetsRouter);
 app.use("/api/inspections", inspectionsRouter);
@@ -67,6 +75,7 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/disputes", disputesRouter);
 app.use("/api/operations", operationsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/notifications", notificationsRouter);
 
 // 404
 app.use((req, res) => {

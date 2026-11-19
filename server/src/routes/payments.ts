@@ -19,6 +19,7 @@ import {
 import { chargeCard, refundPayment, generateZatcaInvoice } from "../services/paymentService.js";
 import { computeOwnerPayout } from "../utils/money.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyPaymentConfirmed } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -119,6 +120,10 @@ router.post(
       entityId: payment.id,
       after: { payment, invoice },
     });
+
+    if (result.status === "captured") {
+      try { await notifyPaymentConfirmed(rental.id, req.user!.userId, rental.totalPayableHalalas); } catch { /* non-critical */ }
+    }
 
     res.json({ payment, invoice });
   })

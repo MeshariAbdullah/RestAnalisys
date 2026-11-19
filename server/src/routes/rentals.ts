@@ -56,6 +56,10 @@ import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import {
+  notifyRentalStatusChange,
+  notifyAssetStatusChange,
+} from "../services/notificationService.js";
 
 const router = Router();
 
@@ -280,6 +284,11 @@ router.post(
       after: { rental, decision },
     });
 
+    try {
+      await notifyRentalStatusChange(rental.id, renterId, asset.ownerId, "pending_legal_signing");
+      await notifyAssetStatusChange(asset.id, asset.ownerId, "reserved");
+    } catch { /* non-critical */ }
+
     res.status(201).json({
       rental,
       risk: decision,
@@ -401,6 +410,8 @@ router.post(
       after: updated,
     });
 
+    try { await notifyRentalStatusChange(id, rental.renterId, rental.ownerId, "out_for_delivery"); } catch { /* non-critical */ }
+
     res.json(updated);
   })
 );
@@ -441,6 +452,8 @@ router.post(
       after: updated,
     });
 
+    try { await notifyRentalStatusChange(id, rental.renterId, rental.ownerId, "active"); } catch { /* non-critical */ }
+
     res.json(updated);
   })
 );
@@ -476,6 +489,8 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    try { await notifyRentalStatusChange(id, rental.renterId, rental.ownerId, "under_inspection"); } catch { /* non-critical */ }
 
     res.json(updated);
   })
@@ -516,6 +531,7 @@ router.post(
         entityId: id,
         after: updated,
       });
+      try { await notifyRentalStatusChange(id, rental.renterId, rental.ownerId, "closed"); } catch { /* non-critical */ }
       return res.json(updated);
     }
 
@@ -547,6 +563,7 @@ router.post(
         entityId: id,
         after: { updated, penaltyHalalas },
       });
+      try { await notifyRentalStatusChange(id, rental.renterId, rental.ownerId, "closed_with_penalty"); } catch { /* non-critical */ }
       return res.json(updated);
     }
 
@@ -581,6 +598,8 @@ router.post(
       entityId: id,
       after: { updated, outcome },
     });
+
+    try { await notifyRentalStatusChange(id, rental.renterId, rental.ownerId, "enforcement"); } catch { /* non-critical */ }
 
     res.json(updated);
   })
@@ -627,6 +646,8 @@ router.post(
       entityId: id,
       after: updated,
     });
+
+    try { await notifyRentalStatusChange(id, rental.renterId, rental.ownerId, "cancelled"); } catch { /* non-critical */ }
 
     res.json(updated);
   })

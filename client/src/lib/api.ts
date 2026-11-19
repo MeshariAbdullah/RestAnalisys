@@ -259,6 +259,16 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ nationalId }),
     }),
+  updateProfile: (data: { fullName?: string; phoneE164?: string; nationalAddressJson?: Record<string, unknown> }) =>
+    request<User>("/auth/profile", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: true }>("/auth/password", {
+      method: "PUT",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -582,6 +592,37 @@ export const adminApi = {
 
 export const healthApi = {
   check: () => request<{ ok: boolean; service: string; version: string; integrations: Record<string, boolean> }>("/health"),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  message: string;
+  relatedEntityType?: string | null;
+  relatedEntityId?: number | null;
+  isRead: boolean;
+  readAt?: string | null;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: (unreadOnly = false) => {
+    const qs = unreadOnly ? "?unread=true" : "";
+    return request<AppNotification[]>(`/notifications${qs}`);
+  },
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+  remove: (id: number) =>
+    request<{ ok: boolean }>(`/notifications/${id}`, { method: "DELETE" }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

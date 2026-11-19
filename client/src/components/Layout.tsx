@@ -19,8 +19,11 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import type { Role, User } from "@/lib/api";
+import { notificationsApi } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
 
 interface NavItem {
@@ -76,6 +79,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
 
+  const { data: unreadData } = useQuery({
+    queryKey: ["unread-count"],
+    queryFn: () => notificationsApi.unreadCount(),
+    enabled: !!user,
+    refetchInterval: 30_000,
+  });
+  const unreadCount = unreadData?.count ?? 0;
+
   function handleLogout() {
     clearSession();
     window.location.href = "/";
@@ -130,7 +141,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="p-3 border-t border-neutral-800">
+        <div className="p-3 border-t border-neutral-800 space-y-2">
+          <Link href="/notifications">
+            <a
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative",
+                location === "/notifications"
+                  ? "bg-amber-500 text-neutral-950 font-medium"
+                  : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+              )}
+            >
+              <Bell className="w-5 h-5 shrink-0" />
+              {sidebarOpen && <span>Notifications</span>}
+              {unreadCount > 0 && (
+                <span className="absolute top-1 left-6 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </a>
+          </Link>
           {sidebarOpen ? (
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">

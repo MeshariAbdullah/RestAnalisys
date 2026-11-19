@@ -27,6 +27,7 @@ import {
 import { requestNafathSignature } from "../services/nafathService.js";
 import { issueSanad, signSanad, dischargeSanad, executeSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
+import { notifyRentalStatusChange } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -159,6 +160,8 @@ router.post(
       entityId: commitment.id,
       after: { signed, sanad },
     });
+
+    try { await notifyRentalStatusChange(rental!.id, userId, rental!.ownerId, "pending_payment"); } catch { /* non-critical */ }
 
     res.json({ commitment: signed, sanad });
   })
