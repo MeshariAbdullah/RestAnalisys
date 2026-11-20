@@ -9,6 +9,8 @@ import {
   FileSignature,
   AlertOctagon,
   TrendingUp,
+  ScrollText,
+  UserPlus,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { adminApi, formatSar } from "@/lib/api";
@@ -118,6 +120,40 @@ export default function AdminDashboard() {
                 <p className="text-2xl font-bold">
                   {isLoading ? "…" : data?.sanadsUnderExecution ?? 0}
                 </p>
+              </CardContent>
+            </Card>
+          </a>
+        </Link>
+      </div>
+
+      <h2 className="text-lg font-semibold mt-8 mb-4">Tools</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Link href="/admin/audit-logs">
+          <a>
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardContent className="p-6 flex items-center gap-4">
+                <ScrollText className="w-8 h-8 text-neutral-600" />
+                <div>
+                  <p className="font-medium">Audit logs</p>
+                  <p className="text-sm text-neutral-500">
+                    Immutable trail of every material action
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </a>
+        </Link>
+        <Link href="/admin/create-staff">
+          <a>
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardContent className="p-6 flex items-center gap-4">
+                <UserPlus className="w-8 h-8 text-neutral-600" />
+                <div>
+                  <p className="font-medium">Create staff user</p>
+                  <p className="text-sm text-neutral-500">
+                    Add inspectors, operations or admins
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </a>

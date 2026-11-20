@@ -259,6 +259,17 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ nationalId }),
     }),
+  updateProfile: (data: {
+    fullName?: string;
+    phoneE164?: string;
+    iban?: string;
+    currentPassword?: string;
+    newPassword?: string;
+  }) =>
+    request<User & { iban?: string | null }>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -578,6 +589,37 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: { page?: number; limit?: number; entityType?: string; action?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.action) qs.set("action", params.action);
+    return request<{
+      items: Array<{
+        id: number;
+        actorUserId: number | null;
+        actorRole: string | null;
+        actorName: string | null;
+        actorEmail: string | null;
+        action: string;
+        entityType: string;
+        entityId: number | null;
+        beforeJson: unknown;
+        afterJson: unknown;
+        ip: string | null;
+        createdAt: string;
+      }>;
+      total: number;
+      page: number;
+      limit: number;
+    }>(`/admin/audit-logs?${qs}`);
+  },
+  createStaff: (data: { email: string; fullName: string; password: string; role: "inspector" | "operations" | "admin" }) =>
+    request<User>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 export const healthApi = {

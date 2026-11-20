@@ -13,7 +13,9 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
+import bcrypt from "bcryptjs";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -178,12 +180,13 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
+    const { email, fullName, role, password } = req.body as {
       email: string;
       fullName: string;
       role: "admin" | "operations" | "inspector";
-      passwordHash: string;
+      password: string;
     };
+    const passwordHash = await bcrypt.hash(password, 12);
     const [user] = await db
       .insert(users)
       .values({
@@ -218,6 +221,60 @@ router.get(
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
     res.json(rows);
+  })
+);
+
+// ── Audit logs ────────────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+    const entityType = req.query.entityType as string | undefined;
+    const action = req.query.action as string | undefined;
+    const offset = (page - 1) * limit;
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (action) conditions.push(eq(auditLogs.action, action));
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(auditLogs)
+      .where(where);
+
+    const rows = await db
+      .select({
+        id: auditLogs.id,
+        actorUserId: auditLogs.actorUserId,
+        actorRole: auditLogs.actorRole,
+        actorName: users.fullName,
+        actorEmail: users.email,
+        action: auditLogs.action,
+        entityType: auditLogs.entityType,
+        entityId: auditLogs.entityId,
+        beforeJson: auditLogs.beforeJson,
+        afterJson: auditLogs.afterJson,
+        ip: auditLogs.ip,
+        createdAt: auditLogs.createdAt,
+      })
+      .from(auditLogs)
+      .leftJoin(users, eq(auditLogs.actorUserId, users.id))
+      .where(where)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    res.json({
+      items: rows,
+      total: Number(countResult?.count ?? 0),
+      page,
+      limit,
+    });
   })
 );
 

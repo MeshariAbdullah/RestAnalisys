@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
-import { LoginSchema, RegisterSchema, NafathVerifySchema } from "../utils/schemas.js";
+import { LoginSchema, RegisterSchema, NafathVerifySchema, ProfileUpdateSchema } from "../utils/schemas.js";
 import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
@@ -160,6 +160,70 @@ router.post(
   })
 );
 
+router.patch(
+  "/profile",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const input = ProfileUpdateSchema.parse(req.body);
+    const userId = req.user!.userId;
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user) throw new NotFoundError("User");
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+
+    if (input.fullName) updates.fullName = input.fullName;
+    if (input.phoneE164) updates.phoneE164 = input.phoneE164;
+    if (input.iban !== undefined && user.role === "owner") {
+      updates.nationalAddressJson = { ...(user.nationalAddressJson as Record<string, unknown> ?? {}), iban: input.iban };
+    }
+
+    if (input.newPassword) {
+      const ok = await bcrypt.compare(input.currentPassword!, user.passwordHash);
+      if (!ok) throw new UnauthorizedError("Current password is incorrect");
+      updates.passwordHash = await bcrypt.hash(input.newPassword, 10);
+    }
+
+    const [updated] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning();
+
+    await recordAudit({
+      req,
+      actorUserId: userId,
+      actorRole: updated.role,
+      action: "auth.profile.updated",
+      entityType: "user",
+      entityId: userId,
+      before: { fullName: user.fullName, phoneE164: user.phoneE164 },
+      after: { fullName: updated.fullName, phoneE164: updated.phoneE164 },
+    });
+
+    return res.json({
+      id: updated.id,
+      email: updated.email,
+      fullName: updated.fullName,
+      role: updated.role,
+      phoneE164: updated.phoneE164,
+      nationalId: updated.nationalId,
+      nafathVerified: updated.nafathVerified,
+      kycStatus: updated.kycStatus,
+      phoneVerified: updated.phoneVerified,
+      emailVerified: updated.emailVerified,
+      trustScore: updated.trustScore,
+      riskCategory: updated.riskCategory,
+      isBlocked: updated.isBlocked,
+      iban: (updated.nationalAddressJson as Record<string, unknown>)?.iban ?? null,
+    });
+  })
+);
+
 router.get(
   "/me",
   authenticate,
@@ -185,6 +249,7 @@ router.get(
       trustScore: user.trustScore,
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
+      iban: (user.nationalAddressJson as Record<string, unknown>)?.iban ?? null,
     });
   })
 );
