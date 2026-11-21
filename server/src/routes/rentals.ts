@@ -52,7 +52,7 @@ import {
   computeRentalQuote,
   DEFAULT_PLATFORM_FEE_PCT,
 } from "../utils/money.js";
-import { computeRiskDecision, RiskFeatures } from "../services/riskEngine.js";
+import { computeRiskDecision, trustScoreToCategory, RiskFeatures } from "../services/riskEngine.js";
 import { generateLegalCommitment } from "../services/legalService.js";
 import { issueSanad } from "../services/nafithService.js";
 import { recordAudit } from "../services/auditService.js";
@@ -94,12 +94,22 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
   );
 
+  const [lateRow] = await db
+    .select({
+      count: sql<number>`count(*) filter (
+        where status in ('closed_with_penalty')
+           or (returned_at is not null and returned_at::date > end_date::date)
+      )`,
+    })
+    .from(rentals)
+    .where(eq(rentals.renterId, userId));
+
   return {
     accountAgeDays,
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: Number(lateRow?.count ?? 0),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -109,6 +119,28 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     userRole: user.role,
     countryIsSaudi: true,
   };
+}
+
+async function updateRenterTrustScore(renterId: number): Promise<void> {
+  const features = await buildRiskFeatures(renterId, 0);
+  const baseScore = 50;
+  let score = baseScore;
+  if (features.completedRentals >= 10) score += 15;
+  else if (features.completedRentals >= 3) score += 8;
+  if (features.accountAgeDays >= 365) score += 15;
+  else if (features.accountAgeDays >= 90) score += 8;
+  else if (features.accountAgeDays < 30) score -= 10;
+  if (features.disputedRentals > 0) score -= 10 * features.disputedRentals;
+  if (features.lateReturns > 0) score -= 5 * features.lateReturns;
+  if (features.cancelledRentals >= 3) score -= 8;
+  if (features.phoneVerified) score += 2;
+  if (features.emailVerified) score += 2;
+  score = Math.max(0, Math.min(100, score));
+  const category = trustScoreToCategory(score);
+  await db
+    .update(users)
+    .set({ trustScore: score, riskCategory: category, updatedAt: new Date() })
+    .where(eq(users.id, renterId));
 }
 
 // ── Quote (no side effects) ─────────────────────────────────────────────────
@@ -192,102 +224,118 @@ router.post(
       durationDays,
     });
 
-    // Rental row -----------------------------------------------------------
-    const reference = generateRentalReference();
-    const [rental] = await db
-      .insert(rentals)
-      .values({
-        reference,
-        assetId: asset.id,
-        renterId,
-        ownerId: asset.ownerId,
-        status: "pending_legal_signing",
-        startDate: input.startDate,
-        endDate: input.endDate,
-        durationDays,
-        dailyPriceHalalas: quote.dailyPriceHalalas,
-        rentalSubtotalHalalas: quote.rentalSubtotalHalalas,
-        platformFeeHalalas: quote.platformFeeHalalas,
-        vatHalalas: quote.vatHalalas,
-        totalPayableHalalas: quote.totalPayableHalalas,
-        trustScoreAtBooking: decision.finalScore,
-        riskSnapshotJson: decision as unknown as object,
+    // Everything below must be atomic — a concurrent rental on the same
+    // asset would otherwise double-reserve it.
+    const result = await db.transaction(async (tx) => {
+      // Re-check asset status inside the transaction to prevent race conditions
+      const [freshAsset] = await tx
+        .select()
+        .from(assets)
+        .where(eq(assets.id, asset.id))
+        .limit(1);
+      if (!freshAsset || freshAsset.status !== "listed") {
+        throw new LegalStateError("Asset is no longer available");
+      }
+
+      // Reserve the asset first
+      await tx
+        .update(assets)
+        .set({ status: "reserved", updatedAt: new Date() })
+        .where(eq(assets.id, asset.id));
+
+      // Rental row
+      const reference = generateRentalReference();
+      const [rental] = await tx
+        .insert(rentals)
+        .values({
+          reference,
+          assetId: asset.id,
+          renterId,
+          ownerId: asset.ownerId,
+          status: "pending_legal_signing",
+          startDate: input.startDate,
+          endDate: input.endDate,
+          durationDays,
+          dailyPriceHalalas: quote.dailyPriceHalalas,
+          rentalSubtotalHalalas: quote.rentalSubtotalHalalas,
+          platformFeeHalalas: quote.platformFeeHalalas,
+          vatHalalas: quote.vatHalalas,
+          totalPayableHalalas: quote.totalPayableHalalas,
+          trustScoreAtBooking: decision.finalScore,
+          riskSnapshotJson: decision as unknown as object,
+          legalCommitmentPct: decision.legalCommitmentPct!,
+          legalCommitmentHalalas: decision.legalCommitmentHalalas,
+          deliveryAddressJson: (input.deliveryAddress as unknown as object) ?? null,
+        })
+        .returning();
+
+      // Persist the risk score row
+      await tx.insert(riskScores).values({
+        userId: renterId,
+        rentalId: rental.id,
+        accountAgeDays: features.accountAgeDays,
+        completedRentals: features.completedRentals,
+        disputedRentals: features.disputedRentals,
+        cancelledRentals: features.cancelledRentals,
+        lateReturns: features.lateReturns,
+        nafathVerified: features.nafathVerified,
+        baseScore: decision.baseScore,
+        modifiersJson: decision.modifiers as unknown as object,
+        finalScore: decision.finalScore,
+        riskCategory: decision.riskCategory,
+        approved: true,
         legalCommitmentPct: decision.legalCommitmentPct!,
         legalCommitmentHalalas: decision.legalCommitmentHalalas,
-        deliveryAddressJson: (input.deliveryAddress as unknown as object) ?? null,
-      })
-      .returning();
+      });
 
-    // Reserve the asset
-    await db
-      .update(assets)
-      .set({ status: "reserved", updatedAt: new Date() })
-      .where(eq(assets.id, asset.id));
-
-    // Persist the risk score row now that we have rental_id
-    await db.insert(riskScores).values({
-      userId: renterId,
-      rentalId: rental.id,
-      accountAgeDays: features.accountAgeDays,
-      completedRentals: features.completedRentals,
-      disputedRentals: features.disputedRentals,
-      cancelledRentals: features.cancelledRentals,
-      lateReturns: features.lateReturns,
-      nafathVerified: features.nafathVerified,
-      baseScore: decision.baseScore,
-      modifiersJson: decision.modifiers as unknown as object,
-      finalScore: decision.finalScore,
-      riskCategory: decision.riskCategory,
-      approved: true,
-      legalCommitmentPct: decision.legalCommitmentPct!,
-      legalCommitmentHalalas: decision.legalCommitmentHalalas,
-    });
-
-    // Generate legal commitment draft --------------------------------------
-    const [renter] = await db.select().from(users).where(eq(users.id, renterId)).limit(1);
-    const legal = generateLegalCommitment({
-      rentalReference: rental.reference,
-      renterFullName: renter!.fullName,
-      renterNationalId: renter!.nationalId ?? "UNKNOWN",
-      assetTitle: asset.title,
-      assetEvaluatedValueHalalas: asset.evaluatedValueHalalas ?? 0,
-      commitmentPct: decision.legalCommitmentPct!,
-      commitmentHalalas: decision.legalCommitmentHalalas,
-      rentalStartDate: input.startDate,
-      rentalEndDate: input.endDate,
-      rentalTotalHalalas: quote.totalPayableHalalas,
-    });
-
-    const [legalCommitment] = await db
-      .insert(legalCommitments)
-      .values({
-        rentalId: rental.id,
-        renterId,
-        status: "pending_signature",
-        contractVersion: legal.version,
-        contractTextHash: legal.textHash,
-        clausesJson: legal.clauses as unknown as object,
-        commitmentHalalas: decision.legalCommitmentHalalas,
+      // Generate legal commitment draft
+      const [renter] = await tx.select().from(users).where(eq(users.id, renterId)).limit(1);
+      const legal = generateLegalCommitment({
+        rentalReference: rental.reference,
+        renterFullName: renter!.fullName,
+        renterNationalId: renter!.nationalId ?? "UNKNOWN",
+        assetTitle: asset.title,
+        assetEvaluatedValueHalalas: asset.evaluatedValueHalalas ?? 0,
         commitmentPct: decision.legalCommitmentPct!,
-      })
-      .returning();
+        commitmentHalalas: decision.legalCommitmentHalalas,
+        rentalStartDate: input.startDate,
+        rentalEndDate: input.endDate,
+        rentalTotalHalalas: quote.totalPayableHalalas,
+      });
+
+      const [legalCommitment] = await tx
+        .insert(legalCommitments)
+        .values({
+          rentalId: rental.id,
+          renterId,
+          status: "pending_signature",
+          contractVersion: legal.version,
+          contractTextHash: legal.textHash,
+          clausesJson: legal.clauses as unknown as object,
+          commitmentHalalas: decision.legalCommitmentHalalas,
+          commitmentPct: decision.legalCommitmentPct!,
+        })
+        .returning();
+
+      return { rental, legal, legalCommitment };
+    });
 
     await recordAudit({
       req,
       action: "rental.create",
       entityType: "rental",
-      entityId: rental.id,
-      after: { rental, decision },
+      entityId: result.rental.id,
+      after: { rental: result.rental, decision },
     });
 
     res.status(201).json({
-      rental,
+      rental: result.rental,
       risk: decision,
       legal: {
-        commitmentId: legalCommitment.id,
-        status: legalCommitment.status,
-        clauses: legal.clauses,
-        textHash: legal.textHash,
+        commitmentId: result.legalCommitment.id,
+        status: result.legalCommitment.status,
+        clauses: result.legal.clauses,
+        textHash: result.legal.textHash,
         commitmentHalalas: decision.legalCommitmentHalalas,
         commitmentPct: decision.legalCommitmentPct,
       },
@@ -516,6 +564,7 @@ router.post(
         entityId: id,
         after: updated,
       });
+      await updateRenterTrustScore(rental.renterId);
       return res.json(updated);
     }
 
@@ -547,6 +596,7 @@ router.post(
         entityId: id,
         after: { updated, penaltyHalalas },
       });
+      await updateRenterTrustScore(rental.renterId);
       return res.json(updated);
     }
 
@@ -581,6 +631,7 @@ router.post(
       entityId: id,
       after: { updated, outcome },
     });
+    await updateRenterTrustScore(rental.renterId);
 
     res.json(updated);
   })

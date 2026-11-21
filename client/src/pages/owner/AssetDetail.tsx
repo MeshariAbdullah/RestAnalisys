@@ -46,7 +46,7 @@ export default function AssetDetail({ id }: { id: number }) {
     ...(asset.studioImagesJson ?? []),
     ...(asset.submissionImagesJson ?? []),
   ];
-  const awaitingOwner = asset.status === "awaiting_owner_approval";
+  const awaitingOwner = asset.status === "inspection_reported";
 
   return (
     <div className="p-8 max-w-5xl mx-auto">

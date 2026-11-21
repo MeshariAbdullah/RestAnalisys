@@ -52,27 +52,49 @@ export function getSeverityLabel(severity: string) {
 
 export function getStatusLabel(status: string) {
   const labels: Record<string, string> = {
-    uploaded: "تم الرفع",
-    extracting_frames: "استخراج الإطارات",
-    analyzing_gpt: "تحليل GPT-4o",
-    analyzing_gemini: "تحليل Gemini",
-    saving_results: "حفظ النتائج",
-    done: "مكتمل",
-    error: "خطأ",
-    queued: "في الانتظار",
+    pending_approval: "بانتظار الموافقة",
+    rejected: "مرفوض",
+    awaiting_shipment: "بانتظار الشحن",
+    in_inspection: "قيد الفحص",
+    inspection_reported: "تم التقييم",
+    owner_rejected_valuation: "المالك رفض التقييم",
+    ready_for_listing: "جاهز للعرض",
+    listed: "معروض",
+    reserved: "محجوز",
+    rented_out: "مؤجر",
+    returned_under_inspection: "مرتجع قيد الفحص",
+    completed: "مكتمل",
+    withdrawn: "مسحوب",
+    lost_or_destroyed: "مفقود أو تالف",
   };
-  return labels[status] ?? status;
+  return labels[status] ?? status.replace(/_/g, " ");
 }
 
-export function getStatusIcon(status: string) {
+export function getStatusColor(status: string) {
   switch (status) {
-    case "done": return "✅";
-    case "error": return "❌";
-    case "uploaded": return "📤";
-    case "extracting_frames": return "🎞️";
-    case "analyzing_gpt": return "🤖";
-    case "analyzing_gemini": return "💎";
-    case "saving_results": return "💾";
-    default: return "⏳";
+    case "listed":
+    case "completed":
+      return "bg-green-100 text-green-800";
+    case "rented_out":
+    case "active":
+    case "confirmed":
+      return "bg-blue-100 text-blue-800";
+    case "reserved":
+    case "pending_approval":
+    case "in_inspection":
+    case "inspection_reported":
+    case "awaiting_shipment":
+    case "ready_for_listing":
+    case "returned_under_inspection":
+      return "bg-yellow-100 text-yellow-800";
+    case "rejected":
+    case "owner_rejected_valuation":
+    case "lost_or_destroyed":
+    case "cancelled":
+      return "bg-red-100 text-red-800";
+    case "withdrawn":
+      return "bg-neutral-100 text-neutral-800";
+    default:
+      return "bg-neutral-100 text-neutral-700";
   }
 }

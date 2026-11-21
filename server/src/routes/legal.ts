@@ -206,6 +206,12 @@ router.post(
       .where(eq(sanadRecords.id, id))
       .returning();
 
+    // Also discharge the associated legal commitment
+    await db
+      .update(legalCommitments)
+      .set({ status: "discharged", dischargedAt: new Date(), updatedAt: new Date() })
+      .where(eq(legalCommitments.id, sanad.legalCommitmentId));
+
     await recordAudit({
       req,
       action: "legal.sanad_discharge",
