@@ -491,6 +491,7 @@ export const disputesApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  mine: () => request<Dispute[]>("/disputes/mine"),
   list: () => request<Dispute[]>("/disputes"),
   assign: (id: number, assigneeUserId: number) =>
     request<Dispute>(`/disputes/${id}/assign`, {
@@ -578,6 +579,16 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  createStaffUser: (data: {
+    email: string;
+    password: string;
+    fullName: string;
+    role: "admin" | "operations" | "inspector";
+  }) =>
+    request<User>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 export const healthApi = {

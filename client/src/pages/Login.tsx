@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api";
 import { saveSession, homeForRole } from "@/lib/auth";
+import { toast } from "@/components/ui/use-toast";
 
 export default function Login() {
   const [, navigate] = useLocation();
@@ -23,7 +24,9 @@ export default function Login() {
       saveSession(res.token, res.user);
       navigate(homeForRole(res.user.role));
     } catch (err) {
-      setError((err as Error).message ?? "Login failed");
+      const msg = (err as Error).message ?? "Login failed";
+      setError(msg);
+      toast({ title: "Login failed", description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
     }

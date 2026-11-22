@@ -5,10 +5,10 @@
 import { Router } from "express";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { disputes, rentals } from "../db/schema.js";
+import { disputes, rentals, users } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
-import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
+import { DisputeOpenSchema, DisputeResolveSchema, DisputeAssignSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
@@ -65,6 +65,20 @@ router.post(
 );
 
 router.get(
+  "/mine",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const rows = await db
+      .select()
+      .from(disputes)
+      .where(eq(disputes.openedByUserId, req.user!.userId))
+      .orderBy(desc(disputes.openedAt))
+      .limit(100);
+    res.json(rows);
+  })
+);
+
+router.get(
   "/",
   authenticate,
   requirePermission("dispute.assign"),
@@ -84,7 +98,13 @@ router.post(
   requirePermission("dispute.assign"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const id = Number(req.params.id);
-    const { assigneeUserId } = req.body as { assigneeUserId: number };
+    const { assigneeUserId } = DisputeAssignSchema.parse(req.body);
+    const [assignee] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, assigneeUserId))
+      .limit(1);
+    if (!assignee) throw new NotFoundError("Assignee user");
     const [updated] = await db
       .update(disputes)
       .set({

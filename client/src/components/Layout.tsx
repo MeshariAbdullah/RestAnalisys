@@ -19,6 +19,7 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  UserCircle,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
@@ -128,6 +129,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+
+          {user && (
+            <div className="pt-3 mt-3 border-t border-neutral-800">
+              <Link href="/profile">
+                <a
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
+                    location === "/profile"
+                      ? "bg-amber-500 text-neutral-950 font-medium"
+                      : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+                  )}
+                >
+                  <UserCircle className="w-5 h-5 shrink-0" />
+                  {sidebarOpen && <span>Profile</span>}
+                </a>
+              </Link>
+            </div>
+          )}
         </nav>
 
         <div className="p-3 border-t border-neutral-800">

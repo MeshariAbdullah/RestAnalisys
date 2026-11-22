@@ -11,6 +11,7 @@ import Browse from "./pages/renter/Browse";
 import ItemDetail from "./pages/renter/ItemDetail";
 import LegalCommitmentPage from "./pages/renter/LegalCommitment";
 import MyRentals from "./pages/renter/MyRentals";
+import RentalDetail from "./pages/renter/RentalDetail";
 
 // Owner
 import OwnerDashboard from "./pages/owner/OwnerDashboard";
@@ -36,6 +37,9 @@ import DisputesPage from "./pages/admin/Disputes";
 import FinancialOverview from "./pages/admin/FinancialOverview";
 import SanadTracking from "./pages/admin/SanadTracking";
 
+// Shared
+import Profile from "./pages/Profile";
+
 export default function App() {
   return (
     <Switch>
@@ -59,6 +63,13 @@ export default function App() {
         {(params) => (
           <ProtectedRoute roles={["renter"]}>
             <LegalCommitmentPage commitmentId={Number(params.commitmentId)} />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/my-rentals/:id">
+        {(params) => (
+          <ProtectedRoute roles={["renter"]}>
+            <RentalDetail id={Number(params.id)} />
           </ProtectedRoute>
         )}
       </Route>
@@ -128,6 +139,11 @@ export default function App() {
       </Route>
       <Route path="/admin/sanad">
         <ProtectedRoute roles={["admin", "super_admin"]}><SanadTracking /></ProtectedRoute>
+      </Route>
+
+      {/* Shared */}
+      <Route path="/profile">
+        <ProtectedRoute><Profile /></ProtectedRoute>
       </Route>
 
       <Route>
