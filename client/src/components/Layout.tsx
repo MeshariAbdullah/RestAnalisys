@@ -19,6 +19,7 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  User as UserIcon,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
@@ -31,6 +32,9 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
+  // All roles
+  { href: "/profile", label: "Profile", icon: UserIcon, roles: ["renter", "owner", "inspector", "operations", "admin", "super_admin"] },
+
   // Renter
   { href: "/browse", label: "Browse Catalog", icon: ShoppingBag, roles: ["renter"] },
   { href: "/my-rentals", label: "My Rentals", icon: FileText, roles: ["renter"] },

@@ -1,8 +1,22 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Receipt, TrendingUp } from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { adminApi, formatSar } from "@/lib/api";
+
+function formatTooltipValue(value: number) {
+  return `${value.toLocaleString("en-SA", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} SAR`;
+}
 
 export default function FinancialOverview() {
   const kpisQuery = useQuery({
@@ -17,9 +31,19 @@ export default function FinancialOverview() {
 
   const kpis = kpisQuery.data;
   const trend = trendQuery.data ?? [];
-  const maxTotal = Math.max(
-    ...trend.map((t) => Number(t.total_halalas ?? 0)),
-    1
+
+  const chartData = useMemo(
+    () =>
+      trend.map((t) => ({
+        date: new Date(t.day).toLocaleDateString("en-GB", {
+          day: "numeric",
+          month: "short",
+        }),
+        totalSar: Number(t.total_halalas) / 100,
+        feesSar: Number(t.fee_halalas) / 100,
+        rentals: Number(t.rentals),
+      })),
+    [trend]
   );
 
   return (
@@ -65,39 +89,77 @@ export default function FinancialOverview() {
         </Card>
       </div>
 
-      <h2 className="text-lg font-semibold mb-3">Last 30 days</h2>
+      <h2 className="text-lg font-semibold mb-3">Revenue — last 30 days</h2>
       <Card>
         <CardContent className="p-6">
-          {trend.length === 0 ? (
+          {chartData.length === 0 ? (
             <p className="text-neutral-500 text-sm">No recent rentals.</p>
           ) : (
-            <div className="space-y-2">
-              {trend.map((t) => {
-                const pct = (Number(t.total_halalas) / maxTotal) * 100;
-                return (
-                  <div
-                    key={t.day}
-                    className="flex items-center gap-3 text-sm"
-                  >
-                    <span className="w-24 text-neutral-500 shrink-0">
-                      {new Date(t.day).toLocaleDateString()}
-                    </span>
-                    <div className="flex-1 h-6 bg-neutral-100 rounded">
-                      <div
-                        className="h-full bg-amber-500 rounded"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="w-24 text-right font-mono">
-                      {formatSar(Number(t.total_halalas))}
-                    </span>
-                    <span className="w-16 text-right text-xs text-neutral-500">
-                      {t.rentals} rentals
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+            <ResponsiveContainer width="100%" height={320}>
+              <AreaChart
+                data={chartData}
+                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradFees" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#737373" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#737373" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 12, fill: "#737373" }}
+                  tickLine={false}
+                  axisLine={{ stroke: "#e5e5e5" }}
+                />
+                <YAxis
+                  tick={{ fontSize: 12, fill: "#737373" }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v: number) =>
+                    v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
+                  }
+                />
+                <Tooltip
+                  formatter={(value: number, name: string) => [
+                    formatTooltipValue(value),
+                    name === "totalSar" ? "Total revenue" : "Platform fees",
+                  ]}
+                  labelStyle={{ fontWeight: 600 }}
+                  contentStyle={{
+                    borderRadius: 8,
+                    border: "1px solid #e5e5e5",
+                    fontSize: 13,
+                  }}
+                />
+                <Legend
+                  formatter={(value: string) =>
+                    value === "totalSar" ? "Total revenue" : "Platform fees"
+                  }
+                  iconType="circle"
+                  wrapperStyle={{ fontSize: 13 }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="totalSar"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  fill="url(#gradTotal)"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="feesSar"
+                  stroke="#737373"
+                  strokeWidth={2}
+                  fill="url(#gradFees)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           )}
         </CardContent>
       </Card>

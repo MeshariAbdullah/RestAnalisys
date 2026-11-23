@@ -72,6 +72,8 @@ export interface User {
   nationalId?: string;
   nafathVerified: boolean;
   kycStatus: "unverified" | "pending" | "verified" | "rejected";
+  phoneVerified?: boolean;
+  emailVerified?: boolean;
   trustScore: number;
   riskCategory: "low" | "medium" | "high" | "ultra_high";
   isBlocked?: boolean;
@@ -394,6 +396,7 @@ export const rentalsApi = {
       body: JSON.stringify(data),
     }),
   mine: () => request<Rental[]>("/rentals/mine"),
+  ownerRentals: () => request<Rental[]>("/rentals/owner"),
   list: () => request<Rental[]>("/rentals"),
   get: (id: number) =>
     request<{
