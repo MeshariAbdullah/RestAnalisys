@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { rentalsApi, paymentsApi, formatSar, type Payment } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 const STATUS_CONFIG: Record<
   string,
@@ -80,8 +81,11 @@ export default function RentalDetail({ id }: { id: number }) {
     try {
       await paymentsApi.charge(id);
       await qc.invalidateQueries({ queryKey: ["rental", id] });
+      toast({ title: "Payment successful", description: "Your rental is now confirmed.", variant: "success" });
     } catch (err) {
-      setError((err as Error).message ?? "Payment failed");
+      const msg = (err as Error).message ?? "Payment failed";
+      setError(msg);
+      toast({ title: "Payment failed", description: msg, variant: "destructive" });
     } finally {
       setPaying(false);
     }

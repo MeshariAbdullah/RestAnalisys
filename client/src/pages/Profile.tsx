@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api";
 import { clearSession } from "@/lib/auth";
+import { toast } from "@/hooks/use-toast";
 
 function riskColor(cat: string): string {
   if (cat === "low") return "bg-green-100 text-green-700";
@@ -52,11 +53,14 @@ export default function Profile() {
       if (res.status === "verified") {
         setVerifySuccess(true);
         await qc.invalidateQueries({ queryKey: ["me"] });
+        toast({ title: "Identity verified", description: "Your Nafath verification is complete.", variant: "success" });
       } else {
         setVerifyError(`Verification status: ${res.status}. Please try again.`);
       }
     } catch (err) {
-      setVerifyError((err as Error).message ?? "Verification failed");
+      const msg = (err as Error).message ?? "Verification failed";
+      setVerifyError(msg);
+      toast({ title: "Verification failed", description: msg, variant: "destructive" });
     } finally {
       setVerifying(false);
     }

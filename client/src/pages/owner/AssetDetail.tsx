@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, formatSar } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 export default function AssetDetail({ id }: { id: number }) {
   const qc = useQueryClient();
@@ -24,8 +25,15 @@ export default function AssetDetail({ id }: { id: number }) {
         approved ? undefined : "Owner rejected the proposed valuation"
       );
       await qc.invalidateQueries({ queryKey: ["asset", id] });
+      toast({
+        title: approved ? "Valuation approved" : "Valuation rejected",
+        description: approved ? "Your asset will be listed shortly." : "You can discuss pricing with MLR.",
+        variant: approved ? "success" : "default",
+      });
     } catch (err) {
-      setActionError((err as Error).message);
+      const msg = (err as Error).message;
+      setActionError(msg);
+      toast({ title: "Action failed", description: msg, variant: "destructive" });
     }
   }
 
@@ -35,8 +43,11 @@ export default function AssetDetail({ id }: { id: number }) {
     try {
       await assetsApi.withdraw(id);
       await qc.invalidateQueries({ queryKey: ["asset", id] });
+      toast({ title: "Asset withdrawn", description: "The item has been removed from listings.", variant: "default" });
     } catch (err) {
-      setActionError((err as Error).message);
+      const msg = (err as Error).message;
+      setActionError(msg);
+      toast({ title: "Withdraw failed", description: msg, variant: "destructive" });
     }
   }
 
