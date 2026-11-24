@@ -587,6 +587,22 @@ router.post(
         after: { updated, penaltyHalalas },
       });
       await updateTrustScore(rental.renterId);
+      await notify({
+        userId: rental.renterId,
+        type: "rental_closed_penalty",
+        title: "Rental closed with penalty",
+        body: `Your rental ${rental.reference} was closed with a penalty charge.`,
+        entityType: "rental",
+        entityId: rental.id,
+      });
+      await notify({
+        userId: rental.ownerId,
+        type: "rental_closed_penalty",
+        title: "Rental closed with penalty",
+        body: `Rental ${rental.reference} for your asset was closed with a penalty applied.`,
+        entityType: "rental",
+        entityId: rental.id,
+      });
       return res.json(updated);
     }
 
@@ -622,6 +638,22 @@ router.post(
       after: { updated, outcome },
     });
     await updateTrustScore(rental.renterId);
+    await notify({
+      userId: rental.renterId,
+      type: "rental_enforcement",
+      title: "Rental under enforcement",
+      body: `Your rental ${rental.reference} has been escalated for enforcement due to ${outcome}.`,
+      entityType: "rental",
+      entityId: rental.id,
+    });
+    await notify({
+      userId: rental.ownerId,
+      type: "rental_enforcement",
+      title: "Rental enforcement initiated",
+      body: `Rental ${rental.reference} for your asset has been escalated — Sanad execution is in progress.`,
+      entityType: "rental",
+      entityId: rental.id,
+    });
 
     res.json(updated);
   })

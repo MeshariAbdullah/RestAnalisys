@@ -13,6 +13,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
 import { updateTrustScore } from "../services/trustScoreService.js";
+import { notify } from "../services/notificationService.js";
 
 const router = Router();
 
@@ -59,6 +60,17 @@ router.post(
       entityType: "dispute",
       entityId: dispute.id,
       after: dispute,
+    });
+
+    const otherPartyId =
+      rental.renterId === actorId ? rental.ownerId : rental.renterId;
+    await notify({
+      userId: otherPartyId,
+      type: "dispute_opened",
+      title: "Dispute opened",
+      body: `A dispute has been opened on rental ${rental.reference}: ${input.summary}`,
+      entityType: "dispute",
+      entityId: dispute.id,
     });
 
     res.status(201).json(dispute);
@@ -151,6 +163,15 @@ router.post(
       after: updated,
     });
     await updateTrustScore(dispute.openedByUserId);
+
+    await notify({
+      userId: dispute.openedByUserId,
+      type: "dispute_resolved",
+      title: "Dispute resolved",
+      body: `Your dispute #${dispute.id} has been resolved: ${input.resolution.replace(/_/g, " ")}.`,
+      entityType: "dispute",
+      entityId: dispute.id,
+    });
 
     res.json(updated);
   })

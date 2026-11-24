@@ -20,7 +20,7 @@ const STATUSES = [
   "in_transit",
   "delivered",
   "failed",
-  "returned_to_warehouse",
+  "returned",
 ] as const;
 
 export default function Shipments() {
