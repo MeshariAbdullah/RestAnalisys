@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -19,8 +20,11 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  Bell,
+  CheckCheck,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
+import { notificationsApi, type AppNotification } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
 
 interface NavItem {
@@ -56,6 +60,7 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+  { href: "/admin/audit", label: "Audit Log", icon: Shield, roles: ["admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
@@ -162,7 +167,98 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {user && <NotificationBar />}
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
+    </div>
+  );
+}
+
+function NotificationBar() {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const { data: countData } = useQuery({
+    queryKey: ["notifications-unread-count"],
+    queryFn: () => notificationsApi.unreadCount(),
+    refetchInterval: 30_000,
+  });
+
+  const { data: notifications } = useQuery({
+    queryKey: ["notifications-list"],
+    queryFn: () => notificationsApi.list(),
+    enabled: open,
+  });
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const unread = countData?.count ?? 0;
+
+  async function markAllRead() {
+    await notificationsApi.markAllRead();
+    qc.invalidateQueries({ queryKey: ["notifications-unread-count"] });
+    qc.invalidateQueries({ queryKey: ["notifications-list"] });
+  }
+
+  return (
+    <div className="flex items-center justify-end px-6 py-2 border-b bg-white" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="relative p-2 rounded-lg hover:bg-neutral-100 transition-colors"
+      >
+        <Bell className="w-5 h-5 text-neutral-600" />
+        {unread > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1">
+            {unread > 99 ? "99+" : unread}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-6 top-12 w-96 max-h-[28rem] bg-white border rounded-xl shadow-xl z-50 flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b">
+            <p className="font-semibold text-sm">Notifications</p>
+            {unread > 0 && (
+              <button
+                onClick={markAllRead}
+                className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-700"
+              >
+                <CheckCheck className="w-3.5 h-3.5" />
+                Mark all read
+              </button>
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {!notifications || notifications.length === 0 ? (
+              <p className="text-sm text-neutral-400 text-center py-8">No notifications</p>
+            ) : (
+              notifications.map((n: AppNotification) => (
+                <div
+                  key={n.id}
+                  className={cn(
+                    "px-4 py-3 border-b last:border-0 text-sm",
+                    !n.read && "bg-amber-50/60"
+                  )}
+                >
+                  <p className="font-medium text-neutral-900">{n.title}</p>
+                  <p className="text-neutral-500 text-xs mt-0.5">{n.body}</p>
+                  <p className="text-neutral-400 text-[10px] mt-1">
+                    {new Date(n.createdAt).toLocaleString("en-SA")}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
