@@ -4,6 +4,8 @@
 
 import { Router } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { z } from "zod";
+import bcrypt from "bcryptjs";
 import { db } from "../db/index.js";
 import {
   users,
@@ -13,6 +15,7 @@ import {
   disputes,
   sanadRecords,
   riskScores,
+  auditLogs,
 } from "../db/schema.js";
 import { authenticate, AuthedRequest } from "../middleware/auth.js";
 import { requirePermission } from "../middleware/rbac.js";
@@ -178,12 +181,14 @@ router.post(
   authenticate,
   requirePermission("user.create_staff"),
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { email, fullName, role, passwordHash } = req.body as {
-      email: string;
-      fullName: string;
-      role: "admin" | "operations" | "inspector";
-      passwordHash: string;
-    };
+    const CreateStaffSchema = z.object({
+      email: z.string().email(),
+      fullName: z.string().min(2),
+      role: z.enum(["admin", "operations", "inspector"]),
+      password: z.string().min(8),
+    });
+    const { email, fullName, role, password } = CreateStaffSchema.parse(req.body);
+    const passwordHash = await bcrypt.hash(password, 10);
     const [user] = await db
       .insert(users)
       .values({
@@ -217,6 +222,42 @@ router.get(
       .from(riskScores)
       .orderBy(desc(riskScores.createdAt))
       .limit(100);
+    res.json(rows);
+  })
+);
+
+// ── Audit log viewer ──────────────────────────────────────────────────────
+router.get(
+  "/audit-logs",
+  authenticate,
+  requirePermission("system.audit"),
+  asyncHandler(async (req, res) => {
+    const entityType = req.query.entityType as string | undefined;
+    const entityId = req.query.entityId ? Number(req.query.entityId) : undefined;
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Number(req.query.offset) || 0;
+
+    const conditions = [];
+    if (entityType) conditions.push(eq(auditLogs.entityType, entityType));
+    if (entityId) conditions.push(eq(auditLogs.entityId, entityId));
+
+    const rows = await db
+      .select({
+        id: auditLogs.id,
+        actorUserId: auditLogs.actorUserId,
+        actorRole: auditLogs.actorRole,
+        action: auditLogs.action,
+        entityType: auditLogs.entityType,
+        entityId: auditLogs.entityId,
+        ip: auditLogs.ip,
+        createdAt: auditLogs.createdAt,
+      })
+      .from(auditLogs)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
     res.json(rows);
   })
 );

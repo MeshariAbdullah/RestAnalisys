@@ -12,6 +12,7 @@ import { DisputeOpenSchema, DisputeResolveSchema } from "../utils/schemas.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { NotFoundError, ForbiddenError, LegalStateError } from "../utils/errors.js";
 import { recordAudit } from "../services/auditService.js";
+import { updateTrustScore } from "../services/trustScoreService.js";
 
 const router = Router();
 
@@ -149,6 +150,7 @@ router.post(
       entityId: input.disputeId,
       after: updated,
     });
+    await updateTrustScore(dispute.openedByUserId);
 
     res.json(updated);
   })

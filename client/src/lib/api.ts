@@ -578,6 +578,75 @@ export const adminApi = {
     }),
   recentRiskDecisions: () =>
     request<Array<Record<string, unknown>>>("/admin/risk/recent"),
+  auditLogs: (params?: { entityType?: string; entityId?: number; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.entityType) qs.set("entityType", params.entityType);
+    if (params?.entityId) qs.set("entityId", String(params.entityId));
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    return request<Array<{
+      id: number;
+      actorUserId: number | null;
+      actorRole: string | null;
+      action: string;
+      entityType: string;
+      entityId: number | null;
+      ip: string | null;
+      createdAt: string;
+    }>>(`/admin/audit-logs?${qs}`);
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: () => request<AppNotification[]>("/notifications"),
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  title: string;
+  body: string;
+  entityType?: string;
+  entityId?: number;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export const notificationsApi = {
+  list: () => request<AppNotification[]>("/notifications"),
+  unreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    request<{ ok: boolean }>("/notifications/read-all", { method: "POST" }),
 };
 
 export const healthApi = {
