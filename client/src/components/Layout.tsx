@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
@@ -19,6 +19,7 @@ import {
   Diamond,
   Wallet,
   FileSignature,
+  UserCircle,
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
@@ -56,6 +57,8 @@ const NAV: NavItem[] = [
   { href: "/admin/disputes", label: "Disputes", icon: Gavel, roles: ["admin", "super_admin"] },
   { href: "/admin/sanad", label: "Sanad Tracking", icon: FileSignature, roles: ["admin", "super_admin"] },
   { href: "/admin/finance", label: "Financial Overview", icon: Receipt, roles: ["admin", "super_admin"] },
+
+  { href: "/profile", label: "My Profile", icon: UserCircle, roles: ["renter", "owner", "inspector", "operations", "admin", "super_admin"] },
 ];
 
 function roleLabel(role: Role): string {
@@ -71,10 +74,17 @@ function roleLabel(role: Role): string {
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [desktopExpanded, setDesktopExpanded] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const user: User | null = getCurrentUser();
 
   const items = user ? NAV.filter((n) => n.roles.includes(user.role)) : [];
+  // The mobile drawer always shows labels; the desktop rail can collapse to icons.
+  const sidebarOpen = desktopExpanded || mobileOpen;
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location]);
 
   function handleLogout() {
     clearSession();
@@ -83,10 +93,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen bg-neutral-50 text-neutral-900 overflow-hidden">
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden
+        />
+      )}
       <aside
         className={cn(
           "flex flex-col bg-neutral-950 text-white transition-all duration-300 shrink-0",
-          sidebarOpen ? "w-64" : "w-16"
+          "fixed inset-y-0 start-0 z-40 w-64 md:static md:z-auto md:translate-x-0 md:rtl:translate-x-0",
+          mobileOpen ? "translate-x-0" : "-translate-x-full rtl:translate-x-full",
+          desktopExpanded ? "md:w-64" : "md:w-16"
         )}
       >
         <div className="flex items-center gap-3 p-4 border-b border-neutral-800">
@@ -100,10 +119,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
           )}
           <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="ml-auto p-1 rounded hover:bg-neutral-800 transition-colors"
+            onClick={() => setDesktopExpanded(!desktopExpanded)}
+            className="ms-auto p-1 rounded hover:bg-neutral-800 transition-colors hidden md:block"
+            aria-label={desktopExpanded ? "Collapse sidebar" : "Expand sidebar"}
           >
-            {sidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            {desktopExpanded ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="ms-auto p-1 rounded hover:bg-neutral-800 transition-colors md:hidden"
+            aria-label="Close menu"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -162,7 +189,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="md:hidden flex items-center gap-3 px-4 h-14 bg-neutral-950 text-white shrink-0">
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="p-1.5 rounded hover:bg-neutral-800"
+            aria-label="Open menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <Diamond className="w-5 h-5 text-amber-500" />
+          <span className="text-sm font-bold">MLR</span>
+        </header>
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
     </div>
   );
 }

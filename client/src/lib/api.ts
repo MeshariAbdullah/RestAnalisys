@@ -75,6 +75,9 @@ export interface User {
   trustScore: number;
   riskCategory: "low" | "medium" | "high" | "ultra_high";
   isBlocked?: boolean;
+  phoneVerified?: boolean;
+  emailVerified?: boolean;
+  nationalAddressJson?: NationalAddress | null;
 }
 
 export interface Asset {
@@ -255,11 +258,28 @@ export const authApi = {
     }),
   me: () => request<User>("/auth/me"),
   nafathVerify: (nationalId: string) =>
-    request<{ transactionId: string; status: string }>("/auth/nafath/initiate", {
+    request<{ transactionId: string; status: string; token?: string }>("/auth/nafath/initiate", {
       method: "POST",
       body: JSON.stringify({ nationalId }),
     }),
+  updateProfile: (input: {
+    fullName?: string;
+    phoneE164?: string;
+    nationalAddressJson?: NationalAddress;
+  }) =>
+    request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
 };
+
+export interface NationalAddress {
+  city: string;
+  district: string;
+  street: string;
+  buildingNumber?: string;
+  postalCode?: string;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Assets

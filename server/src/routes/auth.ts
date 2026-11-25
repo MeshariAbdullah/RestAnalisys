@@ -129,6 +129,7 @@ router.post(
 
     const result = await initiateNafathVerification({ nationalId });
 
+    let token: string | undefined;
     // In the placeholder implementation, verification is synchronous.
     if (result.status === "verified") {
       await db
@@ -151,11 +152,20 @@ router.post(
         entityId: userId,
         after: { transactionId: result.transactionId },
       });
+
+      // requireNafath reads the JWT claim, so the old token must be replaced.
+      token = signToken({
+        userId,
+        email: req.user!.email,
+        role: req.user!.role,
+        nafathVerified: true,
+      });
     }
 
     return res.json({
       transactionId: result.transactionId,
       status: result.status,
+      token,
     });
   })
 );
@@ -185,6 +195,7 @@ router.get(
       trustScore: user.trustScore,
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
+      nationalAddressJson: user.nationalAddressJson,
     });
   })
 );

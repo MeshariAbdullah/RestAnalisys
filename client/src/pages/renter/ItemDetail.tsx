@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, rentalsApi, formatSar } from "@/lib/api";
+import { useToast } from "@/components/ui/use-toast";
 
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -27,6 +28,7 @@ export default function ItemDetail({ id }: { id: number }) {
 
   const [startDate, setStartDate] = useState(threeDaysOut);
   const [endDate, setEndDate] = useState(weekOut);
+  const { toast } = useToast();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +52,7 @@ export default function ItemDetail({ id }: { id: number }) {
         startDate,
         endDate,
       });
+      toast({ title: "Rental reserved — please sign the legal commitment" });
       navigate(`/legal/${res.legal.commitmentId}`);
     } catch (err) {
       setError((err as Error).message ?? "Unable to book");

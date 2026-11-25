@@ -1,6 +1,16 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Receipt, TrendingUp } from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { adminApi, formatSar } from "@/lib/api";
 
@@ -17,9 +27,16 @@ export default function FinancialOverview() {
 
   const kpis = kpisQuery.data;
   const trend = trendQuery.data ?? [];
-  const maxTotal = Math.max(
-    ...trend.map((t) => Number(t.total_halalas ?? 0)),
-    1
+
+  const chartData = useMemo(
+    () =>
+      trend.map((t) => ({
+        day: new Date(t.day).toLocaleDateString("en-SA", { month: "short", day: "numeric" }),
+        totalSar: Number(t.total_halalas) / 100,
+        feeSar: Number(t.fee_halalas) / 100,
+        rentals: Number(t.rentals),
+      })),
+    [trend]
   );
 
   return (
@@ -68,36 +85,61 @@ export default function FinancialOverview() {
       <h2 className="text-lg font-semibold mb-3">Last 30 days</h2>
       <Card>
         <CardContent className="p-6">
-          {trend.length === 0 ? (
+          {chartData.length === 0 ? (
             <p className="text-neutral-500 text-sm">No recent rentals.</p>
           ) : (
-            <div className="space-y-2">
-              {trend.map((t) => {
-                const pct = (Number(t.total_halalas) / maxTotal) * 100;
-                return (
-                  <div
-                    key={t.day}
-                    className="flex items-center gap-3 text-sm"
-                  >
-                    <span className="w-24 text-neutral-500 shrink-0">
-                      {new Date(t.day).toLocaleDateString()}
-                    </span>
-                    <div className="flex-1 h-6 bg-neutral-100 rounded">
-                      <div
-                        className="h-full bg-amber-500 rounded"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="w-24 text-right font-mono">
-                      {formatSar(Number(t.total_halalas))}
-                    </span>
-                    <span className="w-16 text-right text-xs text-neutral-500">
-                      {t.rentals} rentals
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+            <ResponsiveContainer width="100%" height={320}>
+              <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradFee" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#a3a3a3" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#a3a3a3" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                <XAxis dataKey="day" tick={{ fontSize: 12 }} stroke="#a3a3a3" />
+                <YAxis
+                  tick={{ fontSize: 12 }}
+                  stroke="#a3a3a3"
+                  tickFormatter={(v: number) => `${v.toLocaleString()} SAR`}
+                />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: 8,
+                    border: "1px solid #e5e5e5",
+                    fontSize: 13,
+                  }}
+                  formatter={(value: number, name: string) => [
+                    `${value.toLocaleString("en-SA", { minimumFractionDigits: 2 })} SAR`,
+                    name === "totalSar" ? "Revenue" : "Platform fee",
+                  ]}
+                  labelFormatter={(label: string) => label}
+                />
+                <Legend
+                  formatter={(value: string) =>
+                    value === "totalSar" ? "Revenue" : "Platform fee"
+                  }
+                />
+                <Area
+                  type="monotone"
+                  dataKey="totalSar"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  fill="url(#gradTotal)"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="feeSar"
+                  stroke="#a3a3a3"
+                  strokeWidth={2}
+                  fill="url(#gradFee)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           )}
         </CardContent>
       </Card>

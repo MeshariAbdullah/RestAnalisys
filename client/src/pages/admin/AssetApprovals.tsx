@@ -1,14 +1,15 @@
-import React, { useState } from "react";
+import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, X as XIcon, Diamond } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, formatSar, type Asset } from "@/lib/api";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function AssetApprovals() {
   const qc = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const { data, isLoading } = useQuery({
     queryKey: ["assets-pending"],
@@ -16,7 +17,6 @@ export default function AssetApprovals() {
   });
 
   async function act(id: number, approved: boolean) {
-    setError(null);
     try {
       const reason = approved
         ? undefined
@@ -24,18 +24,19 @@ export default function AssetApprovals() {
       if (!approved && !reason) return;
       await assetsApi.review(id, approved, reason);
       await qc.invalidateQueries({ queryKey: ["assets-pending"] });
+      toast({ title: approved ? "Asset approved" : "Asset rejected" });
     } catch (err) {
-      setError((err as Error).message);
+      toast({ title: "Action failed", description: (err as Error).message, variant: "destructive" });
     }
   }
 
   async function publish(id: number) {
-    setError(null);
     try {
       await assetsApi.publish(id);
       await qc.invalidateQueries({ queryKey: ["assets-pending"] });
+      toast({ title: "Listing published" });
     } catch (err) {
-      setError((err as Error).message);
+      toast({ title: "Publish failed", description: (err as Error).message, variant: "destructive" });
     }
   }
 
@@ -45,12 +46,6 @@ export default function AssetApprovals() {
       <p className="text-neutral-500 mb-8">
         Moderate newly submitted assets and publish ready listings.
       </p>
-
-      {error && (
-        <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
-          {error}
-        </div>
-      )}
 
       {isLoading ? (
         <p className="text-neutral-500">Loading…</p>
