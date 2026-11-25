@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Diamond, Calendar, Shield, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ export default function ItemDetail({ id }: { id: number }) {
   const { toast } = useToast();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsNafath, setNeedsNafath] = useState(false);
 
   const assetQuery = useQuery({
     queryKey: ["asset", id],
@@ -46,6 +47,7 @@ export default function ItemDetail({ id }: { id: number }) {
   async function handleBook() {
     setCreating(true);
     setError(null);
+    setNeedsNafath(false);
     try {
       const res = await rentalsApi.create({
         assetId: id,
@@ -56,6 +58,7 @@ export default function ItemDetail({ id }: { id: number }) {
       navigate(`/legal/${res.legal.commitmentId}`);
     } catch (err) {
       setError((err as Error).message ?? "Unable to book");
+      setNeedsNafath((err as Error & { code?: string }).code === "NAFATH_REQUIRED");
     } finally {
       setCreating(false);
     }
@@ -194,7 +197,17 @@ export default function ItemDetail({ id }: { id: number }) {
               {error && (
                 <div className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2 flex gap-2">
                   <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                  {error}
+                  <span>
+                    {error}
+                    {needsNafath && (
+                      <>
+                        {" "}
+                        <Link href="/profile" className="underline font-medium">
+                          Verify your identity
+                        </Link>
+                      </>
+                    )}
+                  </span>
                 </div>
               )}
 
