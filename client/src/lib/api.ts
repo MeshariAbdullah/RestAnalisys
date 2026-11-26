@@ -75,6 +75,7 @@ export interface User {
   trustScore: number;
   riskCategory: "low" | "medium" | "high" | "ultra_high";
   isBlocked?: boolean;
+  createdAt?: string;
 }
 
 export interface Asset {
@@ -258,6 +259,11 @@ export const authApi = {
     request<{ transactionId: string; status: string }>("/auth/nafath/initiate", {
       method: "POST",
       body: JSON.stringify({ nationalId }),
+    }),
+  updateProfile: (data: { fullName?: string; phoneE164?: string }) =>
+    request<User>("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
     }),
 };
 

@@ -46,6 +46,11 @@ export const NafathVerifySchema = z.object({
   nationalId: SaudiNationalId,
 });
 
+export const ProfileUpdateSchema = z.object({
+  fullName: z.string().min(2).optional(),
+  phoneE164: SaudiPhone.optional(),
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Assets (owner submission + admin review)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,7 +124,7 @@ export const OwnerValuationResponseSchema = z.object({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const RentalQuoteRequestSchema = z.object({
-  assetId: z.number().int().positive(),
+  assetId: z.coerce.number().int().positive(),
   startDate: IsoDate,
   endDate: IsoDate,
 });

@@ -59,7 +59,20 @@ export default function ItemDetail({ id }: { id: number }) {
   }
 
   if (assetQuery.isLoading) {
-    return <div className="p-8">Loading…</div>;
+    return (
+      <div className="p-8 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          <div className="aspect-square bg-neutral-100 rounded-xl animate-pulse" />
+          <div className="space-y-4">
+            <div className="h-4 w-20 bg-neutral-200 rounded animate-pulse" />
+            <div className="h-8 w-3/4 bg-neutral-200 rounded animate-pulse" />
+            <div className="h-5 w-1/2 bg-neutral-200 rounded animate-pulse" />
+            <div className="h-20 w-full bg-neutral-100 rounded-xl animate-pulse mt-6" />
+            <div className="h-12 w-full bg-neutral-200 rounded-lg animate-pulse mt-4" />
+          </div>
+        </div>
+      </div>
+    );
   }
   if (!assetQuery.data) {
     return <div className="p-8">Asset not found.</div>;

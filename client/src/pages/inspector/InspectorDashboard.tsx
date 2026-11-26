@@ -25,11 +25,25 @@ export default function InspectorDashboard() {
       </p>
 
       {isLoading ? (
-        <p className="text-neutral-500">Loading…</p>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded-xl border p-5 flex items-center gap-4">
+              <div className="w-16 h-16 bg-neutral-200 rounded-md animate-pulse shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-16 bg-neutral-200 rounded animate-pulse" />
+                <div className="h-5 w-48 bg-neutral-200 rounded animate-pulse" />
+                <div className="h-4 w-32 bg-neutral-200 rounded animate-pulse" />
+              </div>
+              <div className="h-9 w-20 bg-neutral-200 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
       ) : !data || data.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">
-            No assets in the queue right now.
+            <ClipboardCheck className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
+            <p className="font-medium text-neutral-600">No pending inspections</p>
+            <p className="text-sm mt-1">Assets will appear here when they're ready for authentication or return inspection.</p>
           </CardContent>
         </Card>
       ) : (

@@ -38,7 +38,20 @@ export default function Payouts() {
 
       <h2 className="text-lg font-semibold mb-3">History</h2>
       {isLoading ? (
-        <p className="text-neutral-500">Loading…</p>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded-xl border p-5 flex items-center justify-between">
+              <div className="space-y-2">
+                <div className="h-3 w-20 bg-neutral-200 rounded animate-pulse" />
+                <div className="h-4 w-28 bg-neutral-200 rounded animate-pulse" />
+              </div>
+              <div className="text-right space-y-2">
+                <div className="h-6 w-24 bg-neutral-200 rounded animate-pulse" />
+                <div className="h-5 w-16 bg-neutral-200 rounded animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : !data || data.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-neutral-500">

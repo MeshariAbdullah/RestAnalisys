@@ -134,11 +134,28 @@ export default function SanadTracking() {
 
         <TabsContent value="all">
           {allQuery.isLoading ? (
-            <p className="text-neutral-500">Loading…</p>
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-xl border p-5 flex items-center gap-4">
+                  <div className="w-10 h-10 bg-neutral-200 rounded-lg animate-pulse shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-5 w-40 bg-neutral-200 rounded animate-pulse" />
+                    <div className="h-3 w-24 bg-neutral-200 rounded animate-pulse font-mono" />
+                    <div className="flex gap-2">
+                      <div className="h-5 w-16 bg-neutral-200 rounded animate-pulse" />
+                      <div className="h-3 w-20 bg-neutral-200 rounded animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="h-8 w-20 bg-neutral-200 rounded animate-pulse" />
+                </div>
+              ))}
+            </div>
           ) : !allQuery.data || allQuery.data.length === 0 ? (
             <Card>
               <CardContent className="p-12 text-center text-neutral-500">
-                No Sanads issued yet.
+                <FileSignature className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
+                <p className="font-medium text-neutral-600">No Sanad records</p>
+                <p className="text-sm mt-1">Promissory notes will appear here once renters sign their commitments.</p>
               </CardContent>
             </Card>
           ) : (
@@ -152,11 +169,24 @@ export default function SanadTracking() {
 
         <TabsContent value="enforcement">
           {enforceQuery.isLoading ? (
-            <p className="text-neutral-500">Loading…</p>
+            <div className="space-y-3">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="rounded-xl border p-5 flex items-center gap-4">
+                  <div className="w-10 h-10 bg-neutral-200 rounded-lg animate-pulse shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-5 w-40 bg-neutral-200 rounded animate-pulse" />
+                    <div className="h-3 w-24 bg-neutral-200 rounded animate-pulse" />
+                  </div>
+                  <div className="h-8 w-24 bg-neutral-200 rounded animate-pulse" />
+                </div>
+              ))}
+            </div>
           ) : !enforceQuery.data || enforceQuery.data.length === 0 ? (
             <Card>
               <CardContent className="p-12 text-center text-neutral-500">
-                No Sanads in default.
+                <AlertOctagon className="w-12 h-12 mx-auto mb-3 text-green-300" />
+                <p className="font-medium text-neutral-600">No Sanads in default</p>
+                <p className="text-sm mt-1">All promissory notes are current. Nothing requires enforcement action.</p>
               </CardContent>
             </Card>
           ) : (

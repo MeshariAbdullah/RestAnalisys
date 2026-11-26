@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { disputesApi, type Dispute } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 type Resolution =
   | "resolved_for_renter"
@@ -49,8 +50,11 @@ export default function DisputesPage() {
       setOpenId(null);
       setNotes("");
       await qc.invalidateQueries({ queryKey: ["disputes"] });
+      toast({ title: "Dispute resolved", description: resolution.replace(/_/g, " "), variant: "success" });
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message;
+      setError(msg);
+      toast({ title: "Resolution failed", description: msg, variant: "destructive" });
     }
   }
 
@@ -62,7 +66,23 @@ export default function DisputesPage() {
       </p>
 
       {isLoading ? (
-        <p className="text-neutral-500">Loading…</p>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded-xl border p-5 flex items-start gap-4">
+              <div className="w-10 h-10 bg-neutral-200 rounded-lg animate-pulse shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="flex gap-2">
+                  <div className="h-5 w-24 bg-neutral-200 rounded animate-pulse" />
+                  <div className="h-5 w-16 bg-neutral-200 rounded animate-pulse" />
+                  <div className="h-5 w-14 bg-neutral-200 rounded animate-pulse" />
+                </div>
+                <div className="h-4 w-3/4 bg-neutral-200 rounded animate-pulse" />
+                <div className="h-3 w-40 bg-neutral-200 rounded animate-pulse" />
+              </div>
+              <div className="h-8 w-16 bg-neutral-200 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
       ) : !data || data.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">

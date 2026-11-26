@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { signToken, authenticate, AuthedRequest } from "../middleware/auth.js";
-import { LoginSchema, RegisterSchema, NafathVerifySchema } from "../utils/schemas.js";
+import { LoginSchema, RegisterSchema, NafathVerifySchema, ProfileUpdateSchema } from "../utils/schemas.js";
 import { UnauthorizedError, ConflictError, NotFoundError } from "../utils/errors.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { initiateNafathVerification } from "../services/nafathService.js";
@@ -160,6 +160,60 @@ router.post(
   })
 );
 
+router.patch(
+  "/profile",
+  authenticate,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const input = ProfileUpdateSchema.parse(req.body);
+    const userId = req.user!.userId;
+
+    const [before] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!before) throw new NotFoundError("User");
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (input.fullName !== undefined) updates.fullName = input.fullName;
+    if (input.phoneE164 !== undefined) updates.phoneE164 = input.phoneE164;
+
+    const [updated] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning();
+
+    await recordAudit({
+      req,
+      actorUserId: userId,
+      actorRole: req.user!.role,
+      action: "auth.profile.update",
+      entityType: "user",
+      entityId: userId,
+      before: { fullName: before.fullName, phoneE164: before.phoneE164 },
+      after: { fullName: updated.fullName, phoneE164: updated.phoneE164 },
+    });
+
+    return res.json({
+      id: updated.id,
+      email: updated.email,
+      fullName: updated.fullName,
+      role: updated.role,
+      phoneE164: updated.phoneE164,
+      nationalId: updated.nationalId,
+      nafathVerified: updated.nafathVerified,
+      kycStatus: updated.kycStatus,
+      phoneVerified: updated.phoneVerified,
+      emailVerified: updated.emailVerified,
+      trustScore: updated.trustScore,
+      riskCategory: updated.riskCategory,
+      isBlocked: updated.isBlocked,
+      createdAt: updated.createdAt,
+    });
+  })
+);
+
 router.get(
   "/me",
   authenticate,
@@ -185,6 +239,7 @@ router.get(
       trustScore: user.trustScore,
       riskCategory: user.riskCategory,
       isBlocked: user.isBlocked,
+      createdAt: user.createdAt,
     });
   })
 );

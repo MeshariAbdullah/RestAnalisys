@@ -40,13 +40,28 @@ export default function AssetDetail({ id }: { id: number }) {
     }
   }
 
-  if (isLoading || !asset) return <div className="p-8">Loading…</div>;
+  if (isLoading || !asset) {
+    return (
+      <div className="p-8 max-w-4xl mx-auto space-y-6">
+        <div className="h-8 w-48 bg-neutral-200 rounded animate-pulse" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="aspect-video bg-neutral-100 rounded-xl animate-pulse" />
+          <div className="space-y-3">
+            <div className="h-4 w-20 bg-neutral-200 rounded animate-pulse" />
+            <div className="h-6 w-3/4 bg-neutral-200 rounded animate-pulse" />
+            <div className="h-5 w-1/2 bg-neutral-200 rounded animate-pulse" />
+            <div className="h-5 w-1/3 bg-neutral-200 rounded animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const images = [
     ...(asset.studioImagesJson ?? []),
     ...(asset.submissionImagesJson ?? []),
   ];
-  const awaitingOwner = asset.status === "awaiting_owner_approval";
+  const awaitingOwner = asset.status === "inspection_reported";
 
   return (
     <div className="p-8 max-w-5xl mx-auto">

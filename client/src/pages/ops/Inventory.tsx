@@ -27,12 +27,36 @@ export default function Inventory() {
       </p>
 
       {isLoading ? (
-        <p className="text-neutral-500">Loading…</p>
+        <Card>
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-neutral-50">
+                <tr>
+                  <th className="text-left p-4 font-medium">ID</th>
+                  <th className="text-left p-4 font-medium">Brand</th>
+                  <th className="text-left p-4 font-medium">Title</th>
+                  <th className="text-left p-4 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="p-4"><div className="h-4 w-10 bg-neutral-200 rounded animate-pulse" /></td>
+                    <td className="p-4"><div className="h-4 w-20 bg-neutral-200 rounded animate-pulse" /></td>
+                    <td className="p-4"><div className="h-4 w-40 bg-neutral-200 rounded animate-pulse" /></td>
+                    <td className="p-4"><div className="h-5 w-16 bg-neutral-200 rounded animate-pulse" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
       ) : !data || data.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">
             <PackageSearch className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
-            No inventory items.
+            <p className="font-medium text-neutral-600">No inventory items</p>
+            <p className="text-sm mt-1">Assets will appear here once they've been received in the warehouse.</p>
           </CardContent>
         </Card>
       ) : (

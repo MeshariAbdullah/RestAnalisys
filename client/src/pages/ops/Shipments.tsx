@@ -52,7 +52,20 @@ export default function Shipments() {
       </p>
 
       {isLoading ? (
-        <p className="text-neutral-500">Loading…</p>
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-xl border p-5 flex items-center gap-4">
+              <div className="w-10 h-10 bg-neutral-200 rounded-lg animate-pulse shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-40 bg-neutral-200 rounded animate-pulse" />
+                <div className="h-5 w-32 bg-neutral-200 rounded animate-pulse" />
+                <div className="h-3 w-24 bg-neutral-200 rounded animate-pulse" />
+              </div>
+              <div className="h-5 w-16 bg-neutral-200 rounded animate-pulse" />
+              <div className="h-8 w-16 bg-neutral-200 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
       ) : !data || data.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">

@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { assetsApi, formatSar, type Asset } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 export default function AssetApprovals() {
   const qc = useQueryClient();
@@ -24,8 +25,11 @@ export default function AssetApprovals() {
       if (!approved && !reason) return;
       await assetsApi.review(id, approved, reason);
       await qc.invalidateQueries({ queryKey: ["assets-pending"] });
+      toast({ title: approved ? "Asset approved" : "Asset rejected", variant: "success" });
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message;
+      setError(msg);
+      toast({ title: "Action failed", description: msg, variant: "destructive" });
     }
   }
 
@@ -34,8 +38,11 @@ export default function AssetApprovals() {
     try {
       await assetsApi.publish(id);
       await qc.invalidateQueries({ queryKey: ["assets-pending"] });
+      toast({ title: "Listing published", description: "Asset is now visible to renters.", variant: "success" });
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message;
+      setError(msg);
+      toast({ title: "Publish failed", description: msg, variant: "destructive" });
     }
   }
 
@@ -53,11 +60,31 @@ export default function AssetApprovals() {
       )}
 
       {isLoading ? (
-        <p className="text-neutral-500">Loading…</p>
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded-xl border p-5 flex items-center gap-4">
+              <div className="w-20 h-20 bg-neutral-200 rounded-md animate-pulse shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-16 bg-neutral-200 rounded animate-pulse" />
+                <div className="h-5 w-48 bg-neutral-200 rounded animate-pulse" />
+                <div className="flex gap-2">
+                  <div className="h-5 w-24 bg-neutral-200 rounded animate-pulse" />
+                  <div className="h-3 w-20 bg-neutral-200 rounded animate-pulse" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <div className="h-9 w-24 bg-neutral-200 rounded animate-pulse" />
+                <div className="h-9 w-20 bg-neutral-200 rounded animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : !data || data.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">
-            No assets awaiting approval.
+            <Diamond className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
+            <p className="font-medium text-neutral-600">No assets awaiting approval</p>
+            <p className="text-sm mt-1">Submissions from owners will appear here for review.</p>
           </CardContent>
         </Card>
       ) : (
@@ -114,8 +141,7 @@ export default function AssetApprovals() {
                       </Button>
                     </>
                   )}
-                  {asset.status === "in_inspection" ||
-                  asset.status === "in_vault" ? (
+                  {asset.status === "ready_for_listing" ? (
                     <Button
                       className="bg-amber-500 text-neutral-950 hover:bg-amber-400"
                       onClick={() => publish(asset.id)}

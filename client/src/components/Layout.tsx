@@ -133,15 +133,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="p-3 border-t border-neutral-800">
           {sidebarOpen ? (
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0">
-                <Shield className="w-4 h-4 text-neutral-950" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
-                <p className="text-[11px] text-neutral-400 truncate">
-                  {user ? roleLabel(user.role) : ""}
-                </p>
-              </div>
+              <Link href="/profile">
+                <a className="w-9 h-9 bg-amber-500 rounded-full flex items-center justify-center shrink-0 hover:ring-2 hover:ring-amber-400 transition-all" title="My Profile">
+                  <Shield className="w-4 h-4 text-neutral-950" />
+                </a>
+              </Link>
+              <Link href="/profile">
+                <a className="flex-1 min-w-0 hover:opacity-80 transition-opacity">
+                  <p className="text-sm font-medium truncate">{user?.fullName ?? "Guest"}</p>
+                  <p className="text-[11px] text-neutral-400 truncate">
+                    {user ? roleLabel(user.role) : ""}
+                  </p>
+                </a>
+              </Link>
               <button
                 onClick={handleLogout}
                 className="p-1.5 rounded hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-white"
@@ -151,13 +155,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           ) : (
-            <button
-              onClick={handleLogout}
-              className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400"
-              title="Logout"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            <div className="space-y-2">
+              <Link href="/profile">
+                <a className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400" title="My Profile">
+                  <Shield className="w-4 h-4" />
+                </a>
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="w-full flex justify-center p-2 rounded hover:bg-neutral-800 transition-colors text-neutral-400"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           )}
         </div>
       </aside>

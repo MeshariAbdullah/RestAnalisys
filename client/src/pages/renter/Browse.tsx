@@ -10,7 +10,7 @@ import { assetsApi, formatSar, type Asset } from "@/lib/api";
 
 const CATEGORIES = [
   { id: undefined, label: "All", icon: Diamond },
-  { id: "bag", label: "Bags", icon: Diamond },
+  { id: "handbag", label: "Bags", icon: Diamond },
   { id: "watch", label: "Watches", icon: Watch },
   { id: "dress", label: "Dresses", icon: Shirt },
   { id: "jewelry", label: "Jewelry", icon: Gem },
@@ -73,15 +73,26 @@ export default function Browse() {
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-80 rounded-xl bg-neutral-100 animate-pulse"
-            />
+            <div key={i} className="rounded-xl overflow-hidden border">
+              <div className="aspect-square bg-neutral-100 animate-pulse" />
+              <div className="p-5 space-y-3">
+                <div className="h-3 w-16 bg-neutral-200 rounded animate-pulse" />
+                <div className="h-5 w-3/4 bg-neutral-200 rounded animate-pulse" />
+                <div className="flex justify-between mt-4">
+                  <div className="h-5 w-20 bg-neutral-200 rounded animate-pulse" />
+                  <div className="h-4 w-24 bg-neutral-200 rounded animate-pulse" />
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-20 text-neutral-500">
-          No assets match your filters.
+        <div className="text-center py-20">
+          <Diamond className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
+          <p className="font-medium text-neutral-600">No items available</p>
+          <p className="text-sm text-neutral-400 mt-1">
+            {search ? "Try a different search term or clear your filters." : "New luxury items are added regularly — check back soon."}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { adminApi, type User } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 function riskColor(c: string): string {
   if (c === "low") return "bg-green-100 text-green-700";
@@ -35,8 +36,13 @@ export default function UsersPage() {
       ? prompt("Reason for blocking?") ?? undefined
       : undefined;
     if (block && !reason) return;
-    await adminApi.blockUser(u.id, block, reason);
-    await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    try {
+      await adminApi.blockUser(u.id, block, reason);
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+      toast({ title: block ? "User blocked" : "User unblocked", variant: "success" });
+    } catch (err) {
+      toast({ title: "Action failed", description: (err as Error).message, variant: "destructive" });
+    }
   }
 
   return (
@@ -63,12 +69,42 @@ export default function UsersPage() {
       </div>
 
       {isLoading ? (
-        <p className="text-neutral-500">Loading…</p>
+        <Card>
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-neutral-50 text-left">
+                <tr>
+                  <th className="p-4 font-medium">Name</th>
+                  <th className="p-4 font-medium">Email</th>
+                  <th className="p-4 font-medium">Role</th>
+                  <th className="p-4 font-medium">Trust</th>
+                  <th className="p-4 font-medium">Risk</th>
+                  <th className="p-4 font-medium">Status</th>
+                  <th className="p-4 font-medium" />
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="p-4"><div className="h-4 w-24 bg-neutral-200 rounded animate-pulse" /></td>
+                    <td className="p-4"><div className="h-4 w-32 bg-neutral-200 rounded animate-pulse" /></td>
+                    <td className="p-4"><div className="h-5 w-16 bg-neutral-200 rounded animate-pulse" /></td>
+                    <td className="p-4"><div className="h-4 w-8 bg-neutral-200 rounded animate-pulse" /></td>
+                    <td className="p-4"><div className="h-5 w-14 bg-neutral-200 rounded animate-pulse" /></td>
+                    <td className="p-4"><div className="h-5 w-16 bg-neutral-200 rounded animate-pulse" /></td>
+                    <td className="p-4"><div className="h-8 w-16 bg-neutral-200 rounded animate-pulse" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
       ) : !data || data.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center text-neutral-500">
             <UsersIcon className="w-12 h-12 mx-auto mb-3 text-neutral-300" />
-            No users found.
+            <p className="font-medium text-neutral-600">No users found</p>
+            <p className="text-sm mt-1">Try a different role filter.</p>
           </CardContent>
         </Card>
       ) : (
