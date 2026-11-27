@@ -153,11 +153,11 @@ export default function Profile() {
               label={`KYC: ${user.kycStatus}`}
             />
             <VerificationBadge
-              verified={!!(user as any).phoneVerified}
+              verified={user.phoneVerified}
               label="Phone"
             />
             <VerificationBadge
-              verified={!!(user as any).emailVerified}
+              verified={user.emailVerified}
               label="Email"
             />
           </div>

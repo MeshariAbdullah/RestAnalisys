@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardCheck } from "lucide-react";
+import { ClipboardCheck, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -14,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { assetsApi, inspectionsApi } from "@/lib/api";
+import { assetsApi, inspectionsApi, formatSar } from "@/lib/api";
 
 type Grade = "A" | "B" | "C" | "D";
 type Risk = "low" | "medium" | "high" | "ultra_high";
@@ -37,6 +38,14 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
     queryFn: () => assetsApi.get(assetId),
   });
 
+  const isReturn = asset?.status === "returned_under_inspection";
+
+  const { data: rental } = useQuery({
+    queryKey: ["active-rental", assetId],
+    queryFn: () => inspectionsApi.activeRental(assetId),
+    enabled: isReturn,
+  });
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
@@ -49,17 +58,32 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
       if (!marketValueHalalas || !recommendedDailyPriceHalalas) {
         throw new Error("Market value and daily price are required");
       }
-      await inspectionsApi.createIntake({
-        assetId,
-        authenticityVerified,
-        authenticityNotes: authenticityNotes || undefined,
-        conditionScore,
-        conditionGrade,
-        conditionNotes: conditionNotes || undefined,
-        marketValueHalalas,
-        recommendedDailyPriceHalalas,
-        riskCategory,
-      });
+
+      if (isReturn && rental) {
+        await inspectionsApi.createReturn({
+          assetId,
+          rentalId: rental.id,
+          authenticityVerified,
+          conditionScore,
+          conditionGrade,
+          conditionNotes: conditionNotes || undefined,
+          marketValueHalalas,
+          recommendedDailyPriceHalalas,
+          riskCategory,
+        });
+      } else {
+        await inspectionsApi.createIntake({
+          assetId,
+          authenticityVerified,
+          authenticityNotes: authenticityNotes || undefined,
+          conditionScore,
+          conditionGrade,
+          conditionNotes: conditionNotes || undefined,
+          marketValueHalalas,
+          recommendedDailyPriceHalalas,
+          riskCategory,
+        });
+      }
       navigate("/inspector");
     } catch (err) {
       setError((err as Error).message ?? "Submission failed");
@@ -71,15 +95,44 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
   return (
     <div className="p-8 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-2 text-sm text-neutral-500">
-        <ClipboardCheck className="w-4 h-4" />
-        Intake inspection
+        {isReturn ? (
+          <RotateCcw className="w-4 h-4" />
+        ) : (
+          <ClipboardCheck className="w-4 h-4" />
+        )}
+        {isReturn ? "Return inspection" : "Intake inspection"}
       </div>
       <h1 className="text-3xl font-bold mb-1">
         {asset ? `${asset.brand} — ${asset.title}` : "Inspection report"}
       </h1>
-      <p className="text-neutral-500 mb-8">
-        Authenticate, grade and valuate the asset.
+      <p className="text-neutral-500 mb-4">
+        {isReturn
+          ? "Inspect the returned asset for damage, loss or wear."
+          : "Authenticate, grade and valuate the asset."}
       </p>
+
+      {isReturn && rental && (
+        <Card className="mb-6 border-amber-200 bg-amber-50/50">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-amber-700 font-medium uppercase tracking-wider">
+                  Return for rental
+                </p>
+                <p className="font-semibold mt-0.5">{rental.reference}</p>
+              </div>
+              <div className="text-right text-sm">
+                <p className="text-neutral-500">
+                  {rental.startDate} → {rental.endDate}
+                </p>
+                <Badge variant="outline" className="mt-1">
+                  {rental.durationDays} days &middot; {formatSar(rental.dailyPriceHalalas)}/day
+                </Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <form onSubmit={handleSubmit}>
         <Card>
@@ -149,7 +202,11 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
               <Textarea
                 value={conditionNotes}
                 onChange={(e) => setConditionNotes(e.target.value)}
-                placeholder="Scratches, scuffs, missing accessories…"
+                placeholder={
+                  isReturn
+                    ? "Compare against intake report. Note new scratches, scuffs, missing accessories…"
+                    : "Scratches, scuffs, missing accessories…"
+                }
                 rows={3}
                 className="mt-3"
               />
@@ -159,7 +216,9 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
               <h2 className="font-semibold mb-3">Valuation & pricing</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>Market value (SAR)</Label>
+                  <Label>
+                    {isReturn ? "Current market value (SAR)" : "Market value (SAR)"}
+                  </Label>
                   <Input
                     type="number"
                     min="1"
@@ -212,10 +271,14 @@ export default function InspectionForm({ assetId }: { assetId: number }) {
         <div className="flex gap-3 mt-6">
           <Button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || (isReturn && !rental)}
             className="bg-amber-500 text-neutral-950 hover:bg-amber-400"
           >
-            {submitting ? "Submitting…" : "Submit inspection report"}
+            {submitting
+              ? "Submitting…"
+              : isReturn
+                ? "Submit return inspection"
+                : "Submit intake inspection"}
           </Button>
           <Button
             type="button"

@@ -72,6 +72,8 @@ export interface User {
   nationalId?: string;
   nafathVerified: boolean;
   kycStatus: "unverified" | "pending" | "verified" | "rejected";
+  phoneVerified: boolean;
+  emailVerified: boolean;
   trustScore: number;
   riskCategory: "low" | "medium" | "high" | "ultra_high";
   isBlocked?: boolean;
@@ -356,6 +358,8 @@ export const inspectionsApi = {
     }),
   forAsset: (assetId: number) =>
     request<Inspection[]>(`/inspections/asset/${assetId}`),
+  activeRental: (assetId: number) =>
+    request<Rental>(`/inspections/asset/${assetId}/active-rental`),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardCheck, Diamond } from "lucide-react";
+import { ClipboardCheck, Diamond, RotateCcw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,9 +54,17 @@ export default function InspectorDashboard() {
                   </p>
                   <p className="font-semibold truncate">{asset.title}</p>
                   <div className="flex items-center gap-2 mt-2">
-                    <Badge variant="outline">
-                      {asset.status.replace(/_/g, " ")}
-                    </Badge>
+                    {asset.status === "returned_under_inspection" ? (
+                      <Badge className="bg-blue-100 text-blue-700 border-0">
+                        <RotateCcw className="w-3 h-3 mr-1" />
+                        Return inspection
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-amber-100 text-amber-700 border-0">
+                        <ClipboardCheck className="w-3 h-3 mr-1" />
+                        Intake inspection
+                      </Badge>
+                    )}
                     <span className="text-xs text-neutral-500">
                       Declared: {formatSar(asset.ownerDeclaredValueHalalas)}
                     </span>
@@ -64,7 +72,7 @@ export default function InspectorDashboard() {
                 </div>
                 <Link href={`/inspector/report/${asset.id}`}>
                   <Button className="bg-amber-500 text-neutral-950 hover:bg-amber-400">
-                    Inspect
+                    {asset.status === "returned_under_inspection" ? "Inspect return" : "Inspect"}
                   </Button>
                 </Link>
               </CardContent>
