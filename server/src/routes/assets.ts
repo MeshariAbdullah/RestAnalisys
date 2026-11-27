@@ -310,6 +310,9 @@ router.get(
   "/listings",
   asyncHandler(async (req, res) => {
     const filter = AssetListingFilter.parse(req.query);
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, filter.limit));
+    const offset = (page - 1) * limit;
     const conditions = [eq(assets.status, "listed")];
 
     if (filter.category) conditions.push(eq(assets.category, filter.category));
@@ -318,6 +321,13 @@ router.get(
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+
+    const whereClause = and(...conditions);
+
+    const [countRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(assets)
+      .where(whereClause);
 
     const rows = await db
       .select({
@@ -328,16 +338,24 @@ router.get(
         category: assets.category,
         dailyRentalPriceHalalas: assets.dailyRentalPriceHalalas,
         evaluatedValueHalalas: assets.evaluatedValueHalalas,
+        submissionImagesJson: assets.submissionImagesJson,
         studioImagesJson: assets.studioImagesJson,
         attributesJson: assets.attributesJson,
         riskCategory: assets.riskCategory,
       })
       .from(assets)
-      .where(and(...conditions))
+      .where(whereClause)
       .orderBy(desc(assets.updatedAt))
-      .limit(filter.limit);
+      .limit(limit)
+      .offset(offset);
 
-    res.json({ items: rows, count: rows.length });
+    res.json({
+      items: rows,
+      count: rows.length,
+      total: Number(countRow?.count ?? 0),
+      page,
+      totalPages: Math.ceil(Number(countRow?.count ?? 0) / limit),
+    });
   })
 );
 
