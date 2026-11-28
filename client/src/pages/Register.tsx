@@ -12,7 +12,9 @@ export default function Register() {
   const [role, setRole] = useState<"renter" | "owner">("renter");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -20,8 +22,18 @@ export default function Register() {
     e.preventDefault();
     setLoading(true);
     setError("");
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      setLoading(false);
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      setLoading(false);
+      return;
+    }
     try {
-      const res = await authApi.register(email, password, fullName, role);
+      const res = await authApi.register(email, password, fullName, role, phone || undefined);
       saveSession(res.token, res.user);
       navigate(homeForRole(res.user.role));
     } catch (err) {
@@ -90,14 +102,36 @@ export default function Register() {
               />
             </div>
             <div>
+              <Label className="text-neutral-300">Phone (optional)</Label>
+              <Input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="mt-1 bg-neutral-950 border-neutral-800 text-white"
+                placeholder="+966 5XX XXX XXXX"
+              />
+            </div>
+            <div>
               <Label className="text-neutral-300">Password</Label>
               <Input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 bg-neutral-950 border-neutral-800 text-white"
-                placeholder="Min 8 chars, upper + lower + digit"
+                placeholder="Min 8 characters"
                 required
+                minLength={8}
+              />
+            </div>
+            <div>
+              <Label className="text-neutral-300">Confirm password</Label>
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="mt-1 bg-neutral-950 border-neutral-800 text-white"
+                required
+                minLength={8}
               />
             </div>
 

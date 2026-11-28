@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { Role, User } from "@/lib/api";
 import { clearSession, getCurrentUser } from "@/lib/auth";
+import { Toaster } from "@/components/ui/toaster";
 
 interface NavItem {
   href: string;
@@ -163,6 +164,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 overflow-auto">{children}</main>
+      <Toaster />
     </div>
   );
 }

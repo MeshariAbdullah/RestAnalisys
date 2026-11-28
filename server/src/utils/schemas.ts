@@ -81,10 +81,11 @@ export const AssetListingFilter = z.object({
   brand: z.string().optional(),
   minDaily: HalalasAmount.optional(),
   maxDaily: HalalasAmount.optional(),
-  from: IsoDate.optional(),
-  to: IsoDate.optional(),
-  cursor: z.coerce.number().int().nonnegative().optional(),
-  limit: z.coerce.number().int().min(1).max(50).default(20),
+  minPrice: z.coerce.number().nonnegative().optional(),
+  maxPrice: z.coerce.number().nonnegative().optional(),
+  sort: z.enum(["newest", "price_asc", "price_desc"]).default("newest"),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

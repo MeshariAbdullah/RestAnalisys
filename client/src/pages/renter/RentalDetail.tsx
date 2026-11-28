@@ -26,6 +26,7 @@ import {
   type SanadRecord,
   type Payment,
 } from "@/lib/api";
+import { toast } from "@/lib/use-toast";
 
 const STATUS_META: Record<string, { color: string; icon: typeof Clock; label: string }> = {
   pending_risk_review: { color: "bg-amber-100 text-amber-800", icon: Clock, label: "Risk review" },
@@ -92,6 +93,7 @@ export default function RentalDetail({ id }: { id: number }) {
       await qc.invalidateQueries({ queryKey: ["rentals-mine"] });
       setCancelling(false);
       setCancelReason("");
+      toast({ title: "Rental cancelled", variant: "success" });
     } catch (err) {
       setActionError((err as Error).message);
     } finally {
@@ -113,6 +115,7 @@ export default function RentalDetail({ id }: { id: number }) {
       await qc.invalidateQueries({ queryKey: ["rentals-mine"] });
       setShowDisputeForm(false);
       setDisputeSummary("");
+      toast({ title: "Dispute submitted", description: "Our team will review it shortly.", variant: "success" });
     } catch (err) {
       setActionError((err as Error).message);
     } finally {

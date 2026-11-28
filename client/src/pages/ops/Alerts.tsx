@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { operationsApi } from "@/lib/api";
+import { toast } from "@/lib/use-toast";
 
 function severityColor(s: string): string {
   if (s === "critical") return "bg-red-600 text-white";
@@ -23,6 +24,7 @@ export default function AlertsPage() {
   async function resolve(id: number) {
     await operationsApi.resolveAlert(id);
     await qc.invalidateQueries({ queryKey: ["alerts"] });
+    toast({ title: "Alert resolved", variant: "success" });
   }
 
   return (

@@ -318,6 +318,27 @@ router.get(
       conditions.push(gte(assets.dailyRentalPriceHalalas, filter.minDaily));
     if (filter.maxDaily)
       conditions.push(lte(assets.dailyRentalPriceHalalas, filter.maxDaily));
+    if (filter.minPrice)
+      conditions.push(gte(assets.dailyRentalPriceHalalas, Math.round(filter.minPrice * 100)));
+    if (filter.maxPrice)
+      conditions.push(lte(assets.dailyRentalPriceHalalas, Math.round(filter.maxPrice * 100)));
+
+    const orderBy =
+      filter.sort === "price_asc"
+        ? asc(assets.dailyRentalPriceHalalas)
+        : filter.sort === "price_desc"
+          ? desc(assets.dailyRentalPriceHalalas)
+          : desc(assets.createdAt);
+
+    const whereClause = and(...conditions);
+
+    const [countRow] = await db
+      .select({ total: sql<number>`count(*)` })
+      .from(assets)
+      .where(whereClause);
+    const total = Number(countRow?.total ?? 0);
+    const totalPages = Math.max(1, Math.ceil(total / filter.limit));
+    const offset = (filter.page - 1) * filter.limit;
 
     const rows = await db
       .select({
@@ -333,11 +354,12 @@ router.get(
         riskCategory: assets.riskCategory,
       })
       .from(assets)
-      .where(and(...conditions))
-      .orderBy(desc(assets.updatedAt))
-      .limit(filter.limit);
+      .where(whereClause)
+      .orderBy(orderBy)
+      .limit(filter.limit)
+      .offset(offset);
 
-    res.json({ items: rows, count: rows.length });
+    res.json({ items: rows, total, page: filter.page, totalPages });
   })
 );
 
