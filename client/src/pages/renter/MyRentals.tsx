@@ -1,5 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Package, CheckCircle, Clock, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function MyRentals() {
+  const [, navigate] = useLocation();
   const { data, isLoading } = useQuery({
     queryKey: ["rentals-mine"],
     queryFn: () => rentalsApi.mine(),
@@ -74,7 +76,11 @@ export default function MyRentals() {
       ) : (
         <div className="space-y-4">
           {data.map((r: Rental) => (
-            <Card key={r.id}>
+            <Card
+              key={r.id}
+              className="cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => navigate(`/my-rentals/${r.id}`)}
+            >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between gap-6 flex-wrap">
                   <div className="flex-1 min-w-0">
