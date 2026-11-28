@@ -68,10 +68,36 @@ function daysBetween(startIso: string, endIso: string): number {
   return Math.round((end - start) / (1000 * 60 * 60 * 24));
 }
 
-function generateRentalReference(): string {
-  const year = new Date().getFullYear();
-  const rand = Math.floor(100000 + Math.random() * 900000);
-  return `MLR-${year}-${rand}`;
+async function countLateReturns(userId: number): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(rentals)
+    .where(
+      and(
+        eq(rentals.renterId, userId),
+        sql`returned_at is not null`,
+        sql`returned_at::date > end_date::date`
+      )
+    );
+  return Number(row?.count ?? 0);
+}
+
+const REF_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+async function generateRentalReference(): Promise<string> {
+  const now = new Date();
+  const ym = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let code = "";
+    for (let i = 0; i < 6; i++) code += REF_CHARS[Math.floor(Math.random() * REF_CHARS.length)];
+    const ref = `MLR-${ym}-${code}`;
+    const [existing] = await db
+      .select({ id: rentals.id })
+      .from(rentals)
+      .where(eq(rentals.reference, ref))
+      .limit(1);
+    if (!existing) return ref;
+  }
+  throw new Error("Could not generate unique rental reference after 10 attempts");
 }
 
 async function buildRiskFeatures(userId: number, assetValueHalalas: number): Promise<RiskFeatures> {
@@ -99,7 +125,7 @@ async function buildRiskFeatures(userId: number, assetValueHalalas: number): Pro
     completedRentals: Number(row.completed ?? 0),
     disputedRentals: Number(row.disputed ?? 0),
     cancelledRentals: Number(row.cancelled ?? 0),
-    lateReturns: 0, // TODO: derive from return inspections vs end_date
+    lateReturns: await countLateReturns(userId),
     nafathVerified: user.nafathVerified,
     kycVerified: user.kycStatus === "verified",
     phoneVerified: user.phoneVerified,
@@ -193,7 +219,7 @@ router.post(
     });
 
     // Rental row -----------------------------------------------------------
-    const reference = generateRentalReference();
+    const reference = await generateRentalReference();
     const [rental] = await db
       .insert(rentals)
       .values({
